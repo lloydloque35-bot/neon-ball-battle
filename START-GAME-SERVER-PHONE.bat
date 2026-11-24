@@ -1,15 +1,11 @@
 @echo off
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 title Neon Ball Battle - PHONE MODE (keep this window open)
 echo.
 echo  ==========================================================
 echo   NEON BALL BATTLE game server - PHONE MODE
 echo   Keep this window open while you play.
-echo.
-echo   1. Connect your phone to the SAME Wi-Fi as this PC.
-echo   2. Look below for the line:  PHONE / TABLET on the same Wi-Fi
-echo   3. Type the link under it in your phone browser.
-echo.
 echo   Use phone mode only on your HOME Wi-Fi.
 echo   To stop the server: close this window.
 echo  ==========================================================
@@ -21,6 +17,14 @@ if not exist package.json (
   pause
   exit /b
 )
+echo  PHONE / TABLET on the same Wi-Fi: type this link in the phone browser
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
+  set "ip=%%a"
+  set "ip=!ip: =!"
+  echo      http://!ip!:8080
+)
+echo  (If there are several links, try the one that starts with 192.168 first.)
+echo.
 set HOST=0.0.0.0
 call npm start
 pause
