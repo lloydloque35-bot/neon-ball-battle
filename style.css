@@ -323,6 +323,9 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer
 .lb td { vertical-align: middle; }
 .victory-fx { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: min(720px, 100%); height: 260px; pointer-events: none; }
 .results-wrap { position: relative; }
+/* results can be taller than a phone screen in landscape: let the screen scroll */
+#scr-results { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#scr-results .results-wrap { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 
 /* accessibility */
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
