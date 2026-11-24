@@ -58,7 +58,8 @@ class App {
     const started = Date.now();
     const url = new URL(req.url, 'http://local');
     const ctx = { req, res, method: req.method, path: decodeURIComponent(url.pathname), query: Object.fromEntries(url.searchParams), params: {}, cookies: parseCookies(req.headers.cookie), headers: req.headers, setCookies: [] };
-    ctx.ip = this.trustProxy && req.headers['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',')[0].trim() : req.socket.remoteAddress;
+    // behind a trusted proxy, the LAST X-Forwarded-For entry is the one the proxy added (earlier entries can be forged by clients)
+    ctx.ip = this.trustProxy && req.headers['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',').pop().trim() : req.socket.remoteAddress;
     try {
       if (ctx.path.startsWith('/api/')) {
         const r = this.routes.find(rt => rt.method === req.method && rt.re.test(ctx.path));

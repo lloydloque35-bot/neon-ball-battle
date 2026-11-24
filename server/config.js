@@ -35,7 +35,8 @@ function buildConfig() {
     isProd,
     port,
     host: env.HOST || (isProd ? '0.0.0.0' : '127.0.0.1'),
-    appOrigin: (env.APP_ORIGIN || `http://localhost:${port}`).replace(/\/+$/, ''),
+    // APP_ORIGIN, or the public URL that Render provides automatically
+    appOrigin: (env.APP_ORIGIN || env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, ''),
     dbFile: env.DB_FILE || path.join(ROOT, 'data', 'game.db'),
     backupDir: env.BACKUP_DIR || path.join(ROOT, 'data', 'backups'),
     cookieSecure: bool(env.COOKIE_SECURE, isProd),

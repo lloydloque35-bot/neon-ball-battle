@@ -11,6 +11,8 @@ It runs two ways:
 | Battles | local | **server-verified** (anti-cheat) |
 | Accounts, Premium, rankings, fusion, cosmetics, Owner Dashboard | – | ✔ |
 
+**Windows, no typing:** double-click `CREATE-OWNER-ACCOUNT.bat` once, then `START-GAME-SERVER.bat` whenever you want to play or open the Admin Dashboard.
+
 ```bash
 cp .env.example .env
 npm test                                  # 39 automated tests

@@ -1,0 +1,34 @@
+# Render Blueprint: New → Blueprint → pick this repository → Apply.
+# Creates the game server with a persistent disk for the database.
+# A disk needs a paid instance (Starter). Payments stay DISABLED until you add Stripe keys.
+services:
+  - type: web
+    name: neon-ball-battle
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: echo "No build step needed"
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: game-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: DB_FILE
+        value: /var/data/game.db
+      - key: BACKUP_DIR
+        value: /var/data/backups
+      - key: PAYMENTS_MODE
+        value: disabled
+      - key: LOG_LEVEL
+        value: info
