@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050816">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="screen-orientation" content="landscape">
+<title>Neon Ball Battle: Ultimate Gods</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/icons/icon-16.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Neon Ball Battle">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===== GAME STAGE (canvas + in-battle HUD) ===== -->
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="battleHud" class="hidden">
+    <div class="hud-btns">
+      <button id="btnPause" title="Pause (P / Esc)" aria-label="Pause">❚❚</button>
+      <button id="btnSpeed" title="Battle speed" aria-label="Battle speed">1x</button>
+      <button id="btnAuto" title="Auto battle / manual skills (M)" aria-label="Toggle auto or manual control">AUTO</button>
+    </div>
+    <div id="skillBar" class="hidden"></div>
+  </div>
+</div>
+
+<!-- ===== SCREENS ===== -->
+<div id="screens">
+
+  <!-- MAIN MENU -->
+  <section id="scr-menu" class="screen menu-screen">
+    <div class="menu-wrap">
+      <div class="logo">
+        <div class="logo-top">NEON BALL BATTLE</div>
+        <div class="logo-sub">ULTIMATE GODS</div>
+      </div>
+      <div id="menuAnnounce" class="announce"></div>
+      <div class="menu-buttons">
+        <button class="btn big primary" data-go="play">▶&nbsp; PLAY</button>
+        <button class="btn" data-go="collection">◉ Ball Collection</button>
+        <button class="btn" data-go="shop">⬆ Upgrade Shop</button>
+        <button class="btn" data-go="events">✦ Limited Events</button>
+        <button class="btn" data-go="leaderboard">🏆 Rankings</button>
+        <button class="btn gold" data-go="membership">★ Premium</button>
+        <button class="btn" data-go="fusion">🧬 Ball Fusion</button>
+        <button class="btn" data-go="profile">🎨 Profile &amp; Style</button>
+        <button class="btn" data-go="settings">⚙ Settings</button>
+        <button class="btn" data-go="account" id="menuAccount">👤 Sign in</button>
+        <button class="btn admin" data-go="admin">♛ Admin Dashboard</button>
+      </div>
+      <div class="menu-footer">
+        <span class="pill">🪙 <b class="coinVal">0</b></span>
+        <span class="pill" id="menuOwned"></span>
+        <span class="pill" id="menuWins"></span>
+        <span class="pill" id="menuCloud" title="Where your progress is saved">💾 Guest</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAY: MODE SELECT -->
+  <section id="scr-play" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Choose Battle Mode</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body"><div id="modeGrid" class="mode-grid"></div></div>
+  </section>
+
+  <!-- BALL SELECTION -->
+  <section id="scr-select" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2 id="selectTitle">Ball Selection</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body select-layout">
+      <div class="select-left">
+        <div class="tabs" id="selectTabs"></div>
+        <div id="selectGrid" class="ball-grid"></div>
+      </div>
+      <div class="select-right" id="selectSetup"></div>
+    </div>
+  </section>
+
+  <!-- COLLECTION -->
+  <section id="scr-collection" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Ball Collection <small id="collCount"></small></h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body">
+      <div class="filters" id="collFilters"></div>
+      <div id="collGrid" class="ball-grid"></div>
+    </div>
+  </section>
+
+  <!-- UPGRADE SHOP -->
+  <section id="scr-shop" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Upgrade Shop</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="shopBody"></div>
+  </section>
+
+  <!-- EVENTS -->
+  <section id="scr-events" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Limited Events &amp; Rewards</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body">
+      <div class="tabs" id="eventTabs"></div>
+      <div id="eventsBody"></div>
+    </div>
+  </section>
+
+  <!-- ADMIN DASHBOARD -->
+  <section id="scr-admin" class="screen">
+    <header class="scr-head admin-head"><button class="back" data-back>‹ Back</button><h2>♛ Admin Dashboard</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body">
+      <div class="tabs" id="adminTabs"></div>
+      <div id="adminBody"></div>
+    </div>
+  </section>
+
+  <!-- BALL CREATOR -->
+  <section id="scr-creator" class="screen">
+    <header class="scr-head admin-head"><button class="back" data-back>‹ Back</button><h2 id="creatorTitle">Ball Creator</h2><div class="pill">ADMIN</div></header>
+    <div class="scr-body creator-layout">
+      <div class="creator-preview">
+        <canvas id="creatorCanvas" width="320" height="320"></canvas>
+        <div id="creatorSummary"></div>
+      </div>
+      <form id="creatorForm" class="creator-form" autocomplete="off"></form>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="scr-settings" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Settings</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="settingsBody"></div>
+  </section>
+
+  <!-- TOURNAMENT BRACKET -->
+  <section id="scr-bracket" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Quit</button><h2>Tournament Bracket</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="bracketBody"></div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section id="scr-account" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Account &amp; Cloud Save</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="accountBody"></div>
+  </section>
+
+  <!-- PROFILE, DAILY REWARDS & CUSTOMIZATION -->
+  <section id="scr-profile" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Profile &amp; Customization</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="profileBody"></div>
+  </section>
+
+  <!-- PREMIUM MEMBERSHIP -->
+  <section id="scr-membership" class="screen">
+    <header class="scr-head premium-head"><button class="back" data-back>‹ Back</button><h2>★ Ultimate Premium</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="membershipBody"></div>
+  </section>
+
+  <!-- RANKINGS -->
+  <section id="scr-leaderboard" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Global Rankings</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="leaderboardBody"></div>
+  </section>
+
+  <!-- BALL FUSION -->
+  <section id="scr-fusion" class="screen">
+    <header class="scr-head"><button class="back" data-back>‹ Back</button><h2>Ball Fusion</h2><div class="pill">🪙 <b class="coinVal">0</b></div></header>
+    <div class="scr-body" id="fusionBody"></div>
+  </section>
+
+  <!-- BATTLE RESULTS -->
+  <section id="scr-results" class="screen">
+    <div class="results-wrap" id="resultsBody"></div>
+  </section>
+
+</div>
+
+<!-- MODAL / PAUSE / TOASTS -->
+<div id="modal" class="hidden"><div class="modal-box" id="modalBox"></div></div>
+<div id="toasts"></div>
+<div id="rotateHint">
+  <div class="rotate-icon">⟳</div>
+  <p>Rotate your device to <b>landscape</b> for the best battle view.</p>
+  <button class="btn" id="rotateDismiss">Continue anyway</button>
+</div>
+
+<div id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><p>Loading Neon Ball Battle…</p></div>
+
+<script src="script.js"></script>
+<script src="online.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+# NEON BALL BATTLE: ULTIMATE GODS
+
+An autonomous, physics-based **ball-versus-ball** battle game in a glowing rectangular arena. **Every character is a ball**: no humans or humanoids. Wings, horns, crowns, rings and armour only float around the sphere.
+
+It runs two ways:
+
+| | Guest / offline | Game server |
+|---|---|---|
+| Start | open `index.html` | `npm start` (Node ≥ 22.5, no dependencies) |
+| Progress | saved in this browser | cloud save, every device |
+| Battles | local | **server-verified** (anti-cheat) |
+| Accounts, Premium, rankings, fusion, cosmetics, Owner Dashboard | – | ✔ |
+
+```bash
+cp .env.example .env
+npm test                                  # 39 automated tests
+npm start                                 # http://localhost:8080
+npm run owner -- create --username You    # the ONLY way to create the admin/owner account
+```
+
+Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Multiplayer plan: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+
+## Gameplay
+- Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
+- **Rage Mode** activates at **20 HP or below**. God-tier balls transform into **God Mode** on their first ultimate.
+- **AI:**
+  - Six personalities: aggressive, defensive, tactical, intelligent, adaptive (learns during the fight) and boss (3 phases).
+  - Five difficulties: Easy, Normal, Hard, Expert and Godlike.
+  - It dodges attacks, braces against an enemy's God Mode and never wastes attacks on invulnerable targets.
+- **Modes:** 1 VS 1 (main), 2 VS 2, Free For All, Survival, Tournament, Boss, Endless and Practice. *Sudden Death* starts after 90 s.
+- **Balls:**
+  - 50 core balls
+  - 6 limited event balls
+  - 6 Premium balls: Prism, Mirror, Toxic Reactor, Sonic, Magnetar, Rift
+  - 14 **Admin Exclusive** balls: One Above All, Archangel, Omega, Phantom, Infinity Core, Chaos Emperor, Celestial Dragon, Miracle, Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme
+  - unlimited owner-created balls and player fusions
+- **Progression:**
+  - Levels up to 50, a skill tree that unlocks the 3rd and 4th abilities, and three evolutions per ball.
+  - Upgrades and summons.
+  - Achievements (including 100 battles and Perfect Victory), collection rewards, weekly limited events and 7-day daily rewards.
+- **Online extras:** global rankings, public profiles, AI tournaments, Ball Fusion, and cosmetics (aura, skin, trail, hit and victory effects).
+
+## ULTIMATE PREMIUM — $200 / YEAR
+- **What's included:**
+  - Every regular, premium, legendary, mythical and non-admin limited ball
+  - Premium cosmetics, effects and badge
+  - +25% battle rewards, +50% daily coins and 20% off summons
+  - Premium events
+- **How payment works:** checkout runs through Stripe. Premium activates **only after server-verified payment**, renews yearly until turned off, and can be cancelled at any time. Any premium ball can be tried in Practice first.
+- **What Premium never includes:** admin access, admin-exclusive balls or owner abilities.
+
+## Controls
+- **Auto battle** (default), or **Manual** (press M or the AUTO button). In Manual: WASD, arrows or drag to steer; 1-4 for abilities; SPACE for the ultimate.
+- P / Esc pauses. The speed button cycles 1x / 1.5x / 2x / 3x.
+
+## Project structure
+```
+index.html  style.css  script.js     game (rendering, physics, AI, UI; shared deterministic core)
+online.js                            accounts, cloud save, premium, rankings, fusion, owner dashboard UI
+server/                              Node game server (no dependencies)
+  index.js app.js config.js          entry, wiring, environment config
+  auth.js security.js http.js        sessions, 2FA, CSRF, rate limits, headers, static whitelist
+  game.js economy.js verifier.js     cloud save, verified battles (worker threads), economy
+  billing.js                         Stripe subscription + signed webhooks
+  admin.js                           owner-only API
+  core.js                            loads script.js headlessly for server-side replays
+  migrations/  cli/  test/
+docs/                                deployment, security, multiplayer, checklist
+assets/                              optional (everything is drawn procedurally)
+```
