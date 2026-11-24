@@ -13,6 +13,8 @@ It runs two ways:
 
 **Windows, no typing:** double-click `CREATE-OWNER-ACCOUNT.bat` once, then `START-GAME-SERVER.bat` whenever you want to play or open the Admin Dashboard.
 
+**Admin on your phone:** double-click `START-GAME-SERVER-PHONE.bat` on the PC, connect the phone to the **same home Wi-Fi**, and type the link it shows (for example `http://192.168.1.23:8080`) in the phone browser. The first time, Windows asks to allow Node.js: tick **Private networks** and click **Allow**. Use it only on your home Wi-Fi.
+
 ```bash
 cp .env.example .env
 npm test                                  # 39 automated tests
