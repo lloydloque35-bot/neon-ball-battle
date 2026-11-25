@@ -724,7 +724,7 @@ function registry() {
   for (const b of ALL_BUILTIN) {
     const o = (C.overrides || {})[b.id];
     const merged = o ? { ...b, ...o, design: { ...b.design, ...(o.design || {}) }, builtin: true, overridden: true } : { ...b, builtin: true };
-    if (b.supreme && o) { merged.skills = b.skills; merged.ult = b.ult; merged.adminOnly = true; merged.rarity = 'Admin Exclusive'; }
+    if (b.supreme && o) { merged.skills = b.skills; merged.ult = b.ult; if (b.adminOnly) { merged.adminOnly = true; merged.rarity = 'Admin Exclusive'; } else { merged.free = b.free; merged.godBall = b.godBall; } }
     if (C.tuning && C.tuning[b.id] && b.supreme) merged.tuning = C.tuning[b.id];
     list.push(merged);
   }
@@ -1353,7 +1353,7 @@ class Fighter {
     this.rot = rand(TAU); this.t = rand(10);
     const allUnlocked = def.adminOnly || def.unlockAll || o.allUnlocked;
     this.summon = !!o.summon;   // a ball summoned through a portal: temporary like a clone, but keeps its own abilities
-    this.skills = this.isClone && !this.summon ? [] : (def.skills || []).map((s, i) => ({ ...s, cdLeft: rand(1.2, 2.4) + i * 0.9, locked: !allUnlocked && ((i === 2 && !this.tree.slot3) || (i >= 3 && !this.tree.slot4)) }));
+    this.skills = this.isClone && !this.summon ? [] : (def.skills || []).map((s, i) => ({ ...s, cdLeft: rand(1.2, 2.4) + i * 0.9, locked: !allUnlocked && !s.always && ((i === 2 && !this.tree.slot3) || (i >= 3 && !this.tree.slot4)) }));   // s.always: a control that is never locked (Celestial Shift)
     this.ult = def.ult; this.ultMeter = 0;
     this.ultCharge = this.tree.ultcharge ? 1.25 : 1;
     this.powerMul = (this.tree.power1 ? 1.1 : 1) * (this.tree.power2 ? 1.15 : 1);
@@ -1371,17 +1371,17 @@ class Fighter {
     this.cos = o.cos && !this.isClone ? resolveCos(o.cos) : null;   // cosmetics: visual only
     this.straightT = 0;
     this.evoMul = ev; this.energy = 0; this.heat = 0; this.absorbLeft = 0; this.reverseLeft = 0; this.silenceImm = 0; this.repairCd = 0; this.repairs = 0; this.guard = null;
-    this.form = 0; this.fm = 1; this.xAtk = 1; this.xSpd = 1; this.sid = BATTLE && BATTLE.sidN != null ? ++BATTLE.sidN : 0;   // 2.1.0 Supreme forms / admin edits / match id
+    this.form = 0; this.fm = 1; this.xAtk = 1; this.xSpd = 1; this.pAtk = 1; this.pSpd = 1; this.pCd = 1; this.sid = BATTLE && BATTLE.sidN != null ? ++BATTLE.sidN : 0;   // 2.1.0 Supreme forms / admin edits / match id
     if (def.supreme && typeof supremeInit === 'function') supremeInit(this, o);
   }
   get hpRatio() { return this.hp / this.maxHp; }
   get credit() { return this.isClone && this.owner ? this.owner : this; }
   /* Anti Evolution (st.antievo) temporarily switches off evolution, rage, God Mode and power-up bonuses */
   evoOff() { return 1 + ((this.evoMul || 1) - 1) * 0.75; }
-  effAtk() { const ae = this.st.antievo > 0; let a = this.atk; if (ae) a /= this.evoOff(); if (this.rage && !ae) a *= (this.def.rageAtk || 1.3) * this.rageBonus; if (this.god > 0 && !ae) a *= this.def.godBoost || 1.6; if (this.st.buff > 0 && !ae) a *= 1 + this.st.buffPow; if (this.st.weaken > 0) a *= 0.7; if (this.st.adapt > 0 && !ae) a *= 1 + (this.adaptPow || 0.15); if (this.st.overclock > 0 && !ae) a *= 1.12; if (this.st.nulled > 0) a *= this.boss ? 0.85 : 0.75; if (this.fm > 1 && !ae) a *= this.fm; if (this.xAtk !== 1) a *= this.xAtk; return a; }
+  effAtk() { const ae = this.st.antievo > 0; let a = this.atk; if (ae) a /= this.evoOff(); if (this.rage && !ae) a *= (this.def.rageAtk || 1.3) * this.rageBonus; if (this.god > 0 && !ae) a *= this.def.godBoost || 1.6; if (this.st.buff > 0 && !ae) a *= 1 + this.st.buffPow; if (this.st.weaken > 0) a *= 0.7; if (this.st.adapt > 0 && !ae) a *= 1 + (this.adaptPow || 0.15); if (this.st.overclock > 0 && !ae) a *= 1.12; if (this.st.nulled > 0) a *= this.boss ? 0.85 : 0.75; if (this.fm > 1 && !ae) a *= this.fm; if (this.xAtk !== 1) a *= this.xAtk; if (this.pAtk !== 1) a *= this.pAtk; return a; }
   effDef() { const ae = this.st.antievo > 0; let d = this.dfn; if (ae) d /= this.evoOff(); if (this.god > 0 && !ae) d *= 1 + ((this.def.godBoost || 1.6) - 1) * 0.67; if (this.st.adapt > 0 && !ae) d *= 1 + (this.adaptPow || 0.15); if (this.fm > 1 && !ae) d *= 1 + (this.fm - 1) * 0.8; return d; }
-  speedMul() { const ae = this.st.antievo > 0; let m = 1; if (this.st.freeze > 0) m *= 0.3; else if (this.st.slow > 0) m *= 0.55; if (this.rage && !ae) m *= this.def.rageSpd || 1.22; if (this.god > 0 && !ae) m *= 1.22; if (this.st.buff > 0 && !ae) m *= 1 + this.st.buffPow * 0.5; if (this.st.overclock > 0 && !ae) m *= 1.3; if (this.st.dash > 0) m *= 2.3; if (this.fm > 1 && !ae) m *= 1 + (this.fm - 1) * 0.3; if (this.xSpd !== 1) m *= this.xSpd; return m; }
-  cdMul() { const ae = this.st.antievo > 0; let m = this.cdTree; if (this.rage && !ae) m *= 0.6; if (this.god > 0 && !ae) m *= 0.5; if (this.st.overclock > 0 && !ae) m *= 0.65; if (this.form && !ae) m *= this.form === 2 ? 0.8 : 0.9; if (this.sx && this.sx.energyT > 0) m *= 0.75; return m; }
+  speedMul() { const ae = this.st.antievo > 0; let m = 1; if (this.st.freeze > 0) m *= 0.3; else if (this.st.slow > 0) m *= 0.55; if (this.rage && !ae) m *= this.def.rageSpd || 1.22; if (this.god > 0 && !ae) m *= 1.22; if (this.st.buff > 0 && !ae) m *= 1 + this.st.buffPow * 0.5; if (this.st.overclock > 0 && !ae) m *= 1.3; if (this.st.dash > 0) m *= 2.3; if (this.fm > 1 && !ae) m *= 1 + (this.fm - 1) * 0.3; if (this.xSpd !== 1) m *= this.xSpd; if (this.pSpd !== 1) m *= this.pSpd; return m; }
+  cdMul() { const ae = this.st.antievo > 0; let m = this.cdTree; if (this.rage && !ae) m *= 0.6; if (this.god > 0 && !ae) m *= 0.5; if (this.st.overclock > 0 && !ae) m *= 0.65; if (this.form && !ae) m *= this.def.godBall ? (this.form === 2 ? 0.9 : 0.95) : (this.form === 2 ? 0.8 : 0.9); if (this.sx && this.sx.energyT > 0) m *= 0.75; if (this.pCd !== 1) m *= this.pCd; return m; }
   canAct() { return this.alive && this.st.stun <= 0 && this.st.timestop <= 0 && this.casting <= 0 && !(this.st.outside > 0); }
   allSkills() { return this.temp ? this.skills.concat([this.temp]) : this.skills; }
   enemies() { return BATTLE ? BATTLE.fighters.filter(f => f.alive && f.team !== this.team) : []; }
@@ -2684,6 +2684,7 @@ class Battle {
       const c = this.cinematic; scale = 0.05;
       if (Math.random() < 0.9) { const a = vr(TAU), d = vr(150, 320); FX.p(c.f.x + dcos(a) * d, c.f.y + dsin(a) * d, -dcos(a) * d * 2.2, -dsin(a) * d * 2.2, 0.4, vr(3, 6), Math.random() < 0.5 ? '#ffd54f' : c.f.def.design.c3, 'dot', 0); }
     }
+    if (this.clash) scale = Math.min(scale, 0.4);             // GOD CLASH: slow motion (visual only, the simulation is unchanged)
     this.acc += Math.min(0.05, realDt) * this.speed * scale;
     let n = 0;
     if (this.limit != null) {   // online lockstep: never simulate past the last step both players have confirmed
@@ -3291,6 +3292,8 @@ Battle.prototype.drawFighter = function (ctx, f) {
     if (f.cos.trail && Math.random() < 0.8) FX.p(f.x - f.vx * 0.03 + vr(-6, 6), f.y - f.vy * 0.03 + vr(-6, 6), -f.vx * 0.15, -f.vy * 0.15, 0.45, f.cos.trail.id === 'trail_pixel' ? 4 : vr(3, 6), cosColor(f.cos.trail.color, f.t), f.cos.trail.id === 'trail_pixel' ? 'shard' : 'dot', 1.5);
   }
   if (f.def.tuning && f.def.tuning.aura === false) st.noAura = true;   // owner setting (Admin Ball Control Panel)
+  if (f.ghost) st.alpha = 0.55 + 0.18 * Math.sin(f.t * 17);           // holographic copies
+  if (f.sx && f.sx.liftT > 0) { r *= 1 + Math.min(0.3, f.sx.liftT * 0.3); ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, f.y + r * 1.3, r * 0.8, r * 0.25, 0, 0, TAU); ctx.fill(); ctx.restore(); }
   if (f.st.freeze > 0) st.tint = 'rgba(160,230,255,0.38)';
   if (f.st.timestop > 0) st.tint = 'rgba(110,120,160,0.5)';
   if (f.unit && !f.holo && !f.ballLook) { drawUnit(ctx, f, r); return; }
@@ -3668,7 +3671,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
   const S = setup, diff = normDiff(S.difficulty), D = DIFF[diff], me = getBall(S.ball);
   if (!me) throw new Error('Unknown ball');
   const pl = playerSpecFrom(me, prog0), plv = pl.level, elv = plv + D.lvl;
-  if (S.adminTest && me.supreme && S.startForm) pl.startForm = clamp(S.startForm | 0, 0, 2);   // owner test: start in a chosen form
+  if (((S.adminTest && me.adminOnly) || (S.godTest && me.godBall)) && me.supreme && S.startForm) pl.startForm = clamp(S.startForm | 0, 0, 2);   // test battles: start in a chosen form
   const pool = opponentPool(false).filter(b => !b.adminOnly && !b.fusion).map(b => b.id);
   const choose = excl => { const c = pool.filter(id => !excl.includes(id)); return pickWith(c.length ? c : pool, rnd); };
   const chosen = S.enemy && S.enemy !== 'random' && getBall(S.enemy) ? S.enemy : null;
@@ -3685,7 +3688,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
     default: teams = [[pl], [E(chosen || choose([me.id]), elv)]];
   }
   return { v: 2, mode: MODES[S.mode] ? S.mode : '1v1', difficulty: diff, seed: (Math.floor(rnd() * 4294967296) >>> 0), manual: !!S.manual, teams, pool,
-    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0, ...(S.adminTest && me.supreme ? { adminTest: true } : {}) } };
+    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0, ...(S.adminTest && me.supreme && me.adminOnly ? { adminTest: true } : {}), ...(S.godTest && me.godBall && S.mode === 'practice' ? { godTest: true } : {}) } };
 }
 /* ---------- online PvP (shared by the game server and the browser) ---------- */
 const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
@@ -3756,7 +3759,7 @@ function buildBattleConfig(T, hooks = {}) {
   for (const t of T.teams) for (const s of t) if (!getBall(s.ball)) throw new Error('Ball not available: ' + s.ball);
   const cfg = { mode: T.mode, difficulty: T.difficulty, seed: T.seed, manual: T.manual, teams: T.teams.map(t => t.map(mk)), infiniteHp: T.mode === 'practice' && !!T.opts.infinite,
     dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless,
-    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked, adminTest: !!(T.opts && T.opts.adminTest) };
+    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked, adminTest: !!(T.opts && T.opts.adminTest), godTest: !!(T.opts && T.opts.godTest) };
   const pl = T.teams[0][0], diff = T.difficulty;
   const nextFrom = excl => { const c = T.pool.filter(id => !excl.includes(id)); return pick(c.length ? c : T.pool); };
   if (T.mode === 'survival') cfg.checkEnd = B => {
@@ -4185,7 +4188,7 @@ const UI = {
     html += `<h3 style="margin-top:12px">Stats</h3>${statBar('HP', f.maxHp, 260)}${statBar('ATK', f.atk, 160)}${statBar('DEF', f.dfn, 160)}${statBar('SPD', f.spd, 140)}${statBar('CRIT', f.crit, 100, '%')}`;
     html += `<h3 style="margin-top:12px">Abilities</h3>`;
     (b.skills || []).forEach((s, i) => {
-      const locked = !b.adminOnly && !b.unlockAll && ((i === 2 && !p.tree.slot3) || (i >= 3 && !p.tree.slot4));
+      const locked = !b.adminOnly && !b.unlockAll && !s.always && ((i === 2 && !p.tree.slot3) || (i >= 3 && !p.tree.slot4));
       html += `<div class="skill-row ${locked ? 'locked' : ''}"><div class="sico" style="color:${esc(s.color)};background:${rgba(s.color, 0.25)}">${SKILL_TYPES[s.type]?.ico || '•'}</div><div><div class="sname">${esc(s.name)} ${locked ? '🔒' : ''}</div><div class="sdesc">${esc(SKILL_TYPES[s.type]?.label || s.type)} — ${esc(SKILL_TYPES[s.type]?.desc || '')}. Power ${s.power}, cooldown ${s.cd}s${s.effect && s.effect !== 'none' ? ', effect: ' + esc(s.effect) : ''}${locked ? ` — unlock in the skill tree (${i === 2 ? 'Lv 5' : 'Lv 12'})` : ''}</div></div></div>`;
     });
     if (b.ult) html += `<div class="skill-row" style="border:1px solid #ffd54f55"><div class="sico" style="color:#ffd54f;background:#ffd54f33">★</div><div><div class="sname">ULTIMATE: ${esc(b.ult.name)}</div><div class="sdesc">${esc(ULT_TYPES[b.ult.type] || b.ult.type)} — power ${b.ult.power}. Charges from time, damage dealt and damage taken.</div></div></div>`;

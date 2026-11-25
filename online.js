@@ -78,7 +78,7 @@ const Online = {
   async post(path, body) { const r = await API.post(path, body); if (r.save) this.applySave(r.save); return r; },
   /* battles: the server issues the ticket and verifies the result */
   async startBattle(S) {
-    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial, ...(S.adminTest ? { adminTest: true, startForm: S.startForm | 0 } : {}) });
+    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial, ...(S.adminTest ? { adminTest: true, startForm: S.startForm | 0 } : {}), ...(S.godTest ? { godTest: true, startForm: S.startForm | 0 } : {}) });
     return r.ticket;
   },
   async tourStart(S) { return (await API.post('/api/tournament/start', { ball: S.ball, difficulty: S.difficulty })).tour; },

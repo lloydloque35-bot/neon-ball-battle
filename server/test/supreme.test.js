@@ -100,12 +100,12 @@ test('owner: Spawn & Test battles start in the chosen form; admin commands are a
   assert.equal(fin.status, 200);
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.delete_console'"));
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.supreme_test'"));
-  const h = (await owner.get('/api/health')).data; assert.equal(h.version, '2.1.0');
+  const h = (await owner.get('/api/health')).data; assert.equal(h.version, '2.2.0');
 });
 
 /* ---------------- engine (long synchronous simulations run after the server tests) ---------------- */
 test('15 Supreme Admin balls: owner-only, 5 unique abilities, 2 ultimates and 3 forms each', () => {
-  assert.equal(core.GAME_VERSION, '2.1.0');
+  assert.equal(core.GAME_VERSION, '2.2.0');
   assert.deepEqual([...core.supremeIds()].sort(), IDS.slice().sort());
   const seen = new Map();
   for (const id of IDS) {
@@ -120,7 +120,7 @@ test('15 Supreme Admin balls: owner-only, 5 unique abilities, 2 ultimates and 3 
     for (let k = 1; k < 3; k++) assert.notEqual(JSON.stringify(core.formDef(d, k).design), JSON.stringify(d.design), `${id} form ${k} looks different`);
     assert.ok(d.sound && d.sound.base, id + ' has its own sound profile');
   }
-  assert.ok(!core.opponentPool(false).some(b => b.supreme), 'never a random opponent for players');
+  assert.ok(!core.opponentPool(false).some(b => b.supreme && b.adminOnly), 'never a random opponent for players');
 });
 
 test('upgraded balls keep their ids; god versions leave the player balls untouched', () => {

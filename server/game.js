@@ -223,6 +223,10 @@ function register(app, S) {
       for (const k of ['enemy', 'ally']) if (b[k] && b[k] !== 'random' && !pool.has(b[k])) throw bad('That opponent is not available');
       if (mode === 'boss' && b.boss && (!pool.has(b.boss))) throw bad('That boss is not available');
       const setup = { mode, ball: def.id, enemy: b.enemy || 'random', ally: b.ally || 'random', difficulty: core.normDiff(b.difficulty), ffaCount: S_.clampInt(b.ffaCount, 3, 6, 4), boss: b.boss || 'ancientgod', infinite: !!b.infinite, dummy: !!b.dummy, manual: !!b.manual };
+      if (b.godTest) {       // free God Ball practice test (any form, test bar): every player, God Balls only, Practice only (no rewards)
+        if (!def.godBall || mode !== 'practice') throw bad('Practice tests are only for the God Balls');
+        setup.godTest = true; setup.startForm = S_.clampInt(b.startForm, 0, 2, 0);
+      }
       if (b.adminTest) {     // Admin Ball Control Panel "Spawn & test": owner only, Supreme balls only, Practice only (no rewards)
         if (!isOwner(u) || !def.supreme || mode !== 'practice') throw new HttpError(403, 'Owner test battles are only for the game owner', 'NO_ACCESS');
         setup.adminTest = true; setup.startForm = S_.clampInt(b.startForm, 0, 2, 0);
@@ -245,7 +249,8 @@ function register(app, S) {
     const ticket = json(row.ticket);
     const cStep = S_.clampInt(claimed && claimed.step, 0, MAX_STEPS, 0);
     const adminCmds = inputs.filter(a => a[1] === 'x');
-    if (adminCmds.length) {          // owner console commands: only the owner's own Supreme battles may contain them
+    const godTestOnly = adminCmds.length && row.mode === 'practice' && ticket.opts && ticket.opts.godTest && adminCmds.every(a => a[2] >= core.ADMIN_CMDS.testForm);   // free God Ball practice test bar
+    if (adminCmds.length && !godTestOnly) {          // owner console commands: only the owner's own Supreme battles may contain them
       const ball = ticket.teams && ticket.teams[0] && ticket.teams[0][0] ? ticket.teams[0][0].ball : '';
       if (!isOwner(u) || !withCatalog(u, () => { const d = core.getBall(ball); return d && d.supreme; })) {
         S.secEvent(u.id, 'admin_command_forged', 3, { id, n: adminCmds.length }, ctx.ip);

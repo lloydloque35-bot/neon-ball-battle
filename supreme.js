@@ -8,9 +8,14 @@
    reached in battle at 60% / 30% HP or with the 1st / 2nd ultimate), its own art, idle / bounce / victory / defeat
    effects and its own sound profile. Admin-only access is enforced by the server (adminOnly balls → owner only).
    ===================================================================== */
-const GAME_VERSION = '2.1.0';
+const GAME_VERSION = '2.2.0';
 const FORM_MUL = [1, 1.18, 1.38];                 // stats & skill power per form
-const SUP = { forms: {}, skills: {}, ults: {}, fx: {}, roles: {}, MINION_MAX: 4 };
+const FORM_MUL_GOD = [1, 1.08, 1.16];
+const GOD_SKILL_K = [1.1, 0.88, 0.62];            // free God Balls: their forms change the abilities themselves, so the stat boost is smaller
+const SUP = { forms: {}, skills: {}, ults: {}, fx: {}, roles: {}, MINION_MAX: 4,
+  passives: {}, scoreFn: {}, dmgHooks: [], collideHooks: [], steerHooks: [], worldHooks: [], chipHooks: [], condCols: {}, godIds: [] };   // 2.2.0 extension points (gods.js)
+const GOD_UNLOCK = [10, 20];                       // free God Balls: Awakened form from ball Lv 10, Final God Form from Lv 20
+const godFormCap = lv => lv >= GOD_UNLOCK[1] ? 2 : lv >= GOD_UNLOCK[0] ? 1 : 0;
 let SUP_FXK = 1;                                   // visual intensity of the current ball being drawn (admin panel)
 
 /* ---------------- small shared helpers ---------------- */
@@ -45,10 +50,11 @@ function darkArena(t, col = '#000000', a = 0.6) { if (!FX.off && BATTLE) BATTLE.
 function supSay(f, txt, col, size = 16) { if (!FX.off) FX.text(f.x, f.y - f.r - 30, txt, col, size, { life: 1.1 }); }
 
 /* ---------------- forms ---------------- */
-function formDef(base, k) {
-  const fm = base.forms[k]; if (!k) return base;
-  const cache = SUP.forms[base.id] || (SUP.forms[base.id] = {}), key = k + '|' + (base.tuning ? JSON.stringify(base.tuning) : '');
-  if (!cache[key]) cache[key] = { ...base, design: { ...base.design, ...(fm.design || {}), deco: fm.design && fm.design.deco ? fm.design.deco : base.design.deco }, formIndex: k, formName: fm.name };
+function formDef(base, k, variant) {
+  k = k | 0; if (!k && !variant) return base;
+  const fm = base.forms[k] || {}, vs = variant && base.states && base.states[variant] ? (base.states[variant][k] || {}) : null;
+  const cache = SUP.forms[base.id] || (SUP.forms[base.id] = {}), key = k + '|' + (variant || '') + '|' + (base.tuning ? JSON.stringify(base.tuning) : '');
+  if (!cache[key]) cache[key] = { ...base, design: { ...base.design, ...(fm.design || {}), ...(vs || {}) }, formIndex: k, formName: fm.name || base.forms[0].name, variant: variant || null };
   return cache[key];
 }
 /** called at the end of the Fighter constructor for Supreme balls */
@@ -59,10 +65,14 @@ function supremeInit(f, o) {
     const mul = clamp(+tn.cdMul || 1, 0.2, 3), off = Array.isArray(tn.off) ? tn.off : [];
     f.skills.forEach((s, i) => { s.cd = Math.max(0.5, (s.cd || 6) * mul); if (off.includes(i)) { s.locked = true; s.disabled = true; } });
   }
-  if (o.startForm && !f.isClone) applyForm(f, clamp(o.startForm | 0, 0, 2), true);
+  // free God Balls unlock their forms with the ball's level; owner / practice test battles can use every form
+  f.formCap = f.def.godBall && !(BATTLE && BATTLE.cfg && (BATTLE.cfg.godTest || BATTLE.cfg.adminTest)) ? godFormCap(f.level) : 2;
+  if (f.def.godBall) f.ultCharge *= 0.7;            // free God Balls: ultimates charge a little slower (they also transform with them)
+  const pv = SUP.passives[f.def.id]; if (pv && !f.isClone) { f.sx.passive = pv.tick; if (pv.init) pv.init(f); }
+  if (o.startForm && !f.isClone) applyForm(f, clamp(o.startForm | 0, 0, f.formCap), true);
 }
 function applyForm(f, k, silent) {
-  f.form = k; f.fm = FORM_MUL[k]; f.def = formDef(f.baseDef, k);
+  f.form = k; f.fm = (f.baseDef.formMul || (f.baseDef.godBall ? FORM_MUL_GOD : FORM_MUL))[k]; f.def = formDef(f.baseDef, k, f.sx && f.sx.variant);
   f.ult = k >= 2 && f.baseDef.finalUlt ? f.baseDef.finalUlt : f.baseDef.ult;
   f.r = (f.r0 || f.r) * (k === 2 ? 1.06 : 1);
   if (!silent) { f.godUsed = true; }
@@ -76,7 +86,7 @@ function startForm(f, k, then) {
 function finishForm(f, k) {
   applyForm(f, k);
   const fm = f.baseDef.forms[k], d = f.def.design;
-  healFighter(f, f.maxHp * (k === 2 ? 0.15 : 0.1)); f.st.invuln = Math.max(f.st.invuln, 1); f.st.stun = f.st.freeze = f.st.timestop = 0;
+  healFighter(f, f.maxHp * (f.baseDef.godBall ? (k === 2 ? 0.05 : 0.03) : (k === 2 ? 0.15 : 0.1))); f.st.invuln = Math.max(f.st.invuln, f.baseDef.godBall ? 0.6 : 1); f.st.stun = f.st.freeze = f.st.timestop = 0;
   for (const e of f.enemies()) knock(e, f.x, f.y, k === 2 ? 900 : 600);
   if (!FX.off) {
     FX.text(ARENA.cx, ARENA.y + 70, k === 2 ? 'FINAL GOD FORM' : 'AWAKENED', k === 2 ? '#ffd54f' : d.c3, 44, { life: 1.9, vy: 0, pop: 2, stroke: '#14001f' });
@@ -96,22 +106,79 @@ function supremeTick(f, dt) {
   if (!f.baseDef || f.isClone || !f.alive || !BATTLE) return;      // the rest is for Supreme balls only
   // history for Time Rewind / Temporal Clone (sampled every 0.1 s)
   if ((f.histT = (f.histT || 0) - dt) <= 0) { f.histT = 0.1; f.hist.push({ x: f.x, y: f.y, hp: f.hp }); if (f.hist.length > 40) f.hist.shift(); }
-  if (f.baseDef.forms && !BATTLE.cinematic) { if (f.form === 0 && f.hpRatio <= 0.6) startForm(f, 1); else if (f.form === 1 && f.hpRatio <= 0.3) startForm(f, 2); }
+  const cap = f.formCap ?? 2;
+  // HP-based transformations (admin Supreme balls: 60% / 30%; free God Balls only awaken at 50% HP — their Final God Form needs the 2nd ultimate)
+  if (f.baseDef.forms && !BATTLE.cinematic && !f.clashLock) { if (f.form === 0 && f.hpRatio <= (f.baseDef.godBall ? 0.5 : 0.6) && cap >= 1) startForm(f, 1); else if (f.form === 1 && f.hpRatio <= 0.3 && cap >= 2 && !f.baseDef.godBall) startForm(f, 2); }
+  f.pAtk = 1; f.pSpd = 1; f.pCd = 1;                // passives / stances set these every tick
   if (!FX.off) { const fx = SUP.fx[f.baseDef.id]; if (fx && fx.idle && Math.random() < 0.6 * clamp((f.baseDef.tuning && +f.baseDef.tuning.fx) || 1, 0.2, 1.5)) fx.idle(f, f.def.design); }
   if (s.passive) s.passive(f, dt);
 }
 /* ultimates: 1st use awakens the ball, 2nd use reaches the final god form (then the final-form ultimate) */
 function supremeUlt(f) {
+  const B = BATTLE;
+  // GOD CLASH: against an enemy God Ball the ultimate charges for a moment; if the enemy fires its own ultimate meanwhile, the two clash
+  if (!f.isClone && !B.clash && B.fighters.some(x => x.alive && x.team !== f.team && !x.isClone && x.baseDef && x.baseDef.forms)) {
+    const rival = (B.godCharge || []).find(c => c.f.team !== f.team && c.f.alive);
+    if (rival) { B.godCharge = B.godCharge.filter(c => c !== rival); return startClash(rival.f, f); }
+    (B.godCharge || (B.godCharge = [])).push({ f, t: CLASH.WINDOW });
+    if (!FX.off) { FX.ring(f.x, f.y, f.def.design.c3, f.r * 3, CLASH.WINDOW, 6, f.r * 1.2); FX.text(f.x, f.y - f.r - 34, 'CHARGING ULTIMATE', f.def.design.c2, 14, { life: 0.5 }); }
+    return;
+  }
+  releaseUlt(f);
+}
+/** the ultimate itself: 1st use awakens the ball, 2nd use reaches the Final God Form (if unlocked), then the final-form ultimate */
+function releaseUlt(f) {
   f.ults++;
-  const go = () => performUlt(f);
+  const go = () => performUlt(f), cap = f.formCap ?? 2;
   if (f.st.antievo > 0) return go();              // Anti Evolution blocks transformations
-  if (f.form === 0) return startForm(f, 1, go);
-  if (f.form === 1 && f.ults >= 2) return startForm(f, 2, go);
+  if (f.form === 0 && cap >= 1) return startForm(f, 1, go);
+  if (f.form === 1 && f.ults >= 2 && cap >= 2) return startForm(f, 2, go);
   go();
+}
+/* ---------------- GOD CLASH ----------------
+   Two God Balls firing ultimates within 0.4 s of each other lock together. The winner is decided by the battle state
+   (ultimate power × attack × form × remaining HP, with a ±12% seeded swing): no ball is favoured. */
+const CLASH = { WINDOW: 0.4, DUR: 1.6 };
+function clashPower(f) { const u = f.ult || {}; return (u.power || 100) * f.effAtk() * (0.55 + 0.45 * clamp(f.hpRatio, 0, 1)) * (1 + 0.1 * f.form) * (0.88 + RNG() * 0.24); }
+function startClash(a, b) {
+  const B = BATTLE, pa = clashPower(a), pb = clashPower(b);
+  const c = B.clash = { a, b, t: 0, dur: CLASH.DUR, pa, pb, m: (pa - pb) / (pa + pb), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, ax: a.x, ay: a.y, bx: b.x, by: b.y };
+  for (const f of [a, b]) { f.clashLock = true; f.st.invuln = Math.max(f.st.invuln, c.dur + 0.2); f.casting = Math.max(f.casting, c.dur); f.vx = f.vy = 0; }
+  if (!FX.off) {
+    camPunch(c.x, c.y, 0.22, c.dur); darkArena(c.dur, '#000010', 0.45); FX.addFlash(0.3, '#ffffff'); FX.addShake(12); Sound.play('god');
+    FX.text(ARENA.cx, ARENA.y + 70, '⚡ GOD CLASH ⚡', '#ffffff', 50, { life: c.dur, vy: 0, pop: 2, stroke: '#2a0040' });
+    FX.text(ARENA.cx, ARENA.y + 118, `${a.def.name.replace(/ Ball$/, '')}  ${a.ult.name}   VS   ${b.ult.name}  ${b.def.name.replace(/ Ball$/, '')}`, '#ffd54f', 18, { life: c.dur, vy: 0 });
+    vfx((ctx, q) => vClash(ctx, c, q), c.dur);
+  }
+}
+function clashStep(B, h) {
+  const c = B.clash; c.t += h;
+  for (const [f, x, y] of [[c.a, c.ax, c.ay], [c.b, c.bx, c.by]]) if (f.alive) { f.x = x; f.y = y; f.vx = f.vy = 0; }
+  if (c.t >= c.dur || !c.a.alive || !c.b.alive) resolveClash(B, c);
+}
+function resolveClash(B, c) {
+  B.clash = null;
+  for (const f of [c.a, c.b]) { f.clashLock = false; f.casting = 0; f.st.invuln = Math.min(f.st.invuln, 0.25); }
+  const live = [c.a, c.b].filter(f => f.alive);
+  if (live.length < 2) { for (const f of live) releaseUlt(f); return; }
+  if (!FX.off) { FX.addFlash(0.4, '#ffffff'); FX.addShake(22); for (let i = 0; i < 5; i++) FX.ring(c.x, c.y, i % 2 ? '#ffffff' : '#ffd54f', 260 + i * 140, 0.7, 14, 30); FX.burst(c.x, c.y, '#ffffff', 80, 900, 8, 1.1); Sound.play('boom'); }
+  for (const e of B.fighters) if (e.alive && e !== c.a && e !== c.b && !(e.st.outside > 0)) knock(e, c.x, c.y, 500);
+  if (Math.abs(c.m) < 0.04) {      // a perfect draw: both ultimates cancel out
+    for (const [x, y] of [[c.a, c.b], [c.b, c.a]]) { y.st.invuln = 0; dealDamage(x, y, skillDmg(x, 80) * 0.5, { kind: 'skill', tag: 'explosion', power: 80 }); knock(y, c.x, c.y, 900); y.ultMeter = Math.max(y.ultMeter, 50); }
+    if (!FX.off) FX.text(ARENA.cx, ARENA.cy - 30, 'DRAW — THE POWERS CANCEL OUT', '#ffffff', 34, { life: 1.6, vy: 0, pop: 2 });
+    return;
+  }
+  const w = c.m > 0 ? c.a : c.b, l = w === c.a ? c.b : c.a;
+  l.st.invuln = 0; w.clashWins = (w.clashWins || 0) + 1;
+  dealDamage(w, l, skillDmg(w, (w.ult && w.ult.power) || 100) * (0.45 + Math.abs(c.m) * 2.5), { kind: 'skill', tag: 'explosion', power: 80 });
+  knock(l, w.x, w.y, 1100); l.st.stun = Math.max(l.st.stun, 0.7); l.ultMeter = Math.max(l.ultMeter, 35);
+  if (!FX.off) FX.text(ARENA.cx, ARENA.cy - 30, 'CLASH WON: ' + w.def.name.replace(/ Ball$/, '').toUpperCase(), w.def.design.c2, 36, { life: 1.6, vy: 0, pop: 2, stroke: '#000' });
+  releaseUlt(w);
 }
 /* per-ball skill power tweaks (curse, form) — called from useSkill */
 function supSkillPower(f, sk, P) {
   if (f.fm > 1 && !(f.st.antievo > 0)) P *= 1 + (f.fm - 1) * 0.5;   // (attack already rises with the form)
+  if (f.baseDef && f.baseDef.godBall) P *= (f.baseDef.skillK || GOD_SKILL_K)[f.form] || 1;   // free God Balls: richer ability versions hit more often, so each hit is lighter
   const s = f.sx;
   if (s && s.curseT > 0) { P *= 0.65; if (BATTLE) dealDamage(s.curseBy || null, f, f.maxHp * 0.03, { kind: 'dot', noCrit: true, noDef: true }); }
   if (s && s.energyT > 0) P *= 1.15;
@@ -140,6 +207,7 @@ function supDamageHook(src, tgt, amt, o) {
   if (ss && ss.bloodAuraT > 0 && src.alive) healFighter(src, amt * 0.25, true);
   if (ss && ss.predictT > 0 && o.kind === 'skill') amt *= 1.35;
   const ts = tgt.sx;
+  for (const fn of SUP.dmgHooks) { amt = fn(src, tgt, amt, o); if (!(amt > 0)) return 0; }
   if (ts && ts.hemoN > 0 && o.kind !== 'dot' && src) { ts.hemoN--; if (BATTLE) after(0.05, () => { if (tgt.alive) { dealDamage(ts.hemoBy, tgt, tgt.maxHp * 0.025, { kind: 'dot', noCrit: true, noDef: true }); if (!FX.off) FX.burst(tgt.x, tgt.y, '#d50000', 10, 180, 4, 0.4); } }); }
   return amt;
 }
@@ -149,16 +217,20 @@ function supCollide(a, b) {
     s.overcharge--;
     for (const e of supEnemies(a).slice(0, 3)) { dealDamage(a, e, skillDmg(a, 60) * 0.35, { kind: 'skill', tag: 'strike', effect: 'stun', power: 60 }); if (!FX.off) FX.bolt(a.x, a.y, e.x, e.y, '#ffee58', 4, 0.3); }
   }
-  if (s.hemoMark && b.sx) { /* handled in damage hook */ }
+  for (const fn of SUP.collideHooks) fn(a, b);
 }
 function supSteer(f) {
   const c = BATTLE && BATTLE.cond;
   if (c && c.kind === 'shift' && c.team !== f.team && !f.isClone) { f.steerX = -f.steerX; f.steerY = -f.steerY; }
+  for (const fn of SUP.steerHooks) fn(f);
   if (f.sx && f.sx.blindT > 0 && !f.isClone) { const a = BATTLE.time * 2.3 + f.sid * 1.7; f.steerX = dcos(a); f.steerY = dsin(a); f.steerPow = Math.max(f.steerPow, 500); }   // Eclipse: wanders blind
 }
 /** after movement & collisions each step: chains, portals, timed conditions, lag zones */
 function supremeStep(B, h) {
+  if (B.godCharge && B.godCharge.length) for (const c of B.godCharge.slice()) { c.t -= h; if (c.t <= 0 || !c.f.alive) { B.godCharge.splice(B.godCharge.indexOf(c), 1); if (c.f.alive) releaseUlt(c.f); } }
+  if (B.clash) clashStep(B, h);
   supWorld(B, h);
+  for (const fn of SUP.worldHooks) fn(B, h);
   for (const f of B.fighters) {
     if (!f.alive || !f.sx) continue;
     const s = f.sx;
@@ -212,7 +284,8 @@ function supWorld(B, h) {
     if (L.aim) {
       const A = L.aim, f = A.f; if (A.ang == null) A.ang = datan2(L.y1 - L.y0, L.x1 - L.x0);
       if (A.tgt && A.tgt.alive) { const want = datan2(A.tgt.y - f.y, A.tgt.x - f.x), da = ((want - A.ang + Math.PI * 3) % TAU) - Math.PI; A.ang += clamp(da, -A.turn * h, A.turn * h); }
-      const end = rayToWall(f.x, f.y, A.ang); L.x0 = f.x; L.y0 = f.y; L.x1 = end.x; L.y1 = end.y; L.w = A.w0 + (A.w1 - A.w0) * clamp((L.t - L.charge) / L.dur, 0, 1);
+      if (A.sweep) A.off = (A.off || 0) + A.sweep * h;
+      const end = rayToWall(f.x, f.y, A.ang + (A.off || 0)); L.x0 = f.x; L.y0 = f.y; L.x1 = end.x; L.y1 = end.y; L.w = A.w0 + (A.w1 - A.w0) * clamp((L.t - L.charge) / L.dur, 0, 1);
     }
   }
   for (const m of B.fighters) if (m.mirrorOf && m.alive && m.mirrorOf.alive) { const o = m.mirrorOf; m.x = inArenaX(2 * ARENA.cx - o.x, m.r); m.y = inArenaY(2 * ARENA.cy - o.y, m.r); m.vx = -o.vx; m.vy = -o.vy; }
@@ -257,6 +330,7 @@ Object.assign(Sound, {
 
 /* ---------------- AI: how good is each Supreme skill right now ---------------- */
 function supScore(ai, s, c) {
+  if (SUP.scoreFn[s.type]) return SUP.scoreFn[s.type](ai, s, c);
   const role = SUP.roles[s.type]; if (!role) return undefined;
   const f = ai.f, d = c.d, t = c.t;
   switch (role) {
@@ -276,7 +350,7 @@ function supScore(ai, s, c) {
 const supMinions = f => BATTLE ? BATTLE.fighters.filter(x => x.alive && x.owner === f && x.minion).length : 0;
 /* a summoned helper that looks like a ball and fights for its master */
 function supMinion(f, def, x, y, o = {}) {
-  if (!f.alive || supMinions(f) >= SUP.MINION_MAX) return null;
+  if (!f.alive || supMinions(f) >= (o.cap || SUP.MINION_MAX)) return null;
   const u = spawnUnit(f, 'minion', x, y, { def, force: true, P: o.P || 70, life: o.life || 8, hp: o.hp || 0.1, statMul: o.statMul || 0.7, rScale: o.rScale || 0.55, build: 0.3 });
   if (!u) return null;
   u.minion = true; u.ballLook = true; u.mech = false;
@@ -295,7 +369,7 @@ function supremeCommand(pl, a) {
   if (!pl || !BATTLE) return;
   const [cmd, sid, v1, v2] = a.map(x => x | 0), B = BATTLE;
   if (cmd >= 9) {                       // owner test controls (only in owner test battles)
-    if (!B.cfg.adminTest || !pl.def.adminOnly) return;
+    if (!(B.cfg.adminTest && pl.def.adminOnly) && !(B.cfg.godTest && pl.baseDef && pl.baseDef.godBall)) return;   // owner tests / free God Ball practice tests
     if (cmd === 9 && pl.baseDef && pl.baseDef.forms) { const k = clamp(v1, 0, 2); if (k > pl.form) startForm(pl, k); else if (k < pl.form) applyForm(pl, k); }
     if (cmd === 10) pl.ultMeter = 100;
     if (cmd === 11) for (const s of pl.allSkills()) s.cdLeft = 0;
@@ -361,14 +435,14 @@ function supCamera(B, ctx, dt) {
 function supDrawUnder(B, ctx, dt) {
   const d = B.darkFx;
   if (d) { d.t -= dt; if (d.t <= 0) B.darkFx = null; else { ctx.save(); ctx.globalAlpha = d.a * Math.min(1, d.t / 0.4, (d.max - d.t) / 0.25 + 0.1); ctx.fillStyle = d.col; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); ctx.restore(); } }
-  if (B.cond) { const c = B.cond, col = { frozen: '#80d8ff', inferno: '#ff3d00', storm: '#ffee58', shift: '#e040fb' }[c.kind]; ctx.save(); ctx.globalAlpha = 0.1 + 0.04 * Math.sin(B.time * 4); ctx.fillStyle = col; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); ctx.restore(); }
+  if (B.cond) { const c = B.cond, col = { frozen: '#80d8ff', inferno: '#ff3d00', storm: '#ffee58', shift: '#e040fb', ...SUP.condCols }[c.kind] || '#ffffff'; ctx.save(); ctx.globalAlpha = 0.1 + 0.04 * Math.sin(B.time * 4); ctx.fillStyle = col; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); ctx.restore(); }
   for (const P of B.portalPairs || []) for (const [x, y, col] of [[P.ax, P.ay, P.col], [P.bx, P.by, P.col2]]) {
     ctx.save(); ctx.translate(x, y); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(glowSprite(col), -P.r * 2, -P.r * 2, P.r * 4, P.r * 4);
     ctx.strokeStyle = col; ctx.lineWidth = 5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(0, 0, P.r * (1 - i * 0.22), P.r * 0.8 * (1 - i * 0.22), 0, B.time * (3 + i), B.time * (3 + i) + 4.2); ctx.stroke(); }
     ctx.restore();
   }
   for (const f of B.fighters) if (f.alive && f.sx && f.sx.leashT > 0 && f.sx.leash) {   // soul chains
-    const L = f.sx.leash; ctx.save(); ctx.strokeStyle = 'rgba(206,147,216,.85)'; ctx.lineWidth = 3; ctx.setLineDash([10, 5]); ctx.lineDashOffset = -B.time * 40;
+    const L = f.sx.leash; ctx.save(); ctx.strokeStyle = L.col ? rgba(L.col, 0.85) : 'rgba(206,147,216,.85)'; ctx.lineWidth = 3; ctx.setLineDash([10, 5]); ctx.lineDashOffset = -B.time * 40;
     ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(f.x, f.y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = 'rgba(206,147,216,.35)'; ctx.beginPath(); ctx.arc(L.x, L.y, L.r, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#4a148c'; ctx.beginPath(); ctx.arc(L.x, L.y, 10, 0, TAU); ctx.fill(); ctx.restore();
   }
@@ -382,6 +456,7 @@ function supChips(f, chips) {
   if (s.curseT > 0) chips.push(['CURSED', '#ce93d8']); if (s.leashT > 0) chips.push(['CHAINED', '#ce93d8']); if (s.lagT > 0) chips.push(['LAGGING', '#00ff41']);
   if (s.infShieldT > 0) chips.push(['∞ SHIELD', '#00e5ff']); if (s.counterT > 0) chips.push(['COUNTER', '#e1f5fe']); if (s.bloodAuraT > 0) chips.push(['BLOOD AURA', '#ff1744']);
   if (s.predictT > 0) chips.push(['FORESIGHT', '#ffd740']); if (s.blindT > 0) chips.push(['BLINDED', '#ff6d00']); if (s.packetT > 0) chips.push(['PACKET LOSS', '#00ff41']); if (s.scalesT > 0) chips.push(['DRAGON SCALES', '#ffd54f']); if (s.voidArmor > 0) chips.push(['VOID ARMOR', '#7c4dff']); if (s.hemoN > 0) chips.push(['BLEEDING', '#d50000']); if (s.rebirthT > 0) chips.push(['REBIRTH', '#ffea00']); if (s.adminT > 0) chips.push(['ADMIN ' + s.adminLeft, '#00e5ff']);
+  for (const fn of SUP.chipHooks) fn(f, chips);
   if (f.form) chips.push([f.form === 2 ? 'GOD FORM' : 'AWAKENED', f.def.design.c3]);
 }
 /* ---------------- registration helpers ---------------- */
@@ -1510,6 +1585,7 @@ function drawSupProj(ctx, p) {
     case 'shard': ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(r * 1.8, 0); ctx.lineTo(0, -r * 0.6); ctx.lineTo(-r * 1.2, 0); ctx.lineTo(0, r * 0.6); ctx.closePath(); ctx.fill(); ctx.restore(); ctx.drawImage(glowSprite(p.col), p.x - r * 2.4, p.y - r * 2.4, r * 4.8, r * 4.8); return true;
     case 'infloop': ctx.drawImage(glowSprite(p.col), p.x - r * 3.4, p.y - r * 3.4, r * 6.8, r * 6.8); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.55, 0, TAU); ctx.fill(); ctx.strokeStyle = rgba('#e040fb', 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.2, t * 8, t * 8 + 3); ctx.stroke(); return true;
   }
+  const fn = SUP.projStyles && SUP.projStyles[s]; if (fn) { fn(ctx, p, t, r, a); return true; }
   return false;
 }
 
@@ -1560,6 +1636,26 @@ function vPhoenix(ctx, x, y, s, col, a, q) { if (a <= 0.01) return; ctx.save(); 
 function vSun(ctx, x, y, r, col, a, q, black) { if (a <= 0.01) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(glowSprite(col), x - r * 3, y - r * 3, r * 6, r * 6); ctx.translate(x, y); ctx.rotate(q * 2); for (let i = 0; i < 20; i++) { const an = i / 20 * TAU, l = r * (0.35 + 0.25 * Math.sin(q * 20 + i * 1.7)); ctx.strokeStyle = rgba(i % 2 ? col : '#ffea00', 0.8); ctx.lineWidth = r * 0.07; ctx.beginPath(); ctx.moveTo(Math.cos(an) * r, Math.sin(an) * r); ctx.lineTo(Math.cos(an) * (r + l), Math.sin(an) * (r + l)); ctx.stroke(); } ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = black ? '#000000' : '#fff8e1'; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); if (black) { ctx.strokeStyle = col; ctx.lineWidth = r * 0.06; ctx.stroke(); } ctx.restore(); }
 function vMirrorHall(ctx, a, q) { if (a <= 0.01) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1) * 0.7; ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 7; i++) { const x = ARENA.x + ARENA.w * ((i + 0.5) / 7), w = 30 + 20 * Math.sin(q * 6 + i); const g = ctx.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(128,216,255,0)'); g.addColorStop(0.5, 'rgba(225,245,254,.5)'); g.addColorStop(1, 'rgba(234,128,252,0)'); ctx.fillStyle = g; ctx.save(); ctx.translate(x, ARENA.cy); ctx.transform(1, 0, 0.25 * Math.sin(q * 3 + i), 1, 0, 0); ctx.fillRect(-w, -ARENA.h / 2, w * 2, ARENA.h); ctx.restore(); } ctx.restore(); }
 function vOmega(ctx, x, y, s, col, a) { if (a <= 0.01) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.globalCompositeOperation = 'lighter'; ctx.translate(x, y); ctx.drawImage(glowSprite(col), -s * 1.4, -s * 1.4, s * 2.8, s * 2.8); ctx.strokeStyle = col; ctx.lineWidth = s * 0.06; ctx.beginPath(); ctx.arc(0, 0, s, 0, TAU); ctx.stroke(); ctx.font = `900 ${s * 1.2}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = rgba(col, 0.9); ctx.fillText('Ω', 0, s * 0.05); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = `900 ${s * 1.05}px Georgia, serif`; ctx.fillText('Ω', 0, s * 0.05); ctx.restore(); }
+
+/* GOD CLASH: two ultimate beams meet; the contact point is pushed toward the weaker ball as the clash goes on */
+function vClash(ctx, c, q) {
+  const a = c.a, b = c.b, dx = c.bx - c.ax, dy = c.by - c.ay;
+  const push = clamp(c.m, -0.6, 0.6) * Math.min(1, q * 1.4) * 0.8, mx = c.x + dx * push * 0.5, my = c.y + dy * push * 0.5, t = q * 40;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const [f, x, y] of [[a, c.ax, c.ay], [b, c.bx, c.by]]) {
+    const d = f.def.design, wob = 1 + 0.25 * Math.sin(t + (f === a ? 0 : 2));
+    for (const [w, col] of [[46 * wob, rgba(d.c3, 0.25)], [22 * wob, rgba(d.c2, 0.8)], [8, '#ffffff']]) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(mx, my); ctx.stroke(); }
+    const r = 70 * wob; ctx.drawImage(glowSprite(d.c3), x - r, y - r, r * 2, r * 2);
+  }
+  const R = 90 + 40 * Math.sin(t * 1.7); ctx.drawImage(glowSprite('#ffffff'), mx - R, my - R, R * 2, R * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 3;
+  for (let i = 0; i < 10; i++) { const an = i / 10 * TAU + t * 0.3, l = 60 + 50 * Math.abs(Math.sin(t + i)); ctx.beginPath(); ctx.moveTo(mx, my); let x = mx, y = my; for (let k = 0; k < 4; k++) { x += Math.cos(an + (Math.random() - 0.5)) * l / 4; y += Math.sin(an + (Math.random() - 0.5)) * l / 4; ctx.lineTo(x, y); } ctx.stroke(); }
+  for (let i = 0; i < 3; i++) { ctx.strokeStyle = rgba(i % 2 ? '#ffd54f' : '#ffffff', 0.5 * (1 - ((q * 3 + i / 3) % 1))); ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(mx, my, 40 + ((q * 3 + i / 3) % 1) * 260, 0, TAU); ctx.stroke(); }
+  ctx.globalCompositeOperation = 'source-over'; ctx.font = '900 22px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = '#000';
+  const shown = Math.min(1, q * 2), pa = Math.round(c.pa / 100 * shown), pb = Math.round(c.pb / 100 * shown);
+  for (const [v, x, y, col] of [[pa, c.ax, c.ay - a.r - 46, a.def.design.c2], [pb, c.bx, c.by - b.r - 46, b.def.design.c2]]) { ctx.strokeText('⚡ ' + v, x, y); ctx.fillStyle = col; ctx.fillText('⚡ ' + v, x, y); }
+  ctx.restore();
+}
 /* =====================================================================
    OWNER UI — ADMIN DELETE console, test-battle bar, Admin Ball Control Panel (browser only)
    Everything here is a view: each command is an engine input that the server replays and checks,
@@ -1649,7 +1745,7 @@ function supConsoleButton() {
 /* ---------------- owner test battle bar ---------------- */
 function supTestBar() {
   const B = BATTLE, f = B && B.player; let bar = document.getElementById('supTest');
-  if (!B || !B.cfg.adminTest || B.over || !f || !f.baseDef) { if (bar) bar.remove(); return; }
+  if (!B || !(B.cfg.adminTest || B.cfg.godTest) || B.over || !f || !f.baseDef) { if (bar) bar.remove(); return; }
   if (bar && bar._b === B) { bar.querySelector('[data-k=form]').textContent = 'Form: ' + (f.baseDef.forms[f.form] || {}).name; return; }
   if (bar) bar.remove();
   bar = supEl('div', { id: 'supTest', class: 'sup-test' }); bar._b = B;
@@ -1660,6 +1756,7 @@ function supTestBar() {
   bar.append(supEl('button', { class: 'sup-btn gold', onclick: () => cmd(10) }, 'ULT ready'), supEl('button', { class: 'sup-btn', onclick: () => cmd(11) }, 'Reset CD'));
   const fx = SUP.fx[f.baseDef.id] || {};
   for (const [k, l] of [['entrance', 'Entrance'], ['victory', 'Victory'], ['defeat', 'Defeat']]) bar.append(supEl('button', { class: 'sup-btn', onclick: () => { if (fx[k]) { fx[k](f, f.def.design); supSound(f, k === 'entrance' ? 'transform' : k); } } }, '▶ ' + l));
+  if (B.cfg.godTest) bar.append(supEl('span', { class: 'muted', style: { alignSelf: 'center', fontSize: '11px' } }, 'PRACTICE TEST — no rewards'));
   document.body.append(bar);
 }
 if (!window.NBB_HEADLESS) setInterval(() => { try {

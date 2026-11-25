@@ -1,4 +1,14 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0)
+
+## 2.2.0 — Four Supreme God Balls, FREE ([GOD-BALLS.md](GOD-BALLS.md))
+- ✅ God of Chaos, God of War, AI Tech, Solar Eclipse: free for every player (no payment, subscription, premium currency or admin rights)
+- ✅ 20 skills × 3 versions (Base / Awakened / Final God) with different mechanics; 4 ultimates + 4 final-form ultimates with cinematic sequences
+- ✅ 12 forms (3 each) with their own art; forms unlock with free progression (Lv 10 / Lv 20); every form changes the abilities, not just the colour
+- ✅ Passives: Unstable Reality, Battle Instinct, Combat Learning (capped — never invincible), Celestial Balance with a dedicated always-available state switch
+- ✅ GOD CLASH: simultaneous God ultimates clash; the battle state decides; either side can win; never blocks gameplay
+- ✅ Collection section, interactive preview (forms / states / skill versions), free practice tests with a test bar, selection-screen row
+- ✅ Deterministic: server verification and PvP lockstep; balance simulated; God of Time and all existing balls unchanged
+- ✅ Tests: `server/test/gods.test.js`
 
 ## 2.1.0 — Supreme Admin Balls ([SUPREME-ADMIN-BALLS.md](SUPREME-ADMIN-BALLS.md))
 - ✅ 15 owner-only Supreme balls, each with 5 unique abilities, an ultimate, a final-form ultimate and 3 forms changing in real time (Base / Awakened / Final God Form)
