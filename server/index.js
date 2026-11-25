@@ -34,6 +34,15 @@ game.server.listen(cfg.port, cfg.host, () => {
   if (!owner) console.log('No owner account yet. Create it with:  npm run owner -- create --username <name>');
   else if (!owner.totp_enabled) console.log('Owner account has no 2FA yet. Run:  npm run owner -- reset-2fa');
 });
+game.server.on('error', e => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\nThe game server is ALREADY RUNNING (port ${cfg.port} is in use), probably in another black window.`);
+    console.error('You do not need to start it again: just open the game. Close this window.');
+    console.error(`(To restart it, close the other server window first, or use another port: set PORT=${cfg.port + 1})\n`);
+    process.exit(1);
+  }
+  throw e;
+});
 const shutdown = sig => { console.log(`\n${sig} received, shutting down…`); game.close().then(() => process.exit(0)); setTimeout(() => process.exit(1), 8000).unref(); };
 process.on('SIGINT', () => shutdown('SIGINT')); process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', e => console.error('[unhandledRejection]', e));
