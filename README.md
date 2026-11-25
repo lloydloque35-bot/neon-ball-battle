@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.2.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.3.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -48,7 +48,11 @@ Version **2.2.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
     - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
     - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
-  - **NEW 2.2.0 — 4 Supreme God Balls, FREE for every player** ([docs/GOD-BALLS.md](docs/GOD-BALLS.md)):
+  - **NEW 2.3.0 — 2 Premium God Balls, PHP 99 each (PHP 198 for both)** ([docs/PREMIUM-GOD-SHOP.md](docs/PREMIUM-GOD-SHOP.md)):
+    - **God of Guns** (weapon master: floating arsenal, railguns, bullet storms, orbital cannon) and **God Portal** (portals, summons, dimensional traps)
+    - God Portal's ultimate takes its opponent into the **Infinite Void**, a real second battle space with platforms, gravity, zones, hazards and a portal network
+    - **Premium God Shop** with PayMongo (GCash, Maya, QR Ph, online banking, cards): server-verified payments, permanent ownership, restore and history
+  - **2.2.0 — 4 Supreme God Balls, FREE for every player** ([docs/GOD-BALLS.md](docs/GOD-BALLS.md)):
     - **God of Chaos**, **God of War**, **AI Tech**, **Solar Eclipse** — 5 skills each with 3 versions (Base / Awakened / Final God), a regular and a final-form ultimate, 3 forms (Awakened at ball Lv 10, Final God Form at Lv 20) and a passive
     - **GOD CLASH**: two God ultimates at the same moment lock together and the battle state decides the winner
     - a ⚡ Supreme God Balls section in the Collection with an interactive form preview and free practice tests
@@ -90,15 +94,17 @@ Version **2.2.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
 index.html  style.css  script.js     game (rendering, physics, AI, UI; shared deterministic core)
 supreme.js                           2.1.0 Supreme Admin Balls + the forms / God Clash framework (also loaded by the server)
 gods.js                              2.2.0 free Supreme God Balls (also loaded by the server)
+gods2.js                             2.3.0 Premium God Balls, the Infinite Void, the God Shop screen (also loaded by the server)
 online.js                            accounts, cloud save, premium, rankings, fusion, owner dashboard UI
 server/                              Node game server (no dependencies)
   index.js app.js config.js          entry, wiring, environment config
   auth.js security.js http.js        sessions, 2FA, CSRF, rate limits, headers, static whitelist
   game.js economy.js verifier.js     cloud save, verified battles (worker threads), economy
   billing.js                         Stripe subscription + signed webhooks
+  shop.js                            Premium God Shop: PayMongo one-time PHP purchases (verified server-side)
   admin.js                           owner-only API
   pvp.js ws.js                       online PvP: matchmaking, rooms, lockstep relay (WebSocket)
-  core.js                            loads script.js + supreme.js + gods.js headlessly for server-side replays
+  core.js                            loads script.js + supreme.js + gods.js + gods2.js headlessly for server-side replays
   migrations/  cli/  test/
 docs/                                deployment, security, multiplayer, checklist
 assets/                              optional (everything is drawn procedurally)

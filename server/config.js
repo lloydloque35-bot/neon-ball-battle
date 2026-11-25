@@ -56,6 +56,13 @@ function buildConfig() {
       apiBase: (env.STRIPE_API_BASE || 'https://api.stripe.com').replace(/\/+$/, ''),
       autoRenew: bool(env.PREMIUM_AUTO_RENEW, true),
     },
+    shop: {                                                          // 2.3.0 Premium God Shop (PHP, PayMongo)
+      secretKey: env.PAYMONGO_SECRET_KEY || '',
+      webhookSecret: env.PAYMONGO_WEBHOOK_SECRET || '',
+      methods: (env.PAYMONGO_METHODS || 'gcash,paymaya,qrph,card').split(',').map(s => s.trim()).filter(Boolean),
+      liveConfirmed: bool(env.PAYMONGO_LIVE_CONFIRMED, false),
+      apiBase: (env.PAYMONGO_API_BASE || 'https://api.paymongo.com').replace(/\/+$/, ''),
+    },
     mail: { resendKey: env.RESEND_API_KEY || '', from: env.MAIL_FROM || '' },
     logLevel: env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
     limits: { registerPerHour: int(env.LIMIT_REGISTER_PER_HOUR, 5) },
@@ -84,6 +91,8 @@ function validateConfig(cfg) {
   if (cfg.isProd && !cfg.cookieSecure) errors.push('COOKIE_SECURE must be true in production (serve the game over HTTPS)');
   if (cfg.isProd && !/^https:\/\//.test(cfg.appOrigin)) errors.push('APP_ORIGIN must be an https:// URL in production');
   if (!cfg.isProd && P.mode === 'disabled') warnings.push('Payments are disabled (PAYMENTS_MODE=disabled). Premium checkout will show as unavailable.');
+  const SH = cfg.shop; if (SH.secretKey && !/^sk_(test|live)_/.test(SH.secretKey)) errors.push('PAYMONGO_SECRET_KEY must start with sk_test_ or sk_live_');
+  if (SH.secretKey.startsWith('sk_live_') && !SH.liveConfirmed) warnings.push('PayMongo LIVE key set but PAYMONGO_LIVE_CONFIRMED is not true: the Premium God Shop stays closed');
   return { errors, warnings };
 }
 

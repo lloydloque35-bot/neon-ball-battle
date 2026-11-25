@@ -28,6 +28,7 @@ function register(app, S, H) {
   action('/api/shop/unlock', (u, b) => {
     const def = ballOrThrow(b.ball);
     if (def.free) throw bad('This ball is free — it is already unlocked for every player');
+    if (def.paid) throw bad('This Premium God Ball is sold in the Premium God Shop (PHP), not for coins');
     if (def.adminOnly || def.limited || def.premium || def.fusion || def.draft || def.enabled === false) throw bad('This ball cannot be bought with coins');
     if (H.ballRow(u.id, def.id)?.owned) throw bad('You already own this ball');
     spendCoins(u.id, core.RARITY_INFO[def.rarity]?.price || 1000);
@@ -76,7 +77,7 @@ function register(app, S, H) {
   action('/api/shop/summon', (u, b) => {
     const O = core.ORBS[b.orb]; if (!O) throw bad('Unknown orb');
     const premium = S.premiumOf(u.id).active, price = Math.round(O.price * (premium ? 0.8 : 1));
-    const pool = core.allBalls().filter(x => x.enabled && !x.adminOnly && !x.limited && !x.premium && !x.fusion && !x.draft && O.w[x.rarity]);
+    const pool = core.allBalls().filter(x => x.enabled && !x.adminOnly && !x.limited && !x.premium && !x.paid && !x.fusion && !x.draft && O.w[x.rarity]);
     spendCoins(u.id, price);
     const total = pool.reduce((s, x) => s + O.w[x.rarity], 0); let roll = S_.secureRandom() * total, got = pool[0];
     for (const x of pool) { roll -= O.w[x.rarity]; if (roll <= 0) { got = x; break; } }

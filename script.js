@@ -744,6 +744,7 @@ const isPremium = () => !!(window.Online && window.Online.isPremium && window.On
 function canUseBall(b) {
   if (!b || !b.enabled && !isAdmin()) return false;
   if (b.adminOnly) return isAdmin();
+  if (b.paid) return isAdmin() || !!prog(b.id).owned;  // Premium God Balls: bought once (PHP), owned forever
   if (b.free) return true;                            // free for every player (Anti Ball)
   if (isAdmin() || prog(b.id).owned) return true;
   return isPremium() && !b.fusion;                    // premium: every non-admin ball, incl. premium & limited
@@ -1384,7 +1385,7 @@ class Fighter {
   cdMul() { const ae = this.st.antievo > 0; let m = this.cdTree; if (this.rage && !ae) m *= 0.6; if (this.god > 0 && !ae) m *= 0.5; if (this.st.overclock > 0 && !ae) m *= 0.65; if (this.form && !ae) m *= this.def.godBall ? (this.form === 2 ? 0.9 : 0.95) : (this.form === 2 ? 0.8 : 0.9); if (this.sx && this.sx.energyT > 0) m *= 0.75; if (this.pCd !== 1) m *= this.pCd; return m; }
   canAct() { return this.alive && this.st.stun <= 0 && this.st.timestop <= 0 && this.casting <= 0 && !(this.st.outside > 0); }
   allSkills() { return this.temp ? this.skills.concat([this.temp]) : this.skills; }
-  enemies() { return BATTLE ? BATTLE.fighters.filter(f => f.alive && f.team !== this.team) : []; }
+  enemies() { const dm = this.dim || 0; return BATTLE ? BATTLE.fighters.filter(f => f.alive && f.team !== this.team && (f.dim || 0) === dm) : []; }   // 2.3.0: separate dimensions never interact
 }
 
 function applyEffect(src, tgt, eff, power = 50) {
@@ -1405,6 +1406,7 @@ function dealDamage(src, tgt, amt, o = {}) {
   if (!tgt.alive || amt <= 0 || !BATTLE || tgt.st.outside > 0) return 0;   // outside the arena (in a portal): untouchable
   if (tgt.st.invuln > 0 && o.kind !== 'dot') { if (Math.random() < 0.3) FX.text(tgt.x, tgt.y - tgt.r, 'IMMUNE', '#9fe8ff', 14, { life: 0.5 }); return 0; }
   const s = src && src.alive !== undefined ? src : null, cr = s ? s.credit : null;
+  if (s && (s.dim || 0) !== (tgt.dim || 0) && o.kind !== 'dot') return 0;
   let crit = false;
   if (s && !o.noCrit && RNG() < s.crit / 100 * 0.45) { amt *= 1.75; crit = true; }
   if (!o.noDef) amt *= 70 / (70 + tgt.effDef() * 0.7);
@@ -1563,7 +1565,7 @@ function explodeAt(f, x, y, rad, dmg, col, effect, force = 520, power = 60) {
   FX.burst(x, y, col, 36, rad * 2.4, 7, 0.7); FX.sparks(x, y, '#ffffff', 12, rad * 3);
   FX.addShake(Math.min(16, rad / 25)); Sound.play('boom');
   for (const e of BATTLE.fighters) {
-    if (!e.alive || e.team === f.team) continue;
+    if (!e.alive || e.team === f.team || (e.dim || 0) !== (f.dim || 0)) continue;
     const d = len(e.x - x, e.y - y);
     if (d < rad + e.r) { dealDamage(f, e, dmg * (1 - 0.35 * clamp(d / rad, 0, 1)), { kind: 'skill', tag: 'explosion', effect, power }); knock(e, x, y, force); }
   }
@@ -2759,6 +2761,7 @@ class Battle {
     }
   }
   collide(a, b) {
+    if ((a.dim || 0) !== (b.dim || 0)) return;
     if (a.st.outside > 0 || b.st.outside > 0 || a.noCollide || b.noCollide || (a.anchored && b.anchored)) return;
     const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r, d2 = dx * dx + dy * dy;
     if (d2 >= rr * rr) return;
@@ -2794,14 +2797,15 @@ class Battle {
     FX.ring(cx, cy, '#ffffff', 50 + strong * 40, 0.22, 4, 8);
     FX.addShake(2 + strong * 4); Sound.play('hit', clamp(strong, 0, 1));
   }
-  enemiesOf(team) { return this.fighters.filter(f => f.alive && f.team !== team); }
+  enemiesOf(team, dim) { return this.fighters.filter(f => f.alive && f.team !== team && (dim === undefined || (f.dim || 0) === dim)); }
   updateProjs(h) {
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const p = this.projs[i]; p.life -= h;
+      if (p.dim === undefined) p.dim = p.owner ? (p.owner.dim || 0) : 0;
       if (p.frozen > 0) { p.frozen -= h; p.life += h; continue; }   // Time Freeze
       if (p.tick) p.tick(p, h);
       if (p.homing) {
-        if (!p.target || !p.target.alive) { let bd = Infinity; for (const e of this.enemiesOf(p.team)) { const dd = dist2(e.x, e.y, p.x, p.y); if (dd < bd) { bd = dd; p.target = e; } } }
+        if (!p.target || !p.target.alive || (p.target.dim || 0) !== p.dim) { p.target = null; let bd = Infinity; for (const e of this.enemiesOf(p.team, p.dim)) { const dd = dist2(e.x, e.y, p.x, p.y); if (dd < bd) { bd = dd; p.target = e; } } }
         if (p.target && p.target.alive) { const want = datan2(p.target.y - p.y, p.target.x - p.x); let cur = datan2(p.vy, p.vx); const da = ((want - cur + Math.PI * 3) % TAU) - Math.PI; cur += clamp(da, -p.homing * h, p.homing * h); p.vx = dcos(cur) * p.speed; p.vy = dsin(cur) * p.speed; }
       }
       p.x += p.vx * h; p.y += p.vy * h;
@@ -2817,7 +2821,7 @@ class Battle {
         this.projs.splice(i, 1); continue;
       }
       for (const e of this.fighters) {
-        if (!e.alive || e.team === p.team || e.st.phase > 0 || e.st.outside > 0) continue;
+        if (!e.alive || e.team === p.team || e.st.phase > 0 || e.st.outside > 0 || (e.dim || 0) !== p.dim) continue;
         if (p.hits && p.hits.has(e.sid)) continue;
         if (dist2(e.x, e.y, p.x, p.y) < (e.r + p.r) * (e.r + p.r)) {
           const energy = !p.ult && p.style !== 'missile';   // only energy shots: never ultimates, never physical missiles
@@ -2851,7 +2855,7 @@ class Battle {
       else { b.tick = (b.tick || 0) - h; if (b.tick <= 0) { b.tick = 0.12; doHit = true; FX.addShake(2); } }
       if (!doHit) continue;
       for (const e of this.fighters) {
-        if (!e.alive || e.team === b.team) continue;
+        if (!e.alive || e.team === b.team || (e.dim || 0) !== (o.dim || 0)) continue;
         if (e.st.phase > 0 || e.st.outside > 0) continue;
         if (segDist(e.x, e.y, o.x, o.y, b.end.x, b.end.y) < e.r + b.w / 2) {
           dealDamage(o, e, b.dmg * (e.st.reflect > 0 ? 0.5 : e.st.reverse > 0 ? 0.6 : 1), { kind: 'skill', tag: 'beam', effect: b.effect, power: b.power });
@@ -2869,7 +2873,7 @@ class Battle {
       if (w.r > w.maxR) { this.waves.splice(i, 1); continue; }
       if (w.clearProj) for (let k = this.projs.length - 1; k >= 0; k--) { const p = this.projs[k]; if (p.team !== w.team && dist2(p.x, p.y, w.x, w.y) < w.r * w.r) { FX.burst(p.x, p.y, '#b388ff', 6, 160, 4, 0.3); this.projs.splice(k, 1); } }
       for (const e of this.fighters) {
-        if (!e.alive || e.team === w.team || w.hit.has(e.uid) || e.st.outside > 0) continue;
+        if (!e.alive || e.team === w.team || w.hit.has(e.uid) || e.st.outside > 0 || (e.dim || 0) !== ((w.owner && w.owner.dim) || 0)) continue;
         const d = len(e.x - w.x, e.y - w.y);
         if (Math.abs(d - w.r) < e.r + w.w / 2) { w.hit.add(e.uid); dealDamage(w.owner, e, w.dmg, { kind: 'skill', tag: 'wave', effect: w.effect, power: w.power }); knock(e, w.x, w.y, w.force); FX.sparks(e.x, e.y, w.col, 10, 400); if (w.onHit && e.alive) w.onHit(e); }
       }
@@ -2885,7 +2889,7 @@ class Battle {
         this.zones.splice(i, 1); continue;
       }
       for (const e of this.fighters) {
-        if (!e.alive || e.team === z.team || e.st.outside > 0) continue;
+        if (!e.alive || e.team === z.team || e.st.outside > 0 || (e.dim || 0) !== ((z.owner && z.owner.dim) || 0)) continue;
         const dx = z.x - e.x, dy = z.y - e.y, d = len(dx, dy) || 1;
         if (z.custom) { if (z.onTick) z.onTick(z, e, d, h); continue; }
         if (z.kind === 'nullzone' || z.kind === 'cybertrap') { techZone(this, z, e, d, h); continue; }
@@ -2914,7 +2918,7 @@ class Battle {
       if (s.kind === 'pillar') { this.pillars.push({ x: s.x, w: s.r * 1.3, col: s.col, life: 0.5, max: 0.5 }); Sound.play('beam'); }
       FX.ring(s.x, s.y, s.col, s.r * 1.5, 0.35, 8); FX.addShake(5);
       for (const e of this.fighters) {
-        if (!e.alive || e.team === s.team || e.st.outside > 0) continue;
+        if (!e.alive || e.team === s.team || e.st.outside > 0 || (e.dim || 0) !== ((s.owner && s.owner.dim) || 0)) continue;
         const inPillar = s.kind === 'pillar' && Math.abs(e.x - s.x) < s.r * 0.65 + e.r;
         if (inPillar || len(e.x - s.x, e.y - s.y) < s.r + e.r) { dealDamage(s.owner, e, s.dmg, { kind: 'skill', tag: 'strike', effect: s.effect, power: s.power }); knock(e, s.x, s.y, s.kind === 'titan' ? 650 : 300); }
       }
@@ -2927,7 +2931,7 @@ class Battle {
       for (let k = 0; k < o.n; k++) {
         const a = o.ang + k / o.n * TAU, ox = f.x + dcos(a) * o.rad, oy = f.y + dsin(a) * o.rad;
         for (const e of this.fighters) {
-          if (!e.alive || e.team === o.team || e.st.outside > 0) continue;
+          if (!e.alive || e.team === o.team || e.st.outside > 0 || (e.dim || 0) !== (f.dim || 0)) continue;
           if (dist2(e.x, e.y, ox, oy) < (e.r + 11) * (e.r + 11)) {
             const key = e.uid * 10 + k;
             if ((o.hitCd.get(key) || 0) <= this.time) { o.hitCd.set(key, this.time + 0.45); dealDamage(f, e, o.dmg, { kind: 'skill', tag: 'orb', effect: o.effect, power: o.power }); FX.sparks(ox, oy, o.col, 6, 300); }
@@ -2982,7 +2986,7 @@ Battle.prototype.updateLasers = function (h) {
     if (L.sweep) { const S = L.sweep, a = S.a0 + S.av * L.t; L.x0 = S.cx - dcos(a) * S.len; L.y0 = S.cy - dsin(a) * S.len; L.x1 = S.cx + dcos(a) * S.len; L.y1 = S.cy + dsin(a) * S.len; }
     if (L.t < L.charge) continue;
     for (const e of this.fighters) {
-      if (!e.alive || e.team === L.team || e.st.outside > 0 || e.st.phase > 0) continue;
+      if (!e.alive || e.team === L.team || e.st.outside > 0 || e.st.phase > 0 || (e.dim || 0) !== (L.owner.dim || 0)) continue;
       if (segDist(e.x, e.y, L.x0, L.y0, L.x1, L.y1) < e.r + L.w / 2 && (L.ticks.get(e.uid) || 0) <= this.time) {
         L.ticks.set(e.uid, this.time + 0.45);
         dealDamage(L.owner, e, L.dmg, { kind: 'skill', tag: 'laser', power: 60, noCrit: true });
@@ -3866,7 +3870,7 @@ const COSMETIC_SLOTS = { aura: 'Aura colour', skin: 'Ball skin', trail: 'Trail',
 const DAILY_REWARDS = [{ coins: 100 }, { coins: 150 }, { exp: 150 }, { coins: 250 }, { cosmetic: 'trail_stardust', coins: 200 }, { coins: 400 }, { coins: 600, exp: 300 }];
 /* ---------- ball fusion: two eligible balls → a brand-new spherical form (originals are kept) ---------- */
 const FUSION_COST = 2000, FUSION_MIN_LEVEL = 10, FUSION_MAX = 12;
-function fusionEligible(b) { return !!b && !b.adminOnly && !b.limited && !b.premium && !b.fusion && !b.draft; }
+function fusionEligible(b) { return !!b && !b.adminOnly && !b.limited && !b.premium && !b.paid && !b.fusion && !b.draft; }
 function makeFusionDef(a, b, id) {
   const ri = r => RARITIES.indexOf(r), rar = RARITIES[Math.min(ri('God Tier'), Math.max(ri(a.rarity), ri(b.rarity)) + 1)];
   const avg = k => Math.round((a[k] + b[k]) / 2 * 1.12);
@@ -4129,7 +4133,7 @@ const UI = {
     c.append(ballCanvas(b, 84, { evo: owned ? p.evo : 0 }));
     if (owned && !b.adminOnly) c.append(h('span', { class: 'lv' }, 'Lv ' + p.level));
     if (p.evo) c.append(h('span', { class: 'evo' }, '★'.repeat(p.evo)));
-    if (!owned && o.showLock) c.append(h('div', { class: 'lock' }, b.adminOnly ? '♛ ADMIN' : b.premium ? '★ PREMIUM' : b.limited ? '⏳ EVENT' : '🔒 ' + fmtNum(RARITY_INFO[b.rarity]?.price || 1000)));
+    if (!owned && o.showLock) c.append(h('div', { class: 'lock' }, b.adminOnly ? '♛ ADMIN' : b.paid ? '💎 PHP ' + (b.pricePhp || 99) : b.premium ? '★ PREMIUM' : b.limited ? '⏳ EVENT' : '🔒 ' + fmtNum(RARITY_INFO[b.rarity]?.price || 1000)));
     if (owned && !p.owned && !b.adminOnly && !b.free && isPremium()) c.append(h('span', { class: 'evo', title: 'Unlocked by Ultimate Premium' }, '★P'));
     if (b.free) c.append(h('span', { class: 'tag-free' }, 'FREE'));
     if (b.isNew) c.append(h('span', { class: 'tag-new' }, 'NEW'));
@@ -4254,7 +4258,7 @@ const ORBS = {
 };
 function localSummon(kind) {
   const O = ORBS[kind]; if (SAVE.coins < O.price) throw new Error('Not enough coins');
-  const pool = allBalls().filter(b => b.enabled && !b.adminOnly && !b.limited && !b.premium && !b.fusion && !b.draft && O.w[b.rarity]);
+  const pool = allBalls().filter(b => b.enabled && !b.adminOnly && !b.limited && !b.premium && !b.paid && !b.fusion && !b.draft && O.w[b.rarity]);
   const total = pool.reduce((s, b) => s + O.w[b.rarity], 0); let r = Math.random() * total, got = pool[0];
   for (const b of pool) { r -= O.w[b.rarity]; if (r <= 0) { got = b; break; } }
   addCoins(-O.price); SAVE.stats.summons++;

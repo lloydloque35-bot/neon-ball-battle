@@ -442,7 +442,7 @@ Object.assign(UI, {
   adTab: 'overview',
   render_admin() {
     const tabs = $('#adminTabs'); tabs.innerHTML = '';
-    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
+    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls'], ['shopph', '💳 God Shop (PHP)']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
       tabs.append(h('button', { class: 'tab admin-tab' + (this.adTab === k ? ' active' : ''), onclick: () => { this.adTab = k; this.render_admin(); } }, l));
     tabs.append(h('button', { class: 'btn admin small', style: { marginLeft: 'auto' }, onclick: () => this.openCreator(null) }, '＋ Create New Ball'));
     const body = $('#adminBody'); body.innerHTML = '<p class="muted">Loading…</p>';

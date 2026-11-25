@@ -10,6 +10,7 @@ const S_ = require('../security');
 const { startServer, Client } = require('./helpers');
 const { createOwner, confirmTotp } = require('../cli/owner');
 const { loadCore } = require('../core');
+const { VERSION } = require('../app');
 
 const core = loadCore(); core.setCatalog(null);
 const STEP = core.STEP;
@@ -100,12 +101,12 @@ test('owner: Spawn & Test battles start in the chosen form; admin commands are a
   assert.equal(fin.status, 200);
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.delete_console'"));
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.supreme_test'"));
-  const h = (await owner.get('/api/health')).data; assert.equal(h.version, '2.2.0');
+  const h = (await owner.get('/api/health')).data; assert.equal(h.version, VERSION);
 });
 
 /* ---------------- engine (long synchronous simulations run after the server tests) ---------------- */
 test('15 Supreme Admin balls: owner-only, 5 unique abilities, 2 ultimates and 3 forms each', () => {
-  assert.equal(core.GAME_VERSION, '2.2.0');
+  assert.equal(core.GAME_VERSION, VERSION);
   assert.deepEqual([...core.supremeIds()].sort(), IDS.slice().sort());
   const seen = new Map();
   for (const id of IDS) {

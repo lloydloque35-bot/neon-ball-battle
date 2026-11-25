@@ -8,7 +8,7 @@
    reached in battle at 60% / 30% HP or with the 1st / 2nd ultimate), its own art, idle / bounce / victory / defeat
    effects and its own sound profile. Admin-only access is enforced by the server (adminOnly balls → owner only).
    ===================================================================== */
-const GAME_VERSION = '2.2.0';
+const GAME_VERSION = '2.3.0';
 const FORM_MUL = [1, 1.18, 1.38];                 // stats & skill power per form
 const FORM_MUL_GOD = [1, 1.08, 1.16];
 const GOD_SKILL_K = [1.1, 0.88, 0.62];            // free God Balls: their forms change the abilities themselves, so the stat boost is smaller
@@ -66,8 +66,8 @@ function supremeInit(f, o) {
     f.skills.forEach((s, i) => { s.cd = Math.max(0.5, (s.cd || 6) * mul); if (off.includes(i)) { s.locked = true; s.disabled = true; } });
   }
   // free God Balls unlock their forms with the ball's level; owner / practice test battles can use every form
-  f.formCap = f.def.godBall && !(BATTLE && BATTLE.cfg && (BATTLE.cfg.godTest || BATTLE.cfg.adminTest)) ? godFormCap(f.level) : 2;
-  if (f.def.godBall) f.ultCharge *= 0.7;            // free God Balls: ultimates charge a little slower (they also transform with them)
+  f.formCap = f.def.godBall && !f.def.paid && !(BATTLE && BATTLE.cfg && (BATTLE.cfg.godTest || BATTLE.cfg.adminTest)) ? godFormCap(f.level) : 2;   // bought Premium God Balls: every form at once
+  if (f.def.godBall) f.ultCharge *= f.def.ultChargeMul || 0.7;            // free God Balls: ultimates charge a little slower (they also transform with them)
   const pv = SUP.passives[f.def.id]; if (pv && !f.isClone) { f.sx.passive = pv.tick; if (pv.init) pv.init(f); }
   if (o.startForm && !f.isClone) applyForm(f, clamp(o.startForm | 0, 0, f.formCap), true);
 }
@@ -246,7 +246,7 @@ function supremeStep(B, h) {
     for (let i = B.portalPairs.length - 1; i >= 0; i--) {
       const P = B.portalPairs[i]; P.t -= h; if (P.t <= 0) { B.portalPairs.splice(i, 1); continue; }
       for (const f of B.fighters) {
-        if (!f.alive || f.anchored || f.tether || f.st.outside > 0 || (f.portalCd || 0) > B.time) continue;
+        if (!f.alive || f.anchored || f.tether || f.st.outside > 0 || (f.portalCd || 0) > B.time || (f.dim || 0) !== (P.dim || 0)) continue;
         for (const [ax, ay, bx, by] of [[P.ax, P.ay, P.bx, P.by], [P.bx, P.by, P.ax, P.ay]]) if (len(f.x - ax, f.y - ay) < P.r) {
           const sp = len(f.vx, f.vy) || 1; f.x = inArenaX(bx + f.vx / sp * (P.r + f.r + 4), f.r); f.y = inArenaY(by + f.vy / sp * (P.r + f.r + 4), f.r); f.portalCd = B.time + 0.7;
           if (!FX.off) { FX.ring(bx, by, P.col2, P.r * 1.8, 0.3, 5, P.r); Sound.play('portal'); } break;

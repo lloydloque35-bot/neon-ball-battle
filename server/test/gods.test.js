@@ -8,6 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startServer, Client } = require('./helpers');
 const { loadCore } = require('../core');
+const { VERSION } = require('../app');
 
 const core = loadCore(); core.setCatalog(null);
 const STEP = core.STEP, GODS = ['godofchaos', 'godofwar', 'aitech', 'solareclipse'];
@@ -57,7 +58,7 @@ test('free practice tests: any form + test bar, Practice only; test commands are
 
 /* ---------------- engine ---------------- */
 test('four free God Balls: 5 skills (+ Solar Eclipse\'s state control), 2 ultimates, 3 forms, passives', () => {
-  assert.equal(core.GAME_VERSION, '2.2.0');
+  assert.equal(core.GAME_VERSION, VERSION);
   assert.deepEqual([...core.godIds()], GODS);
   const seen = new Set();
   for (const id of GODS) {

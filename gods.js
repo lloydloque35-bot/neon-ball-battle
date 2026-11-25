@@ -14,7 +14,7 @@ const GOD_BALLS = [];
 /** registers a free God Ball (Supreme framework: forms, final ultimate, effects) */
 function godBall(def, cfg) {
   Object.assign(def, { supreme: true, godBall: true, free: true, adminOnly: false, godMode: false, isNew: true, forms: cfg.forms, finalUlt: cfg.finalUlt, sound: cfg.sound,
-    states: cfg.states || null, passiveInfo: cfg.passiveInfo, godClass: cfg.godClass, formPassive: cfg.formPassive, formMul: cfg.formMul || null, skillK: cfg.skillK || null });
+    states: cfg.states || null, passiveInfo: cfg.passiveInfo, godClass: cfg.godClass, formPassive: cfg.formPassive, formMul: cfg.formMul || null, skillK: cfg.skillK || null, ultChargeMul: cfg.ultChargeMul || null });
   SUP.fx[def.id] = cfg.fx || {};
   if (cfg.passive) SUP.passives[def.id] = cfg.passive;
   const i = ALL_BUILTIN.findIndex(b => b.id === def.id); if (i >= 0) ALL_BUILTIN[i] = def; else ALL_BUILTIN.push(def);

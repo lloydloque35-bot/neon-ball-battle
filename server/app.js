@@ -9,7 +9,7 @@ const { RateLimiter } = require('./security');
 const { createLogger, createServices } = require('./services');
 const { loadCore } = require('./core');
 
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 
 function createGameServer(cfg, opts = {}) {
   const log = opts.log || createLogger(cfg.logLevel);
@@ -22,7 +22,7 @@ function createGameServer(cfg, opts = {}) {
   S.version = VERSION;
   const app = new App({ root: cfg.root, secure: cfg.cookieSecure, trustProxy: cfg.trustProxy, log });
   // order matters: billing defines premium helpers used by auth/game; auth installs the session middleware
-  for (const mod of ['billing', 'auth', 'game', 'admin', 'season', 'pvp']) {
+  for (const mod of ['billing', 'auth', 'game', 'admin', 'season', 'pvp', 'shop']) {
     const file = path.join(__dirname, mod + '.js');
     if (fs.existsSync(file)) require(file).register(app, S);
   }

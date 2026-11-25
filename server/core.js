@@ -11,6 +11,7 @@ const path = require('node:path');
 const SCRIPT = path.join(__dirname, '..', 'script.js');
 const SUPREME = path.join(__dirname, '..', 'supreme.js');   // 2.1.0 Supreme Admin Balls (same simulation as the browser)
 const GODS = path.join(__dirname, '..', 'gods.js');         // 2.2.0 free Supreme God Balls (needs supreme.js)
+const GODS2 = path.join(__dirname, '..', 'gods2.js');       // 2.3.0 Premium God Balls (needs gods.js)
 
 function loadCore() {
   const src = fs.readFileSync(SCRIPT, 'utf8');
@@ -28,6 +29,7 @@ function loadCore() {
   vm.runInContext(src, ctx, { filename: 'script.js' });
   if (fs.existsSync(SUPREME)) vm.runInContext(fs.readFileSync(SUPREME, 'utf8'), ctx, { filename: 'supreme.js' });
   if (fs.existsSync(SUPREME) && fs.existsSync(GODS)) vm.runInContext(fs.readFileSync(GODS, 'utf8'), ctx, { filename: 'gods.js' });
+  if (fs.existsSync(GODS) && fs.existsSync(GODS2)) vm.runInContext(fs.readFileSync(GODS2, 'utf8'), ctx, { filename: 'gods2.js' });
   if (!ctx.NBB_CORE) throw new Error('Game core failed to load');
   return ctx.NBB_CORE;
 }

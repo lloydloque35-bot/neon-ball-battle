@@ -1,4 +1,12 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0)
+
+## 2.3.0 — God of Guns + God Portal, Premium God Shop ([PREMIUM-GOD-SHOP.md](PREMIUM-GOD-SHOP.md))
+- ✅ God of Guns and God Portal: 5 skills × 3 versions, regular + final-form ultimates, 3 forms, passives, art, effects, sounds
+- ✅ Infinite Void: a real, isolated battle dimension (platforms, turning gravity, zones, hazards, portal network, copies, collapse, safe return); bystanders and other matches untouched; final form = three linked dimensions
+- ✅ Premium God Shop: PHP 99 each / PHP 198 bundle via PayMongo (GCash, Maya, QR Ph, online banking, cards)
+- ✅ Server-verified payments (signed webhooks + re-fetching the checkout session), idempotent events, unique payments, no duplicate purchases, permanent ownership, restore, history, audit log
+- 🟡 Owner setup: PayMongo account + keys, then "Register webhook" in the Admin Dashboard. Until then the shop stays closed (never simulated)
+- ✅ Tests: `server/test/gods2.test.js` with a local fake PayMongo API
 
 ## 2.2.0 — Four Supreme God Balls, FREE ([GOD-BALLS.md](GOD-BALLS.md))
 - ✅ God of Chaos, God of War, AI Tech, Solar Eclipse: free for every player (no payment, subscription, premium currency or admin rights)

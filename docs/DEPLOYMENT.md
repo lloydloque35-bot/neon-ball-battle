@@ -141,6 +141,7 @@ Tested setup. The free plan asks for a card to verify the account, but the Free 
    alwaysdata requires listening on IPv6 `::` (hence `HOST=::`). It provides `PORT` itself.
 6. In the site's **SSL** tab, turn on forcing HTTPS. Sign-in cookies are `Secure`, so the game must be opened with `https://`.
 7. **Updating later:** run `cd neon-ball-battle && git pull` over SSH, then restart the site. `data/` (the database) is not in git, so updates never touch it.
+8. **Premium God Shop (PHP, PayMongo):** add `PAYMONGO_SECRET_KEY=sk_test_...` to the Environment line, restart, then open Admin Dashboard → 💳 God Shop (PHP) and press **Register webhook automatically**. Full steps: [PREMIUM-GOD-SHOP.md](PREMIUM-GOD-SHOP.md).
 
 ## 4. Database migrations
 
