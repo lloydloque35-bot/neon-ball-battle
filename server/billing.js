@@ -18,6 +18,7 @@ const PLAN = { id: 'ultimate_premium', name: 'ULTIMATE PREMIUM', priceUsd: 200, 
 const BENEFITS = [
   'Unlock every regular, premium, legendary, mythical and non-admin limited ball',
   '2,000 free coins every month',
+  'Premium balls at full power: Lv 50, fully evolved, every upgrade',
   'All standard battle modes', 'Premium cosmetics: Golden Aura, Gilded Skin, Prism Trail, Holy Hits, Supernova Victory',
   'Premium particle effects and a Premium profile badge', '+25% coins and EXP from verified battles, +50% daily coins',
   '20% off summon orbs', 'Premium-exclusive limited events', 'No advertisements (the game has none)',

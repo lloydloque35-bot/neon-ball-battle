@@ -51,6 +51,25 @@ test('server: Anti Ball is free for everyone; Tech Balls need an active Premium 
   assert.equal((await premium.post('/api/battle/start', { mode: '1v1', ball: 'mecha', difficulty: 'easy' })).status, 200, 'back after renewing');
 });
 
+test('Premium balls are always at full power for Premium members (Lv 50, fully evolved), without touching saved progress', async () => {
+  const c = new Client(srv.base); await c.register('max_fan');
+  const uid = srv.db.get("SELECT id FROM users WHERE username = 'max_fan'").id;
+  let save = (await c.get('/api/save')).data;
+  assert.ok(!save.balls.prism || save.balls.prism.level < 50, 'free players: no boost');
+  srv.S.grantPremium(uid, 30, 0);
+  save = (await c.get('/api/save')).data;
+  for (const id of ['prism', 'mirror', 'mecha', 'cyber']) { const b = save.balls[id]; assert.ok(b && b.level === 50 && b.evo === 3 && b.maxed && b.tree.slot4 && b.up.atk > 0, id + ' maxed'); }
+  assert.ok(!save.balls.fire.maxed, 'regular balls keep their own progress');
+  const t = (await c.post('/api/battle/start', { mode: '1v1', ball: 'cyber', difficulty: 'easy' })).data.ticket;
+  assert.equal(t.teams[0][0].level, 50); assert.equal(t.teams[0][0].evo, 3);
+  assert.equal((await c.post('/api/shop/upgrade', { ball: 'mecha', stat: 'atk' })).status, 400, 'nothing to upgrade');
+  assert.equal((await c.post('/api/ball/evolve', { ball: 'mecha' })).status, 400);
+  assert.ok(!srv.db.get("SELECT 1 FROM user_balls WHERE user_id = ? AND ball_id = 'mecha' AND level = 50", uid), 'saved progress untouched');
+  srv.db.run('UPDATE subscriptions SET current_period_end = ? WHERE user_id = ?', Date.now() - 1000, uid); srv.S.expireSubscriptions();
+  save = (await c.get('/api/save')).data;
+  assert.ok(!save.balls.mecha || !save.balls.mecha.maxed, 'boost ends with the subscription');
+});
+
 test('5th and 6th abilities pressed manually are accepted and replay exactly on the server', async () => {
   const c = new Client(srv.base); await c.register('six_skills');
   const r = await c.post('/api/battle/start', { mode: 'practice', ball: 'cyber', trial: true, dummy: true, manual: true });

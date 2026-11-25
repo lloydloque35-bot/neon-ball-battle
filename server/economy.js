@@ -37,6 +37,7 @@ function register(app, S, H) {
   action('/api/shop/upgrade', (u, b) => {
     const def = ballOrThrow(b.ball), stat = String(b.stat || '');
     if (!access(u, def) || def.adminOnly) throw new HttpError(403, 'You cannot upgrade this ball', 'NO_ACCESS');
+    if (def.premium && S.premiumMaxed(u.id, def.id)) throw bad('Premium balls are already at full power (Lv 50, fully evolved) for Premium members');
     if (!(stat in core.UPGRADE_CAPS)) throw bad('Unknown stat');
     const r = ensureRow(u.id, def.id), up = json(r.up, {}), pts = up[stat] || 0;
     if (pts >= core.UPGRADE_CAPS[stat]) throw bad('This stat is maxed');
@@ -47,6 +48,7 @@ function register(app, S, H) {
   action('/api/ball/evolve', (u, b) => {
     const def = ballOrThrow(b.ball);
     if (!access(u, def) || def.adminOnly) throw new HttpError(403, 'You cannot evolve this ball', 'NO_ACCESS');
+    if (def.premium && S.premiumMaxed(u.id, def.id)) throw bad('Premium balls are already at full power (Lv 50, fully evolved) for Premium members');
     const p = progOf(u.id, def.id), nx = core.EVO[p.evo + 1];
     if (!nx) throw bad('Already fully evolved');
     if (p.level < nx.lvl) throw bad(`Reach level ${nx.lvl} first`);
@@ -61,6 +63,7 @@ function register(app, S, H) {
     const def = ballOrThrow(b.ball), node = core.TREE.find(n => n.id === b.node);
     if (!node) throw bad('Unknown skill');
     if (!access(u, def) || def.adminOnly) throw new HttpError(403, 'You cannot train this ball', 'NO_ACCESS');
+    if (def.premium && S.premiumMaxed(u.id, def.id)) throw bad('Premium balls are already at full power (Lv 50, fully evolved) for Premium members');
     const r = ensureRow(u.id, def.id), tree = json(r.tree, {});
     if (tree[node.id]) throw bad('Already learned');
     if (node.need4 && (def.skills || []).length < 4) throw bad('This ball has no 4th ability');

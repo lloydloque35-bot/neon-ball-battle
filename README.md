@@ -65,6 +65,7 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
 - **What's included:**
   - Every regular, premium, legendary, mythical and non-admin limited ball, including both **Tech Balls**
   - **2,000 free coins every month**
+  - **Premium balls at full power:** Lv 50, fully evolved, every upgrade and ability (while Premium is active)
   - Premium cosmetics, effects and badge
   - +25% battle rewards, +50% daily coins and 20% off summons
   - Premium events

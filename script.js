@@ -4133,7 +4133,8 @@ const UI = {
       if (nx && !b.adminOnly) btns.append(h('button', { class: 'btn gold', disabled: !canEvolve(id), title: `Requires level ${nx.lvl}`, onclick: () => this.evolve(id) }, `✦ Evolve → ${nx.name} (Lv ${nx.lvl}, 🪙 ${fmtNum(nx.cost)})`));
       btns.append(h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = id; this.closeModal(); this.show('play'); } }, '⚔ Battle'));
       if (!p.owned && !b.adminOnly) btns.append(h('p', { class: 'muted', style: { width: '100%', fontSize: '12px' } }, '★ Unlocked by your Ultimate Premium membership.'));
-      btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); this.show('shop'); this.shopBall = id; this.render_shop(); } }, '⬆ Upgrade'));
+      if (p.maxed) btns.append(h('p', { class: 'muted', style: { width: '100%', fontSize: '12px', color: '#ffd54f' } }, '★ Premium ball: always at full power for Premium members — Lv 50, fully evolved, every upgrade and ability.'));
+      else btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); this.show('shop'); this.shopBall = id; this.render_shop(); } }, '⬆ Upgrade'));
     }
     L.append(btns);
     // right column

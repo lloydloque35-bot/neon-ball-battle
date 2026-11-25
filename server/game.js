@@ -41,7 +41,22 @@ function register(app, S) {
     if (!r) { db.run('INSERT INTO user_balls (user_id, ball_id, owned) VALUES (?, ?, 0)', uid, id); r = ballRow(uid, id); }
     return r;
   }
+  /* Premium balls cannot be bought or upgraded with coins, so for an ACTIVE Premium member (and the owner) they always
+     fight at full power: Lv 50, fully evolved, every upgrade and skill-tree node. Nothing is written to the saved
+     progress, so the boost ends with the subscription and the player's own progress is kept as it was. */
+  const MAXED = () => ({ level: core.MAX_LVL, exp: 0, evo: core.EVO.length - 1, up: { ...core.UPGRADE_CAPS }, tree: Object.fromEntries(core.TREE.map(n => [n.id, 1])), sp: 0 });
+  function premiumMaxed(uid, id) {
+    const def = core.getBall(id);
+    if (!def || !def.premium || def.fusion || def.adminOnly) return false;
+    const u = db.get('SELECT role FROM users WHERE id = ?', uid);
+    return !!(u && u.role === 'owner') || S.premiumOf(uid).active;
+  }
+  S.premiumMaxed = premiumMaxed;
   function progOf(uid, id) {
+    const p = progRow(uid, id);
+    return premiumMaxed(uid, id) ? { ...p, ...MAXED(), maxed: true } : p;
+  }
+  function progRow(uid, id) {
     const r = ballRow(uid, id);
     return r ? { owned: !!r.owned, level: r.level, exp: r.exp, evo: r.evo, up: json(r.up, {}), tree: json(r.tree, {}), sp: r.sp, wins: r.wins, losses: r.losses } : { owned: false, level: 1, exp: 0, evo: 0, up: {}, tree: {}, sp: 1, wins: 0, losses: 0 };
   }
@@ -112,6 +127,7 @@ function register(app, S) {
     const uid = user.id, p = profileRow(uid);
     const balls = {};
     for (const r of db.all('SELECT * FROM user_balls WHERE user_id = ?', uid)) balls[r.ball_id] = { owned: !!r.owned, level: r.level, exp: r.exp, evo: r.evo, up: json(r.up, {}), tree: json(r.tree, {}), sp: r.sp, wins: r.wins, losses: r.losses };
+    for (const d of withCatalog(user, () => core.allBalls().filter(b => b.premium && !b.fusion && !b.adminOnly))) if (premiumMaxed(uid, d.id)) balls[d.id] = { owned: false, wins: 0, losses: 0, ...(balls[d.id] || {}), ...MAXED(), maxed: true };
     const achievements = {}; for (const a of db.all('SELECT * FROM achievements WHERE user_id = ?', uid)) achievements[a.ach_id] = { done: true, claimed: !!a.claimed_at };
     const limited = {}; for (const l of db.all('SELECT * FROM limited_records WHERE user_id = ?', uid)) limited[l.ball_id] = { at: l.obtained_at, event: l.event_name };
     const eventProgress = {}; for (const e of db.all('SELECT * FROM event_progress WHERE user_id = ?', uid)) eventProgress[e.event_id] = { wins: e.wins, claimed: !!e.claimed };
