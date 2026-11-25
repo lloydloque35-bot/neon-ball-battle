@@ -121,6 +121,18 @@ sudo systemctl enable --now neon-ball-battle
 journalctl -u neon-ball-battle -f      # logs
 ```
 
+### Free hosting on alwaysdata (no server to manage)
+The server reads alwaysdata's `ALWAYSDATA_HTTPD_IP` / `ALWAYSDATA_HTTPD_PORT` automatically.
+1. Create a free account. The site address is `https://<account>.alwaysdata.net`.
+2. Choose Node.js 22 or newer for the account's environment.
+3. Over SSH, run `git clone https://github.com/<you>/neon-ball-battle.git`.
+4. **Web › Sites:** set the site type to **Node.js**.
+   - **Command:** `node --disable-warning=ExperimentalWarning server/index.js`
+   - **Working directory:** `neon-ball-battle`
+   - **Environment:** `NODE_ENV=production`, `APP_ORIGIN=https://<account>.alwaysdata.net`, `TRUST_PROXY=true`
+5. Over SSH, run `cd neon-ball-battle && NODE_ENV=production npm run owner -- create --username <name>`. Create a **new** owner here; never reuse a 2FA secret that has been shown anywhere.
+6. Restart the site. To update later, run `git pull` over SSH and restart the site again. `data/` (the database) is not in git, so updates never touch it.
+
 ## 4. Database migrations
 
 Migrations are numbered SQL files in `server/migrations/`, and each is applied once. They run automatically on start, or manually with `npm run migrate`. To change the schema, add a new file such as `002_something.sql`. Never edit a migration that has already shipped.

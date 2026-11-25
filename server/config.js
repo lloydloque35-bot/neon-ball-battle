@@ -28,13 +28,14 @@ const int = (v, d) => (v === undefined || v === '' || isNaN(+v) ? d : Math.trunc
 
 function buildConfig() {
   const isProd = env.NODE_ENV === 'production';
-  const port = int(env.PORT, 8080);
+  // alwaysdata.com hands the address/port to listen on in ALWAYSDATA_HTTPD_IP / ALWAYSDATA_HTTPD_PORT
+  const port = int(env.PORT || env.ALWAYSDATA_HTTPD_PORT, 8080);
   const cfg = {
     root: ROOT,
     env: env.NODE_ENV || 'development',
     isProd,
     port,
-    host: env.HOST || (isProd ? '0.0.0.0' : '127.0.0.1'),
+    host: env.HOST || env.ALWAYSDATA_HTTPD_IP || (isProd ? '0.0.0.0' : '127.0.0.1'),
     // APP_ORIGIN, or the public URL that Render provides automatically
     appOrigin: (env.APP_ORIGIN || env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, ''),
     dbFile: env.DB_FILE || path.join(ROOT, 'data', 'game.db'),
