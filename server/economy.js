@@ -164,13 +164,18 @@ function register(app, S, H) {
 
   /* ---------- ball fusion ---------- */
   function fusionCheck(u, a, b) {
-    const A = ballOrThrow(a), B = ballOrThrow(b);
+    const A = ballOrThrow(a), B = ballOrThrow(b), owner = u.role === 'owner';
     if (A.id === B.id) throw bad('Choose two different balls');
-    if (!core.fusionEligible(A) || !core.fusionEligible(B)) throw bad('Admin, limited, premium and fusion balls cannot be fused');
-    for (const d of [A, B]) { const r = H.ballRow(u.id, d.id); if (!r || !r.owned) throw bad(`You must own ${d.name}`); if (r.level < core.FUSION_MIN_LEVEL) throw bad(`${d.name} must be level ${core.FUSION_MIN_LEVEL}+`); }
+    if (owner) {
+      // the game owner may fuse any balls they can use (admin balls included) at any level; fusions with an admin parent stay owner-only
+      for (const d of [A, B]) if (d.fusion || d.draft || !S.access(u, d)) throw bad(`${d.name} cannot be fused`);
+    } else {
+      if (!core.fusionEligible(A) || !core.fusionEligible(B)) throw bad('Admin, limited, premium and fusion balls cannot be fused');
+      for (const d of [A, B]) { const r = H.ballRow(u.id, d.id); if (!r || !r.owned) throw bad(`You must own ${d.name}`); if (r.level < core.FUSION_MIN_LEVEL) throw bad(`${d.name} must be level ${core.FUSION_MIN_LEVEL}+`); }
+    }
     const pair = [A.id, B.id].sort().join('+');
     if (db.all('SELECT parents FROM fusions WHERE user_id = ?', u.id).some(r => json(r.parents, []).slice().sort().join('+') === pair)) throw bad('You already fused these two balls');
-    if (db.get('SELECT COUNT(*) n FROM fusions WHERE user_id = ?', u.id).n >= core.FUSION_MAX) throw bad(`Fusion limit reached (${core.FUSION_MAX})`);
+    if (!owner && db.get('SELECT COUNT(*) n FROM fusions WHERE user_id = ?', u.id).n >= core.FUSION_MAX) throw bad(`Fusion limit reached (${core.FUSION_MAX})`);
     return { A, B };
   }
   app.post('/api/fusion/preview', ctx => {

@@ -97,6 +97,23 @@ function register(app, S) {
     S.audit(me.id, 'admin.player_status', u.username, ctx.ip, { status, until, reason });
     return { ok: true };
   });
+  /** max level, final evolution, full stat upgrades and the whole skill tree. Players: only balls they own. Owner: any ball, admin balls included. */
+  function maxOut(u, which) {
+    const isOwnerAcc = u.role === 'owner';
+    const owned = new Set(db.all('SELECT ball_id FROM user_balls WHERE user_id = ? AND owned = 1', u.id).map(r => r.ball_id));
+    const list = which === '*all*'
+      ? core.allBalls().filter(d => !d.draft && (owned.has(d.id) || (isOwnerAcc && !d.fusion)))
+      : [core.getBall(which)].filter(Boolean);
+    if (!list.length) throw bad('Choose a ball to upgrade');
+    const tree = Object.fromEntries(core.TREE.map(n => [n.id, 1])), up = { ...core.UPGRADE_CAPS }, evo = core.EVO.length - 1;
+    for (const d of list) {
+      if (d.draft) throw bad('Draft balls cannot be upgraded');
+      if (!owned.has(d.id) && !(isOwnerAcc && !d.fusion)) throw bad(`${u.username} does not own ${d.name}`);
+      S.ensureBallRow(u.id, d.id);
+      db.run('UPDATE user_balls SET level = ?, exp = 0, evo = ?, up = ?, tree = ? WHERE user_id = ? AND ball_id = ?', core.MAX_LVL, evo, JSON.stringify(up), JSON.stringify(tree), u.id, d.id);
+    }
+    return which === '*all*' ? `all ${list.length} balls` : list[0].id;
+  }
   A('post', '/api/admin/players/:id/grant', (ctx, me) => {
     const id = num(ctx.params.id, 1, 1e12, 0), u = db.get('SELECT id, username, role FROM users WHERE id = ?', id);
     if (!u) throw new HttpError(404, 'Player not found');
@@ -106,6 +123,7 @@ function register(app, S) {
       if (b.ball) { const d = core.getBall(String(b.ball)); if (!d || d.adminOnly || d.fusion) throw bad('That ball cannot be granted'); S.unlockBall(id, d.id, 'grant', 'Granted by the owner'); done.ball = d.id; }
       if (b.premiumDays) { const n = num(b.premiumDays, 1, 3650, 0); S.grantPremium(id, n, me.id); done.premiumDays = n; }
       if (b.cosmetic) { const c = core.COSMETICS.find(x => x.id === b.cosmetic); if (!c) throw bad('Unknown cosmetic'); db.run("INSERT OR IGNORE INTO cosmetics_owned (user_id, cosmetic_id, acquired_at, source) VALUES (?, ?, ?, 'grant')", id, c.id, now()); done.cosmetic = c.id; }
+      if (b.maxBall) done.maxed = maxOut(u, String(b.maxBall));
     }));
     if (!Object.keys(done).length) throw bad('Nothing to grant');
     S.audit(me.id, 'admin.grant', u.username, ctx.ip, { ...done, note: str(b.note, 200) });

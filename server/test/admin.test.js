@@ -102,3 +102,32 @@ test('events, announcements, export and backup', async () => {
   const bk = await owner.post('/api/admin/backup');
   assert.equal(bk.status, 200); assert.match(bk.data.file, /^game-.*\.db$/);
 });
+
+test('owner tools: coins and max upgrades for themselves; fusion at any level incl. admin balls (stays admin-only)', async () => {
+  const bossId = srv.db.get("SELECT id FROM users WHERE role = 'owner'").id;
+  const before = srv.db.get('SELECT coins FROM profiles WHERE user_id = ?', bossId).coins;
+  const g = await owner.post(`/api/admin/players/${bossId}/grant`, { coins: 50000, maxBall: 'oneaboveall', note: 'testing' });
+  assert.equal(g.status, 200);
+  assert.equal(srv.db.get('SELECT coins FROM profiles WHERE user_id = ?', bossId).coins, before + 50000);
+  const oaa = srv.db.get("SELECT * FROM user_balls WHERE user_id = ? AND ball_id = 'oneaboveall'", bossId);
+  assert.equal(oaa.level, 50); assert.equal(oaa.evo, 3);
+  assert.equal(JSON.parse(oaa.up).atk, 25); assert.equal(JSON.parse(oaa.tree).master, 1);
+  assert.ok(srv.db.get("SELECT COUNT(*) n FROM audit_logs WHERE action = 'admin.grant'").n >= 1);
+  // the owner fuses One Above All with a level-1 starter
+  const f = await owner.post('/api/fusion/create', { a: 'oneaboveall', b: 'fire' });
+  assert.equal(f.status, 200, JSON.stringify(f.data));
+  const def = JSON.parse(srv.db.get('SELECT def FROM fusions WHERE id = ?', f.data.fusion).def);
+  assert.equal(def.adminOnly, true, 'a fusion with an admin ball stays admin-exclusive');
+  // regular players: still level 10+, no admin balls, and cannot max a ball they do not own
+  const pid = srv.db.get("SELECT id FROM users WHERE username = 'regular_1'").id;
+  srv.S.addCoins(pid, 10000);
+  const pf = await player.post('/api/fusion/create', { a: 'fire', b: 'ice' });
+  assert.equal(pf.status, 400); assert.match(pf.data.error, /level 10/);
+  assert.equal((await player.post('/api/fusion/create', { a: 'oneaboveall', b: 'fire' })).status, 400);
+  assert.equal((await owner.post(`/api/admin/players/${pid}/grant`, { maxBall: 'oneaboveall' })).status, 400);
+  assert.equal((await owner.post(`/api/admin/players/${pid}/grant`, { maxBall: '*all*' })).status, 200);
+  assert.equal(srv.db.get("SELECT level FROM user_balls WHERE user_id = ? AND ball_id = 'fire'", pid).level, 50);
+  assert.equal(srv.db.get("SELECT COUNT(*) n FROM user_balls WHERE user_id = ? AND ball_id = 'oneaboveall'", pid).n, 0);
+  // players can never use the owner's grant endpoint on themselves
+  assert.equal((await player.post(`/api/admin/players/${pid}/grant`, { coins: 99999 })).status, 403);
+});

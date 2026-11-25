@@ -2700,6 +2700,7 @@ function makeFusionDef(a, b, id) {
     skills: [{ ...a.skills[0] }, { ...b.skills[0] }, fused],
     ult: { ...ult, name: short(a.name).toUpperCase() + '-' + short(b.name).toUpperCase() + ' FUSION', power: ult.power + 10 },
     ai: a.ai, godMode: !!(a.godMode || b.godMode), desc: `A fusion of ${a.name} and ${b.name}. Both originals remain in the collection.`,
+    ...(a.adminOnly || b.adminOnly ? { adminOnly: true } : {}),          // a fusion with an admin ball stays admin-exclusive
   };
 }
 

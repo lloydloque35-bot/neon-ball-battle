@@ -400,9 +400,12 @@ Object.assign(UI, {
     const body = $('#fusionBody'); body.innerHTML = '';
     if (!Online.available) return body.append(needServer('Ball fusion'));
     if (!Online.active) return body.append(needSignIn('Ball Fusion'));
-    const elig = allBalls().filter(b => fusionEligible(b) && prog(b.id).owned);
-    const ready = elig.filter(b => prog(b.id).level >= FUSION_MIN_LEVEL);
-    body.append(h('p', { class: 'muted' }, `Combine two balls you own (level ${FUSION_MIN_LEVEL}+) into a brand-new spherical fusion with a new fused ability. Both original balls stay in your collection. Cost: 🪙 ${fmtNum(FUSION_COST)}. Admin, limited, premium and fusion balls cannot be fused.`));
+    const owner = isAdmin();
+    const elig = owner ? playableBalls().filter(b => !b.fusion && !b.draft) : allBalls().filter(b => fusionEligible(b) && prog(b.id).owned);
+    const ready = owner ? elig : elig.filter(b => prog(b.id).level >= FUSION_MIN_LEVEL);
+    body.append(h('p', { class: 'muted' }, owner
+      ? `♛ Owner fusion: you can fuse ANY two balls at any level, admin balls included (One Above All, Archangel…). A fusion with an admin ball stays admin-only. Cost: 🪙 ${fmtNum(FUSION_COST)}.`
+      : `Combine two balls you own (level ${FUSION_MIN_LEVEL}+) into a brand-new spherical fusion with a new fused ability. Both original balls stay in your collection. Cost: 🪙 ${fmtNum(FUSION_COST)}. Admin, limited, premium and fusion balls cannot be fused.`));
     if (ready.length < 2) body.append(h('div', { class: 'card notice' }, h('p', {}, `You need two eligible balls at level ${FUSION_MIN_LEVEL} or higher. Eligible balls you own: ${elig.map(b => `${b.name} (Lv ${prog(b.id).level})`).join(', ') || 'none'}.`)));
     const pick = (key, label) => h('label', { class: 'field' }, h('span', {}, label), h('select', { onchange: e => { this[key] = e.target.value; this.render_fusion(); } }, h('option', { value: '' }, '— choose —'), ready.map(b => h('option', { value: b.id, selected: this[key] === b.id }, `${b.name} (Lv ${prog(b.id).level})`))));
     const A = getBall(this.fuseA), B = getBall(this.fuseB);
@@ -442,6 +445,11 @@ Object.assign(UI, {
   },
   async admin_overview(body) {
     const o = await API.get('/api/admin/overview'); body.innerHTML = '';
+    const meU = Online.me.user;
+    body.append(h('div', { class: 'card premium-hero', style: { marginBottom: '12px' } },
+      h('div', { class: 'row', style: { alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' } },
+        h('div', {}, h('h3', { style: { margin: 0 } }, `♛ Your account: ${meU.username}`), h('p', { class: 'muted', style: { margin: '4px 0 0' } }, `🪙 ${fmtNum(SAVE.coins)} coins • ${Object.values(SAVE.balls || {}).filter(b => b.owned).length} balls owned`)),
+        h('button', { class: 'btn gold', onclick: () => this.adminGrant({ id: meU.id, username: meU.username, role: 'owner' }) }, '🎁 Give myself coins / max-upgrade balls'))));
     body.append(h('div', { class: 'stat-grid' },
       statCard('Players', fmtNum(o.users.total), `${o.users.active7d} active this week`), statCard('Premium members', fmtNum(o.premium.active)),
       statCard('Revenue (all time)', usd(o.revenue.totalUsd), `${usd(o.revenue.last30Usd)} last 30 days • payments ${o.revenue.mode}`),
@@ -460,7 +468,7 @@ Object.assign(UI, {
       p.id, h('span', {}, p.role === 'owner' ? '♛ ' : '', p.username, h('br'), h('small', { class: 'muted' }, p.email || '')), p.status + (p.suspended_until ? ' until ' + dateStr(p.suspended_until) : ''),
       p.level, p.rp, fmtNum(p.coins), p.battles, p.premium.active ? `★ until ${dateStr(p.premium.expiresAt)}` : p.premium.status, p.flags ? h('b', { class: 'warn' }, p.flags) : '0',
       h('div', { class: 'acts' }, h('button', { class: 'btn small', onclick: () => this.adminPlayer(p.id) }, 'View'),
-        p.role === 'owner' ? null : h('button', { class: 'btn small gold', onclick: () => this.adminGrant(p) }, 'Grant'),
+        h('button', { class: 'btn small gold', onclick: () => this.adminGrant(p) }, 'Grant'),
         p.role === 'owner' ? null : p.status === 'active'
           ? [h('button', { class: 'btn small', onclick: () => this.adminStatus(p, 'suspended') }, 'Suspend'), h('button', { class: 'btn small danger', onclick: () => this.adminStatus(p, 'banned') }, 'Ban')]
           : h('button', { class: 'btn small green', onclick: () => adminDo(() => API.post(`/api/admin/players/${p.id}/status`, { status: 'active' }), () => this.render_admin()) }, 'Restore')),
@@ -486,8 +494,11 @@ Object.assign(UI, {
     const coins = h('input', { type: 'number', min: 0, max: 1000000, value: 0 }), days = h('input', { type: 'number', min: 0, max: 3650, value: 0 }), note = h('input', { type: 'text', maxlength: 200, placeholder: 'Note for the audit log' });
     const ball = h('select', {}, h('option', { value: '' }, '— none —'), allBalls().filter(b => !b.adminOnly && !b.fusion && !b.draft).map(b => h('option', { value: b.id }, `${b.name} (${b.rarity})`)));
     const cos = h('select', {}, h('option', { value: '' }, '— none —'), COSMETICS.map(c => h('option', { value: c.id }, c.name)));
-    this.modal(h('div', { style: { maxWidth: '480px', margin: 'auto' } }, h('h2', {}, `🎁 Promotional rewards for ${p.username}`), h('div', { class: 'fgrid' }, field('Coins', coins), field('Ball', ball), field('Premium days', days, 'Promotional, no charge'), field('Cosmetic', cos)), field('Note', note),
-      h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '8px' } }, h('button', { class: 'btn gold', onclick: () => adminDo(() => API.post(`/api/admin/players/${p.id}/grant`, { coins: +coins.value || undefined, ball: ball.value || undefined, premiumDays: +days.value || undefined, cosmetic: cos.value || undefined, note: note.value }), () => { this.closeModal(); this.render_admin(); }) }, 'Grant'))));
+    const self = p.role === 'owner';
+    const maxSel = h('select', {}, h('option', { value: '' }, '— none —'), h('option', { value: '*all*' }, self ? '★ ALL balls (admin balls too)' : '★ ALL balls this player owns'),
+      allBalls().filter(b => !b.draft && (self || !b.adminOnly)).map(b => h('option', { value: b.id }, `${b.adminOnly ? '♛ ' : ''}${b.name}`)));
+    this.modal(h('div', { style: { maxWidth: '480px', margin: 'auto' } }, h('h2', {}, self ? '🎁 Owner tools for your account' : `🎁 Promotional rewards for ${p.username}`), h('div', { class: 'fgrid' }, field('Coins', coins, 'Up to 1,000,000 at a time'), field('Max upgrade', maxSel, 'Level 50, final evolution, all upgrades and skills'), self ? null : field('Ball', ball), self ? null : field('Premium days', days, 'Promotional, no charge'), field('Cosmetic', cos)), field('Note', note),
+      h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '8px' } }, h('button', { class: 'btn gold', onclick: () => adminDo(() => API.post(`/api/admin/players/${p.id}/grant`, { coins: +coins.value || undefined, maxBall: maxSel.value || undefined, ball: ball.value || undefined, premiumDays: +days.value || undefined, cosmetic: cos.value || undefined, note: note.value }), async () => { this.closeModal(); if (self) await Online.refresh(); this.render_admin(); }) }, self ? 'Give to me' : 'Grant'))));
   },
   async admin_balls(body) {
     const r = await API.get('/api/admin/balls'); body.innerHTML = '';

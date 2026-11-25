@@ -19,6 +19,7 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 ## Phase 3 — Private admin control
 - ✅ Server-side owner authentication with scrypt, TOTP 2FA, secure sessions, CSRF, rate limits, audit logs and a single-owner DB constraint
 - ✅ The old browser-stored admin PIN was removed; the owner is created only with the CLI
+- ✅ Owner tools: give yourself or any player coins; max-upgrade any ball (level 50, final evolution, all upgrades and skills; admin balls for the owner only); the owner can fuse any two balls at any level (fusions with an admin ball stay admin-only). Everything is audit-logged
 - ✅ Dashboard: overview, players (view, suspend, ban, restore, grant), balls (create, edit, duplicate, publish, disable, restore, delete), events, subscriptions & payment reports, announcements, audit & security log, JSON export, DB backup
 - ✅ Tests: players, Premium members and unauthenticated users are refused; stale 2FA forces re-verification; the owner cannot be banned
 
