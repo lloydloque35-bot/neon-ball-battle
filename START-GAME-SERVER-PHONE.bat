@@ -17,13 +17,7 @@ if not exist package.json (
   pause
   exit /b
 )
-echo  PHONE / TABLET on the same Wi-Fi: type this link in the phone browser
-for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
-  set "ip=%%a"
-  set "ip=!ip: =!"
-  echo      http://!ip!:8080
-)
-echo  (If there are several links, try the one that starts with 192.168 first.)
+echo  The phone link appears below when the server has started.
 echo.
 set HOST=0.0.0.0
 call npm start

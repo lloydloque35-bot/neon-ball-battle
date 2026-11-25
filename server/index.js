@@ -4,12 +4,14 @@ const { buildConfig, validateConfig } = require('./config');
 const os = require('node:os');
 const { createGameServer } = require('./app');
 
-/** This PC's addresses on the local network (Wi-Fi / LAN), home-router style addresses first. */
+/** This PC's addresses on the local network (Wi-Fi / LAN): real Wi-Fi/Ethernet first, virtual adapters (VirtualBox, Hyper-V, WSL, VPN) last. */
+const VIRTUAL = /virtual|vbox|vmware|vethernet|hyper-v|wsl|docker|loopback|bluetooth|tailscale|zerotier|hamachi|tap-|tun/i;
 function lanAddresses() {
-  const rank = ip => (ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : 2);
-  return Object.values(os.networkInterfaces()).flat()
-    .filter(a => a && (a.family === 'IPv4' || a.family === 4) && !a.internal)
-    .map(a => a.address).sort((a, b) => rank(a) - rank(b));
+  const out = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces()))
+    for (const a of list || []) if ((a.family === 'IPv4' || a.family === 4) && !a.internal) out.push({ ip: a.address, virt: VIRTUAL.test(name) || a.address.startsWith('192.168.56.') });
+  const rank = x => (x.virt ? 10 : 0) + (x.ip.startsWith('192.168.') ? 0 : x.ip.startsWith('10.') ? 1 : 2);
+  return out.sort((a, b) => rank(a) - rank(b)).map(x => x.ip);
 }
 
 const cfg = buildConfig();
