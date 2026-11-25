@@ -123,16 +123,24 @@ journalctl -u neon-ball-battle -f      # logs
 ```
 
 ### Free hosting on alwaysdata (no server to manage)
-The server reads alwaysdata's `ALWAYSDATA_HTTPD_IP` / `ALWAYSDATA_HTTPD_PORT` automatically.
-1. Create a free account. The site address is `https://<account>.alwaysdata.net`.
-2. Choose Node.js 22 or newer for the account's environment.
-3. Over SSH, run `git clone https://github.com/<you>/neon-ball-battle.git`.
-4. **Web › Sites:** set the site type to **Node.js**.
+Tested setup. The free plan asks for a card to verify the account, but the Free plan is not charged.
+1. Create the account; its name becomes the address `https://<account>.alwaysdata.net`.
+2. Under **Environment**, check that the Node.js version is 22 or newer (24 works).
+3. **Remote access › SSH**:
+   - Add your SSH public key, or set the SSH password.
+   - Connect with `ssh <account>@ssh-<account>.alwaysdata.net`.
+   - Run `git clone https://github.com/<you>/neon-ball-battle.git`.
+4. **Create the owner.** Use a **new** owner account; never reuse a 2FA secret that has been shown anywhere:
+   `cd neon-ball-battle && npm run owner -- create --username <name>`
+   (you can set `NBB_OWNER_PASSWORD` to avoid the hidden password prompt).
+5. **Web › Sites ›** your site: set **Type** to **Node.js** and fill in:
    - **Command:** `node --disable-warning=ExperimentalWarning server/index.js`
    - **Working directory:** `neon-ball-battle`
-   - **Environment:** `NODE_ENV=production`, `APP_ORIGIN=https://<account>.alwaysdata.net`, `TRUST_PROXY=true`
-5. Over SSH, run `cd neon-ball-battle && NODE_ENV=production npm run owner -- create --username <name>`. Create a **new** owner here; never reuse a 2FA secret that has been shown anywhere.
-6. Restart the site. To update later, run `git pull` over SSH and restart the site again. `data/` (the database) is not in git, so updates never touch it.
+   - **Environment** (one line): `NODE_ENV=production APP_ORIGIN=https://<account>.alwaysdata.net TRUST_PROXY=true HOST=::`
+
+   alwaysdata requires listening on IPv6 `::` (hence `HOST=::`). It provides `PORT` itself.
+6. In the site's **SSL** tab, turn on forcing HTTPS. Sign-in cookies are `Secure`, so the game must be opened with `https://`.
+7. **Updating later:** run `cd neon-ball-battle && git pull` over SSH, then restart the site. `data/` (the database) is not in git, so updates never touch it.
 
 ## 4. Database migrations
 
