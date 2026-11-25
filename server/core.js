@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const SCRIPT = path.join(__dirname, '..', 'script.js');
+const SUPREME = path.join(__dirname, '..', 'supreme.js');   // 2.1.0 Supreme Admin Balls (same simulation as the browser)
 
 function loadCore() {
   const src = fs.readFileSync(SCRIPT, 'utf8');
@@ -24,6 +25,7 @@ function loadCore() {
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(src, ctx, { filename: 'script.js' });
+  if (fs.existsSync(SUPREME)) vm.runInContext(fs.readFileSync(SUPREME, 'utf8'), ctx, { filename: 'supreme.js' });
   if (!ctx.NBB_CORE) throw new Error('Game core failed to load');
   return ctx.NBB_CORE;
 }

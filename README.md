@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.1.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -48,6 +48,11 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
     - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
     - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
+  - **NEW 2.1.0 — 15 Supreme Admin Balls** (owner only, [docs/SUPREME-ADMIN-BALLS.md](docs/SUPREME-ADMIN-BALLS.md)):
+    - Reality Controller (ultimate **ADMIN DELETE** opens an owner console), Supreme Skull King, Void Emperor, Thunder God, Archangel
+    - Demon Lord, Glitch 404, Dragon Emperor, Blood Moon God, Time God, Infinity God, Phoenix God, Black Sun, Mirror God, Omega
+    - each has 5 unique abilities, an ultimate, a final-form ultimate and 3 forms (Base → Awakened → Final God Form)
+    - **Admin Ball Control Panel** in the Admin Dashboard: previews, abilities on/off, cooldowns, effects, Spawn & Test
   - 15 **Admin Exclusive** balls: One Above All, Archangel, **Portal Master**, Omega, Phantom, Infinity Core, Chaos Emperor, Celestial Dragon, Miracle, Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme
   - **Portal Master Ball** (owner only):
     - opens portals anywhere and slips out of the arena and back
@@ -79,6 +84,7 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
 ## Project structure
 ```
 index.html  style.css  script.js     game (rendering, physics, AI, UI; shared deterministic core)
+supreme.js                           2.1.0 Supreme Admin Balls (also loaded by the server)
 online.js                            accounts, cloud save, premium, rankings, fusion, owner dashboard UI
 server/                              Node game server (no dependencies)
   index.js app.js config.js          entry, wiring, environment config
@@ -87,7 +93,7 @@ server/                              Node game server (no dependencies)
   billing.js                         Stripe subscription + signed webhooks
   admin.js                           owner-only API
   pvp.js ws.js                       online PvP: matchmaking, rooms, lockstep relay (WebSocket)
-  core.js                            loads script.js headlessly for server-side replays
+  core.js                            loads script.js + supreme.js headlessly for server-side replays
   migrations/  cli/  test/
 docs/                                deployment, security, multiplayer, checklist
 assets/                              optional (everything is drawn procedurally)

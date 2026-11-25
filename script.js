@@ -724,6 +724,8 @@ function registry() {
   for (const b of ALL_BUILTIN) {
     const o = (C.overrides || {})[b.id];
     const merged = o ? { ...b, ...o, design: { ...b.design, ...(o.design || {}) }, builtin: true, overridden: true } : { ...b, builtin: true };
+    if (b.supreme && o) { merged.skills = b.skills; merged.ult = b.ult; merged.adminOnly = true; merged.rarity = 'Admin Exclusive'; }
+    if (C.tuning && C.tuning[b.id] && b.supreme) merged.tuning = C.tuning[b.id];
     list.push(merged);
   }
   for (const c of C.customBalls || []) list.push({ ...c, custom: true });
@@ -1141,6 +1143,7 @@ function drawBall(ctx, def, x, y, r, st = {}) {
   if (st.god) { _ringHalf(ctx, r, d.c2, 0.6 + t * 0.3, false, 1.75, 0.3, 0.06); }
   if (deco.includes('orbit')) _orbitDots(ctx, r, d.c3, t, false);
   if (deco.includes('portals')) _portalSigils(ctx, r, d.c3, t, false);
+  if (def.design.sdeco && typeof drawSupDeco === 'function') drawSupDeco(ctx, def, r, t, st, false);
   if (evo >= 1 && !deco.includes('orbit') && !deco.includes('portals')) _orbitDots(ctx, r, d.c2, t * 0.8, false, 2, 1.45, 0.4, 0.4, 0.08);
 
   /* --- body: rotating texture + static lighting --- */
@@ -1162,6 +1165,7 @@ function drawBall(ctx, def, x, y, r, st = {}) {
   if (st.god) _ringHalf(ctx, r, d.c2, 0.6 + t * 0.3, true, 1.75, 0.3, 0.06);
   if (deco.includes('orbit')) _orbitDots(ctx, r, d.c3, t, true);
   if (deco.includes('portals')) _portalSigils(ctx, r, d.c3, t, true);
+  if (def.design.sdeco && typeof drawSupDeco === 'function') drawSupDeco(ctx, def, r, t, st, true);
   if (evo >= 1 && !deco.includes('orbit') && !deco.includes('portals')) _orbitDots(ctx, r, d.c2, t * 0.8, true, 2, 1.45, 0.4, 0.4, 0.08);
   if (deco.includes('eyes')) _eyes(ctx, r, st.god ? '#ffd54f' : '#b14dff', t, st.rage);
   if (deco.includes('antenna')) _antenna(ctx, r, d.c3, t);
@@ -1367,15 +1371,17 @@ class Fighter {
     this.cos = o.cos && !this.isClone ? resolveCos(o.cos) : null;   // cosmetics: visual only
     this.straightT = 0;
     this.evoMul = ev; this.energy = 0; this.heat = 0; this.absorbLeft = 0; this.reverseLeft = 0; this.silenceImm = 0; this.repairCd = 0; this.repairs = 0; this.guard = null;
+    this.form = 0; this.fm = 1; this.xAtk = 1; this.xSpd = 1; this.sid = BATTLE && BATTLE.sidN != null ? ++BATTLE.sidN : 0;   // 2.1.0 Supreme forms / admin edits / match id
+    if (def.supreme && typeof supremeInit === 'function') supremeInit(this, o);
   }
   get hpRatio() { return this.hp / this.maxHp; }
   get credit() { return this.isClone && this.owner ? this.owner : this; }
   /* Anti Evolution (st.antievo) temporarily switches off evolution, rage, God Mode and power-up bonuses */
   evoOff() { return 1 + ((this.evoMul || 1) - 1) * 0.75; }
-  effAtk() { const ae = this.st.antievo > 0; let a = this.atk; if (ae) a /= this.evoOff(); if (this.rage && !ae) a *= (this.def.rageAtk || 1.3) * this.rageBonus; if (this.god > 0 && !ae) a *= this.def.godBoost || 1.6; if (this.st.buff > 0 && !ae) a *= 1 + this.st.buffPow; if (this.st.weaken > 0) a *= 0.7; if (this.st.adapt > 0 && !ae) a *= 1 + (this.adaptPow || 0.15); if (this.st.overclock > 0 && !ae) a *= 1.12; if (this.st.nulled > 0) a *= this.boss ? 0.85 : 0.75; return a; }
-  effDef() { const ae = this.st.antievo > 0; let d = this.dfn; if (ae) d /= this.evoOff(); if (this.god > 0 && !ae) d *= 1 + ((this.def.godBoost || 1.6) - 1) * 0.67; if (this.st.adapt > 0 && !ae) d *= 1 + (this.adaptPow || 0.15); return d; }
-  speedMul() { const ae = this.st.antievo > 0; let m = 1; if (this.st.freeze > 0) m *= 0.3; else if (this.st.slow > 0) m *= 0.55; if (this.rage && !ae) m *= this.def.rageSpd || 1.22; if (this.god > 0 && !ae) m *= 1.22; if (this.st.buff > 0 && !ae) m *= 1 + this.st.buffPow * 0.5; if (this.st.overclock > 0 && !ae) m *= 1.3; if (this.st.dash > 0) m *= 2.3; return m; }
-  cdMul() { const ae = this.st.antievo > 0; let m = this.cdTree; if (this.rage && !ae) m *= 0.6; if (this.god > 0 && !ae) m *= 0.5; if (this.st.overclock > 0 && !ae) m *= 0.65; return m; }
+  effAtk() { const ae = this.st.antievo > 0; let a = this.atk; if (ae) a /= this.evoOff(); if (this.rage && !ae) a *= (this.def.rageAtk || 1.3) * this.rageBonus; if (this.god > 0 && !ae) a *= this.def.godBoost || 1.6; if (this.st.buff > 0 && !ae) a *= 1 + this.st.buffPow; if (this.st.weaken > 0) a *= 0.7; if (this.st.adapt > 0 && !ae) a *= 1 + (this.adaptPow || 0.15); if (this.st.overclock > 0 && !ae) a *= 1.12; if (this.st.nulled > 0) a *= this.boss ? 0.85 : 0.75; if (this.fm > 1 && !ae) a *= this.fm; if (this.xAtk !== 1) a *= this.xAtk; return a; }
+  effDef() { const ae = this.st.antievo > 0; let d = this.dfn; if (ae) d /= this.evoOff(); if (this.god > 0 && !ae) d *= 1 + ((this.def.godBoost || 1.6) - 1) * 0.67; if (this.st.adapt > 0 && !ae) d *= 1 + (this.adaptPow || 0.15); if (this.fm > 1 && !ae) d *= 1 + (this.fm - 1) * 0.8; return d; }
+  speedMul() { const ae = this.st.antievo > 0; let m = 1; if (this.st.freeze > 0) m *= 0.3; else if (this.st.slow > 0) m *= 0.55; if (this.rage && !ae) m *= this.def.rageSpd || 1.22; if (this.god > 0 && !ae) m *= 1.22; if (this.st.buff > 0 && !ae) m *= 1 + this.st.buffPow * 0.5; if (this.st.overclock > 0 && !ae) m *= 1.3; if (this.st.dash > 0) m *= 2.3; if (this.fm > 1 && !ae) m *= 1 + (this.fm - 1) * 0.3; if (this.xSpd !== 1) m *= this.xSpd; return m; }
+  cdMul() { const ae = this.st.antievo > 0; let m = this.cdTree; if (this.rage && !ae) m *= 0.6; if (this.god > 0 && !ae) m *= 0.5; if (this.st.overclock > 0 && !ae) m *= 0.65; if (this.form && !ae) m *= this.form === 2 ? 0.8 : 0.9; if (this.sx && this.sx.energyT > 0) m *= 0.75; return m; }
   canAct() { return this.alive && this.st.stun <= 0 && this.st.timestop <= 0 && this.casting <= 0 && !(this.st.outside > 0); }
   allSkills() { return this.temp ? this.skills.concat([this.temp]) : this.skills; }
   enemies() { return BATTLE ? BATTLE.fighters.filter(f => f.alive && f.team !== this.team) : []; }
@@ -1411,6 +1417,7 @@ function dealDamage(src, tgt, amt, o = {}) {
     if (g.hp <= 0.5) killFighter(g, cr);
     if (amt <= 0.01) return take;
   }
+  if ((tgt.sx || (s && s.sx)) && typeof supDamageHook === 'function') { amt = supDamageHook(s, tgt, amt, o); if (!(amt > 0)) return 0; }
   if (tgt.st.shield > 0 && o.kind !== 'dot') { amt *= 1 - tgt.st.shieldPow; FX.ring(tgt.x, tgt.y, '#9fe8ff', tgt.r * 1.45, 0.25, 4, tgt.r * 1.15); }
   amt = Math.max(0.5, amt * DMG_SCALE * (BATTLE.dmgMul || 1));
   if (BATTLE.infiniteHp && !tgt.isPlayer && tgt.team !== 0) { tgt.hp = Math.max(1, tgt.hp - amt); if (tgt.hp <= 1) tgt.hp = tgt.maxHp; }
@@ -1477,11 +1484,13 @@ function resurrect(f, pct) {
 
 function killFighter(f, killer) {
   if (!f.alive) return;
+  if (f.sx && typeof supPreventDeath === 'function' && supPreventDeath(f)) return;
   const res = !f.resUsed && !f.isClone && f.skills.find(s => s.type === 'resurrect' && !s.locked);
   if (res) { f.hp = 0; resurrect(f, clamp((res.power || 50) / 100, 0.2, 0.8)); return; }
   f.alive = false; f.hp = 0; f.deathT = 0;
   const d = f.def.design;
-  if (f.isClone) { if (f.unit) unitGone(f, true); else FX.burst(f.x, f.y, d.c3, 18, 260, 5, 0.6); return; }
+  if (f.isClone) { if (f.minionDeath) { const md = f.minionDeath; f.minionDeath = null; md(f); } if (f.unit) unitGone(f, true); else FX.burst(f.x, f.y, d.c3, 18, 260, 5, 0.6); return; }
+  if (f.baseDef && typeof supremeDefeat === 'function') supremeDefeat(f);
   FX.burst(f.x, f.y, d.c3, 70, 620, 8, 1.2); FX.burst(f.x, f.y, d.c2, 40, 420, 6, 1.0, 'shard'); FX.sparks(f.x, f.y, '#ffffff', 24, 800);
   for (let i = 0; i < 3; i++) FX.ring(f.x, f.y, i ? d.c2 : '#ffffff', 220 + i * 80, 0.6 + i * 0.2, 12 - i * 3, f.r);
   FX.text(f.x, f.y - f.r - 20, 'K.O.!', '#ff3355', 40, { life: 1.6, pop: 2.2 });
@@ -1501,6 +1510,7 @@ function tickFighter(f, dt) {
     s.burn = Math.max(0, s.burn - dt); s.poison = Math.max(0, s.poison - dt); if (s.poison <= 0) f.poisonStacks = 0; if (s.burn <= 0) f.burnDps = 0;
   }
   if (!f.alive) return;
+  if (f.sx && typeof supremeTick === 'function') supremeTick(f, dt);
   if (f.silenceImm > 0) f.silenceImm -= dt;
   if (f.def.heat && f.heat > 0) f.heat = Math.max(0, f.heat - dt * (s.overheat > 0 ? 22 : s.overclock > 0 ? 6 : HEAT.DECAY));
   if (f.def.passive === 'repair' && !f.isClone && BATTLE) { if (f.repairCd > 0) f.repairCd -= dt; else if (f.hpRatio <= 0.2 && f.repairs < UNIT.REPAIR_MAX) emergencyRepair(f); }
@@ -1768,6 +1778,7 @@ function unitBrain(f, A, dt) {
   if (A.chk >= 1.2) { if (len(f.x - A.cx, f.y - A.cy) < 18) { const a = rand(TAU); f.vx = dcos(a) * f.baseSpeed; f.vy = dsin(a) * f.baseSpeed; A.slot += 1.3; } A.chk = 0; A.cx = f.x; A.cy = f.y; }
   if (!t) return;
   const d = len(t.x - f.x, t.y - f.y);
+  if (k === 'minion') { if (f.mshot && A.fireT <= 0 && d < f.mshot.range) { A.fireT = f.mshot.cd; f.mshot.fire(f, t); } return; }   // Supreme summons
   if (k === 'robot' && A.fireT <= 0 && d < 430) { A.fireT = 1.7; unitShot(f, t, 520, 6, 0.2, '#80d8ff'); }
   else if (k === 'skydrone' && A.fireT <= 0 && d < 620) { A.fireT = 1.5; unitShot(f, t, 620, 7, 0.08, '#ff1744'); }
   else if (k === 'megabot') {
@@ -2143,6 +2154,7 @@ function useSkill(f, sk) {
   if (f.st.nulled > 0) P *= f.boss ? 0.8 : 0.6;                                  // inside an enemy Null Zone
   const boost = f.energy > 4 && ENERGY_TYPES.includes(sk.type) ? 1 + f.energy / 100 * ANTI.ENERGY_BONUS : 1;   // Power Absorb's stored energy
   P *= boost;
+  if (typeof supSkillPower === 'function') P = supSkillPower(f, sk, P);
   const col = sk.color || f.def.design.c3, fn = SKILL_FN[sk.type];
   if (!fn) return false;
   if (fn(f, sk, P, col, tgt) === false) return false;
@@ -2160,7 +2172,8 @@ function useUltimate(f) {
   if (!f.ult || f.ultMeter < 100 || !f.canAct() || BATTLE.cinematic) return false;
   f.ultMeter = 0;
   if (f.isPlayer) SAVE.stats.skills++;
-  if (f.def.godMode && !f.godUsed && !f.isClone && !(f.st.antievo > 0)) startGodMode(f, () => performUlt(f));   // Anti Evolution postpones the transformation
+  if (f.baseDef && f.baseDef.forms && !f.isClone && typeof supremeUlt === 'function') supremeUlt(f);          // Supreme: Base → Awakened → Final God form
+  else if (f.def.godMode && !f.godUsed && !f.isClone && !(f.st.antievo > 0)) startGodMode(f, () => performUlt(f));   // Anti Evolution postpones the transformation
   else performUlt(f);
   return true;
 }
@@ -2458,6 +2471,7 @@ class AIController {
   scoreSkill(s, c) {
     const f = this.f, P = s.power || 50, pers = this.pers;
     const tv = scoreTech(this, s, c); if (tv !== undefined) return tv;
+    if (typeof supScore === 'function') { const sv = supScore(this, s, c); if (sv !== undefined) return sv; }
     const offensive = !['shield', 'heal', 'buff', 'resurrect', 'adaptive', 'clone', 'copy', 'dimescape', 'summon', 'clonearmy'].includes(s.type);
     if (offensive && (c.t.st.invuln > 0.3 || c.t.st.phase > 0.3)) return 0;                       // avoid wasting attacks on an invulnerable target
     if (s.type === 'shield' && c.t.god > 0 && f.st.shield <= 0) return 1.1;  // brace against a transformed enemy
@@ -2591,7 +2605,7 @@ class Battle {
     this.pairCd = new Map(); this.ultsUsed = 0; this.wave = 1; this.kills = 0; this.infiniteHp = !!cfg.infiniteHp;
     this.speed = SAVE.settings.speed || 1; this.result = null;
     this.acc = 0; this.stepN = 0; this.actions = []; this.rec = []; this.replay = cfg.replay || null; this.ri = 0; this.lastSteer = null;
-    FX.reset(); FX.off = !!cfg.headless; BATTLE = this;
+    FX.reset(); FX.off = !!cfg.headless; this.sidN = 0; BATTLE = this;
     this.seed = cfg.seed ?? ((Math.random() * 4294967296) >>> 0); seedRNG(this.seed);
     cfg.teams.forEach((team, ti) => team.forEach((spec, k) => this.spawn(spec, ti, k, team.length, cfg.teams.length)));
     this.pvp = !!cfg.pvp; this.limit = null; this.net = cfg.net || null;
@@ -2635,6 +2649,7 @@ class Battle {
       case 'u': useUltimate(pl); break;
       case 'm': pl.manual = !!a[1]; if (!pl.manual) pl.inP = 0; break;
       case 's': pl.inX = a[1] / 100; pl.inY = a[2] / 100; pl.inP = a[3]; break;
+      case 'x': if (typeof supremeCommand === 'function') supremeCommand(pl, a.slice(1)); break;   // ADMIN DELETE console (validated inside the engine)
     }
   }
   pumpInputs() {
@@ -2686,7 +2701,7 @@ class Battle {
     this.pumpInputs();
     if (this.cinematic) {        // God Mode transformation runs in simulation time (deterministic)
       const c = this.cinematic; c.t += h / 0.05;
-      if (c.t >= c.dur) { this.cinematic = null; if (c.f.alive) { finishGodMode(c.f); c.then(); } }
+      if (c.t >= c.dur) { this.cinematic = null; if (c.f.alive) { if (c.form != null) finishForm(c.f, c.form); else finishGodMode(c.f); c.then(); } }
     }
     const sdT = { boss: 150, survival: 0, endless: 0, practice: 0 }[this.mode] ?? 90;
     if (sdT && this.time > sdT) {
@@ -2702,6 +2717,7 @@ class Battle {
       if (f.alive && f.st.outside > 0) { f.st.outside -= h; if (f.st.outside > 0) continue; f.st.outside = 0; emergeFromPortal(f); }   // travelling through a portal
       if (!f.alive || f.st.timestop > 0) continue;
       if (f.manual) { f.steerX = f.inX; f.steerY = f.inY; f.steerPow = f.inP; } else if (f.ai) f.ai.update(h);
+      if ((this.cond || f.sx) && typeof supSteer === 'function') supSteer(f);
       if (f.anchored || f.tether) { if (f.anchored) f.vx = f.vy = 0; continue; }   // turrets / factories stand still, drones fly with their commander
       if (f.steerPow > 0 && f.st.stun <= 0) { f.vx += f.steerX * f.steerPow * h; f.vy += f.steerY * f.steerPow * h; }
       const target = f.baseSpeed * f.speedMul() * (f.casting > 0 ? 0.25 : 1) * (f.st.stun > 0 ? 0.6 : 1);
@@ -2721,6 +2737,7 @@ class Battle {
       for (let j = i + 1; j < F.length; j++) { const b = F[j]; if (b.alive) this.collide(a, b); }
     }
     this.updateProjs(h); this.updateBeams(h); this.updateWaves(h); this.updateZones(h); this.updateStrikes(h); this.updateOrbs(h); this.updateLasers(h);
+    if (typeof supremeStep === 'function') supremeStep(this, h);
     for (let i = this.pillars.length - 1; i >= 0; i--) if ((this.pillars[i].life -= h) <= 0) this.pillars.splice(i, 1);
     for (let i = this.portals.length - 1; i >= 0; i--) if ((this.portals[i].t += h) >= this.portals[i].life) this.portals.splice(i, 1);
     if (F.some(f => !f.alive && (f.isClone || (f.team !== 0 && f.deathT++ > 600 && (this.mode === 'survival' || this.mode === 'endless')))))
@@ -2735,7 +2752,7 @@ class Battle {
     else if (f.y + f.r > ARENA.b) { f.y = ARENA.b - f.r; if (f.vy > 0) { f.vy = -f.vy; hit = 'b'; } }
     if (hit) {
       const wx = hit === 'l' ? ARENA.x : hit === 'r' ? ARENA.r : f.x, wy = hit === 't' ? ARENA.y : hit === 'b' ? ARENA.b : f.y;
-      Arena.wallHit(wx, wy, f.def.design.c3);
+      Arena.wallHit(wx, wy, f.def.design.c3); if (f.baseDef && typeof supBounce === 'function') supBounce(f, wx, wy);
       if (!this.cfg.demo) Sound.play('bounce', clamp(len(f.vx, f.vy) / 600, 0, 1));
       if (f.st.dash > 0) FX.sparks(wx, wy, f.def.design.c3, 6, 300);
     }
@@ -2768,6 +2785,7 @@ class Battle {
     if (imb) { b.vx += nx * kb * dA / sum; b.vy += ny * kb * dA / sum; }
     if (ima) { a.vx -= nx * kb * dB / sum; a.vy -= ny * kb * dB / sum; }
     if (a.st.dash > 0) a.st.dash = Math.min(a.st.dash, 0.08); if (b.st.dash > 0) b.st.dash = Math.min(b.st.dash, 0.08);
+    if ((a.sx || b.sx) && typeof supCollide === 'function') { supCollide(a, b); supCollide(b, a); if (SUP.onCollideDash) { SUP.onCollideDash(a, b); SUP.onCollideDash(b, a); } }
     const strong = Math.max(appA, appB) / 500;
     FX.sparks(cx, cy, '#ffffff', 6 + Math.round(strong * 8), 380 + strong * 200);
     for (const f of [a, b]) if (f.cos && f.cos.hit) { FX.sparks(cx, cy, f.cos.hit.color, 12, 520); FX.ring(cx, cy, f.cos.hit.color, 70, 0.3, 5, 8); }
@@ -2779,6 +2797,8 @@ class Battle {
   updateProjs(h) {
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const p = this.projs[i]; p.life -= h;
+      if (p.frozen > 0) { p.frozen -= h; p.life += h; continue; }   // Time Freeze
+      if (p.tick) p.tick(p, h);
       if (p.homing) {
         if (!p.target || !p.target.alive) { let bd = Infinity; for (const e of this.enemiesOf(p.team)) { const dd = dist2(e.x, e.y, p.x, p.y); if (dd < bd) { bd = dd; p.target = e; } } }
         if (p.target && p.target.alive) { const want = datan2(p.target.y - p.y, p.target.x - p.x); let cur = datan2(p.vy, p.vx); const da = ((want - cur + Math.PI * 3) % TAU) - Math.PI; cur += clamp(da, -p.homing * h, p.homing * h); p.vx = dcos(cur) * p.speed; p.vy = dsin(cur) * p.speed; }
@@ -2786,12 +2806,18 @@ class Battle {
       p.x += p.vx * h; p.y += p.vy * h;
       if (!p.nulled && this.zones.length) for (const z of this.zones) if (z.kind === 'nullzone' && z.team !== p.team && dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { p.nulled = true; p.dmg *= 0.6; p.speed *= 0.65; p.vx *= 0.65; p.vy *= 0.65; if (!FX.off) FX.ring(p.x, p.y, '#7c4dff', 30, 0.3, 3, 4); break; }
       if (Math.random() < 0.35) FX.p(p.x, p.y, -p.vx * 0.05 + vr(-20, 20), -p.vy * 0.05 + vr(-20, 20), 0.28, p.r * 0.75, p.col);
+      if (p.bounce > 0 && p.life > 0) { let b = false;
+        if (p.x < ARENA.x + p.r || p.x > ARENA.r - p.r) { p.vx = -p.vx; p.x = clamp(p.x, ARENA.x + p.r, ARENA.r - p.r); b = true; }
+        if (p.y < ARENA.y + p.r || p.y > ARENA.b - p.r) { p.vy = -p.vy; p.y = clamp(p.y, ARENA.y + p.r, ARENA.b - p.r); b = true; }
+        if (b) { p.bounce--; if (p.hits) p.hits.clear(); if (!FX.off) FX.sparks(p.x, p.y, p.col, 5, 260); } }
       if (p.life <= 0 || p.x < ARENA.x + p.r * 0.5 || p.x > ARENA.r - p.r * 0.5 || p.y < ARENA.y + p.r * 0.5 || p.y > ARENA.b - p.r * 0.5) {
         FX.burst(p.x, p.y, p.col, 8, 170, 4, 0.35); if (p.life > 0) Arena.wallHit(clamp(p.x, ARENA.x, ARENA.r), clamp(p.y, ARENA.y, ARENA.b), p.col);
+        if (p.onEnd) p.onEnd(p);
         this.projs.splice(i, 1); continue;
       }
       for (const e of this.fighters) {
         if (!e.alive || e.team === p.team || e.st.phase > 0 || e.st.outside > 0) continue;
+        if (p.hits && p.hits.has(e.sid)) continue;
         if (dist2(e.x, e.y, p.x, p.y) < (e.r + p.r) * (e.r + p.r)) {
           const energy = !p.ult && p.style !== 'missile';   // only energy shots: never ultimates, never physical missiles
           if (e.st.absorb > 0 && e.absorbLeft > 0 && energy) { absorbShot(e, p); this.projs.splice(i, 1); break; }            // Power Absorb
@@ -2804,7 +2830,10 @@ class Battle {
           if (p.boom) explodeAt(p.owner, p.x, p.y, p.boom, p.dmg * 0.35, p.col, null, 240, p.power);   // missiles explode
           const k = e.boss ? 0.08 : 0.25; e.vx += p.vx * k; e.vy += p.vy * k;
           FX.burst(p.x, p.y, p.col, 14, 260, 5, 0.45); FX.sparks(p.x, p.y, '#ffffff', 6, 360); FX.ring(p.x, p.y, p.col, 46, 0.25, 4);
-          Sound.play('hit', 0.6); this.projs.splice(i, 1); break;
+          Sound.play('hit', 0.6);
+          if (p.onHit) p.onHit(p, e);
+          if (p.pierce > 0) { p.pierce--; (p.hits || (p.hits = new Set())).add(e.sid); continue; }   // passes through
+          this.projs.splice(i, 1); break;
         }
       }
     }
@@ -2857,6 +2886,7 @@ class Battle {
       for (const e of this.fighters) {
         if (!e.alive || e.team === z.team || e.st.outside > 0) continue;
         const dx = z.x - e.x, dy = z.y - e.y, d = len(dx, dy) || 1;
+        if (z.custom) { if (z.onTick) z.onTick(z, e, d, h); continue; }
         if (z.kind === 'nullzone' || z.kind === 'cybertrap') { techZone(this, z, e, d, h); continue; }
         if (z.kind === 'trap') {
           if (d > z.r + e.r * 0.3) continue;
@@ -2868,7 +2898,7 @@ class Battle {
         }
         const key = e.uid; if ((z.ticks.get(key) || 0) <= this.time) { z.ticks.set(key, this.time + (z.kind === 'trap' ? 0.5 : 0.4)); dealDamage(z.owner, e, z.dmg, { kind: 'skill', tag: 'zone', effect: z.effect, power: z.power, noCrit: true }); }
       }
-      if (z.kind !== 'trap' && z.kind !== 'nullzone' && z.kind !== 'cybertrap' && z.kind !== 'minihole' && Math.random() < 0.8) { const a = vr(TAU), rr = z.r * vr(0.6, 1); FX.p(z.x + dcos(a) * rr, z.y + dsin(a) * rr, -dcos(a) * rr * 1.6 - dsin(a) * 140, -dsin(a) * rr * 1.6 + dcos(a) * 140, 0.5, vr(2, 4), z.col, 'dot', 0.5); }
+      if (!z.custom && z.kind !== 'trap' && z.kind !== 'nullzone' && z.kind !== 'cybertrap' && z.kind !== 'minihole' && Math.random() < 0.8) { const a = vr(TAU), rr = z.r * vr(0.6, 1); FX.p(z.x + dcos(a) * rr, z.y + dsin(a) * rr, -dcos(a) * rr * 1.6 - dsin(a) * 140, -dsin(a) * rr * 1.6 + dcos(a) * 140, 0.5, vr(2, 4), z.col, 'dot', 0.5); }
     }
   }
   updateStrikes(h) {
@@ -2915,8 +2945,10 @@ class Battle {
   }
   endWith(win, extra = {}) {
     if (this.endTimer >= 0 || this.over) return;
+    if (typeof supremeVictory === 'function') for (const f of this.fighters) if (f.alive && f.baseDef && !f.isClone) supremeVictory(f);
     const pl = this.player;
     this.result = { win, mode: this.mode, time: this.time, kills: this.kills, wave: this.wave, step: this.stepN, hpPct: pl ? Math.max(0, pl.hp) / pl.maxHp : 0, stats: pl ? { ...pl.stats } : {}, rage: !!(pl && pl.rageEver), god: !!(pl && pl.godUsed), ...extra };
+    if (this.adminLog) this.result.adminCmds = this.adminLog;
     if (this.pvp) {
       this.result.slots = this.slots.map(f => ({ team: f.team, hpPct: Math.max(0, f.hp) / f.maxHp, stats: { ...f.stats }, rage: !!f.rageEver, god: !!f.godUsed }));
       this.result.places = this.placesOf(this.result.winner);
@@ -3208,8 +3240,10 @@ Battle.prototype.drawSkynet = function (ctx, dt) {
 Battle.prototype.draw = function (ctx, dt) {
   ctx.save();
   if (FX.shake > 0) ctx.translate(vr(-FX.shake, FX.shake), vr(-FX.shake, FX.shake));
+  if (this.cam && typeof supCamera === 'function') supCamera(this, ctx, dt);
   Arena.draw(ctx, dt);
   ctx.save(); chamferPath(ctx, ARENA.x, ARENA.y, ARENA.w, ARENA.h, 12); ctx.clip();
+  if (typeof supDrawUnder === 'function') supDrawUnder(this, ctx, dt);
   this.drawDarks(ctx, dt); this.drawZones(ctx); this.drawStrikes(ctx); this.drawLasers(ctx);
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (const p of this.pillars) {
@@ -3223,6 +3257,7 @@ Battle.prototype.draw = function (ctx, dt) {
   for (const f of order) this.drawFighter(ctx, f);
   this.drawOrbs(ctx); this.drawProjs(ctx); this.drawBeams(ctx); this.drawWaves(ctx);
   FX.drawWorld(ctx);
+  if (this.vfx && this.vfx.length && typeof supDrawOver === 'function') supDrawOver(this, ctx, dt);
   if (this.skynetT > 0) this.drawSkynet(ctx, dt);
   if (this.timeTint > 0) { ctx.fillStyle = `rgba(110,140,255,${Math.min(0.16, this.timeTint * 0.12)})`; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); }
   if (this.cinematic) {
@@ -3237,7 +3272,7 @@ Battle.prototype.draw = function (ctx, dt) {
   FX.drawTexts(ctx);
   if (this.cinematic) {
     const c = this.cinematic; ctx.save(); ctx.textAlign = 'center'; ctx.font = '900 38px "Segoe UI", sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#000';
-    const txt = 'TRANSFORMING' + '.'.repeat(1 + Math.floor(c.t * 4) % 3); ctx.strokeText(txt, ARENA.cx, ARENA.y + 70); ctx.fillStyle = '#ffd54f'; ctx.fillText(txt, ARENA.cx, ARENA.y + 70); ctx.restore();
+    const txt = (c.form === 2 ? 'FINAL GOD FORM' : c.form === 1 ? 'AWAKENING' : 'TRANSFORMING') + '.'.repeat(1 + Math.floor(c.t * 4) % 3); ctx.strokeText(txt, ARENA.cx, ARENA.y + 70); ctx.fillStyle = '#ffd54f'; ctx.fillText(txt, ARENA.cx, ARENA.y + 70); ctx.restore();
   }
   ctx.restore();
   if (this.suddenDeath) { ctx.save(); ctx.globalAlpha = 0.45 + 0.35 * Math.sin(this.time * 5); ctx.strokeStyle = '#ff2244'; ctx.lineWidth = 5; ctx.shadowColor = '#ff2244'; ctx.shadowBlur = 18; chamferPath(ctx, ARENA.x, ARENA.y, ARENA.w, ARENA.h, 12); ctx.stroke(); ctx.restore(); }
@@ -3255,9 +3290,10 @@ Battle.prototype.drawFighter = function (ctx, f) {
     if (f.cos.skin) st.skin = f.cos.skin;
     if (f.cos.trail && Math.random() < 0.8) FX.p(f.x - f.vx * 0.03 + vr(-6, 6), f.y - f.vy * 0.03 + vr(-6, 6), -f.vx * 0.15, -f.vy * 0.15, 0.45, f.cos.trail.id === 'trail_pixel' ? 4 : vr(3, 6), cosColor(f.cos.trail.color, f.t), f.cos.trail.id === 'trail_pixel' ? 'shard' : 'dot', 1.5);
   }
+  if (f.def.tuning && f.def.tuning.aura === false) st.noAura = true;   // owner setting (Admin Ball Control Panel)
   if (f.st.freeze > 0) st.tint = 'rgba(160,230,255,0.38)';
   if (f.st.timestop > 0) st.tint = 'rgba(110,120,160,0.5)';
-  if (f.unit && !f.holo) { drawUnit(ctx, f, r); return; }
+  if (f.unit && !f.holo && !f.ballLook) { drawUnit(ctx, f, r); return; }
   if (f.holo) st.alpha = 0.72 + 0.2 * Math.sin(f.t * 23) * Math.sin(f.t * 7);
   if (f.st.antievo > 0 && !st.tint) st.tint = 'rgba(70,40,90,0.3)';
   if (f.st.overheat > 0 && !st.tint) st.tint = 'rgba(255,120,30,0.28)';
@@ -3339,6 +3375,7 @@ Battle.prototype.drawZones = function (ctx) {
   for (const z of this.zones) {
     const a = Math.min(1, z.life / 0.4, (z.max - z.life) / 0.25 + 0.2), t = this.time;
     ctx.save(); ctx.translate(z.x, z.y); ctx.globalAlpha = a;
+    if (z.custom) { if (z.draw) { try { z.draw(ctx, z, t); } catch (e) { /* visual only */ } } ctx.restore(); continue; }
     if (z.kind === 'nullzone' || z.kind === 'minihole' || z.kind === 'cybertrap') { drawTechZone(ctx, z, t); ctx.restore(); continue; }
     if (z.kind === 'trap') {
       const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, z.r); gr.addColorStop(0, rgba(z.col, 0.28)); gr.addColorStop(1, rgba(z.col, 0.05));
@@ -3375,6 +3412,7 @@ Battle.prototype.drawProjs = function (ctx) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (const p of this.projs) {
     if (p.style === 'missile') { drawMissile(ctx, p); continue; }
+    if (p.style && typeof drawSupProj === 'function' && drawSupProj(ctx, p)) continue;
     const s = p.r * 3.4; ctx.drawImage(glowSprite(p.col), p.x - s, p.y - s, s * 2, s * 2);
     ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.85, 0, TAU); ctx.fill();
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.45, 0, TAU); ctx.fill();
@@ -3457,6 +3495,7 @@ function hudPanel(ctx, f, right) {
   const chips = []; if (f.rage) chips.push(['RAGE', rageColor(f.def.design)]); if (f.god > 0) chips.push(['GOD ' + Math.ceil(f.god) + 's', '#ffd54f']);
   if (f.st.shield > 0) chips.push(['SHIELD', '#9fe8ff']); if (f.st.buff > 0) chips.push(['POWER', '#ff9f1c']); if (f.st.adapt > 0) chips.push(['ADAPT', '#e0aaff']);
   if (f.st.phase > 0) chips.push(['PHASED', '#b2fff9']); if (f.st.outside > 0) chips.push(['IN THE VOID', '#d18cff']); if (f.st.reflect > 0) chips.push(['REFLECT', '#e0f7fa']);
+  if (f.sx && typeof supChips === 'function') supChips(f, chips);
   if (f.st.silence > 0) chips.push(['SILENCED', '#ff8a80']); if (f.st.antievo > 0) chips.push(['DE-EVOLVED', '#ea80fc']); if (f.st.nulled > 0) chips.push(['NULLED', '#b388ff']);
   if (f.st.overheat > 0) chips.push(['OVERHEAT', '#ff9100']); else if (f.st.overclock > 0) chips.push(['OVERCLOCK', '#ff1744']);
   if (f.st.absorb > 0) chips.push(['ABSORB ' + f.absorbLeft, '#ea80fc']); if (f.st.reverse > 0) chips.push(['REVERSE ' + f.reverseLeft, '#e1bee7']); if (f.guard && f.guard.alive) chips.push(['DRONE', '#80d8ff']);
@@ -3629,6 +3668,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
   const S = setup, diff = normDiff(S.difficulty), D = DIFF[diff], me = getBall(S.ball);
   if (!me) throw new Error('Unknown ball');
   const pl = playerSpecFrom(me, prog0), plv = pl.level, elv = plv + D.lvl;
+  if (S.adminTest && me.supreme && S.startForm) pl.startForm = clamp(S.startForm | 0, 0, 2);   // owner test: start in a chosen form
   const pool = opponentPool(false).filter(b => !b.adminOnly && !b.fusion).map(b => b.id);
   const choose = excl => { const c = pool.filter(id => !excl.includes(id)); return pickWith(c.length ? c : pool, rnd); };
   const chosen = S.enemy && S.enemy !== 'random' && getBall(S.enemy) ? S.enemy : null;
@@ -3645,7 +3685,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
     default: teams = [[pl], [E(chosen || choose([me.id]), elv)]];
   }
   return { v: 2, mode: MODES[S.mode] ? S.mode : '1v1', difficulty: diff, seed: (Math.floor(rnd() * 4294967296) >>> 0), manual: !!S.manual, teams, pool,
-    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0 } };
+    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0, ...(S.adminTest && me.supreme ? { adminTest: true } : {}) } };
 }
 /* ---------- online PvP (shared by the game server and the browser) ---------- */
 const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
@@ -3702,6 +3742,7 @@ function cleanPvpActions(list) {
       case 'k': if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 6) return null; out.push([a[0], 'k', a[2]]); break;   // up to 6 abilities + a copied one
       case 'u': out.push([a[0], 'u', 0]); break;
       case 'm': out.push([a[0], 'm', a[2] ? 1 : 0]); break;
+      case 'x': if (a.length !== 6 || !a.slice(2).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return null; out.push([a[0], 'x', a[2], a[3], a[4], a[5]]); break;   // owner console
       case 's': if (![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return null; out.push([a[0], 's', a[2], a[3], a[4]]); break;
       default: return null;
     }
@@ -3715,7 +3756,7 @@ function buildBattleConfig(T, hooks = {}) {
   for (const t of T.teams) for (const s of t) if (!getBall(s.ball)) throw new Error('Ball not available: ' + s.ball);
   const cfg = { mode: T.mode, difficulty: T.difficulty, seed: T.seed, manual: T.manual, teams: T.teams.map(t => t.map(mk)), infiniteHp: T.mode === 'practice' && !!T.opts.infinite,
     dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless,
-    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked };
+    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked, adminTest: !!(T.opts && T.opts.adminTest) };
   const pl = T.teams[0][0], diff = T.difficulty;
   const nextFrom = excl => { const c = T.pool.filter(id => !excl.includes(id)); return pick(c.length ? c : T.pool); };
   if (T.mode === 'survival') cfg.checkEnd = B => {

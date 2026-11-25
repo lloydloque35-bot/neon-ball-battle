@@ -29,7 +29,8 @@ function register(app, S) {
     const overrides = Object.fromEntries(db.all('SELECT ball_id, def FROM ball_overrides').map(r => [r.ball_id, json(r.def, {})]));
     const disabled = Object.fromEntries(db.all('SELECT ball_id FROM ball_flags WHERE disabled = 1').map(r => [r.ball_id, true]));
     const fusions = userId ? db.all('SELECT def FROM fusions WHERE user_id = ? ORDER BY created_at', userId).map(r => json(r.def, {})) : [];
-    return { overrides, customBalls, disabled, fusions };
+    const tuning = Object.fromEntries(db.all('SELECT ball_id, settings FROM admin_ball_tuning').map(r => [r.ball_id, json(r.settings, {})]));   // Supreme ball settings (owner)
+    return { overrides, customBalls, disabled, fusions, tuning };
   }
   /** runs fn with the shared core pointed at this user's catalog (synchronous only) */
   function withCatalog(user, fn) { core.setCatalog(catalogFor(user ? user.id : null, user ? isOwner(user) : false)); return fn(); }
@@ -176,13 +177,14 @@ function register(app, S) {
     if (!Array.isArray(inputs) || inputs.length > 20000) return 'Too many inputs';
     let last = 0;
     for (const a of inputs) {
-      if (!Array.isArray(a) || a.length < 2 || a.length > 5) return 'Malformed input';
+      if (!Array.isArray(a) || a.length < 2 || a.length > 6) return 'Malformed input';
       const [step, type] = a;
       if (!Number.isInteger(step) || step < 1 || step > MAX_STEPS || step < last) return 'Malformed input step';
       last = step;
       if (type === 'k') { if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 6 || a.length !== 3) return 'Malformed ability input'; }   // up to 6 abilities + a copied one
       else if (type === 'u') { if (a.length !== 3 || a[2] !== 0) return 'Malformed ultimate input'; }
       else if (type === 'm') { if (a.length !== 3 || (a[2] !== 0 && a[2] !== 1)) return 'Malformed control input'; }
+      else if (type === 'x') { if (a.length !== 6 || !Object.values(core.ADMIN_CMDS).includes(a[2]) || !a.slice(3).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return 'Malformed admin command'; }   // ADMIN DELETE console
       else if (type === 's') { if (a.length !== 5 || ![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return 'Malformed steering input'; }
       else return 'Unknown input type';
     }
@@ -221,6 +223,11 @@ function register(app, S) {
       for (const k of ['enemy', 'ally']) if (b[k] && b[k] !== 'random' && !pool.has(b[k])) throw bad('That opponent is not available');
       if (mode === 'boss' && b.boss && (!pool.has(b.boss))) throw bad('That boss is not available');
       const setup = { mode, ball: def.id, enemy: b.enemy || 'random', ally: b.ally || 'random', difficulty: core.normDiff(b.difficulty), ffaCount: S_.clampInt(b.ffaCount, 3, 6, 4), boss: b.boss || 'ancientgod', infinite: !!b.infinite, dummy: !!b.dummy, manual: !!b.manual };
+      if (b.adminTest) {     // Admin Ball Control Panel "Spawn & test": owner only, Supreme balls only, Practice only (no rewards)
+        if (!isOwner(u) || !def.supreme || mode !== 'practice') throw new HttpError(403, 'Owner test battles are only for the game owner', 'NO_ACCESS');
+        setup.adminTest = true; setup.startForm = S_.clampInt(b.startForm, 0, 2, 0);
+        S.audit(u.id, 'admin.supreme_test', def.id, ctx.ip, { startForm: setup.startForm, enemy: setup.dummy ? 'dummy' : setup.enemy });
+      }
       return { ticket: newTicket(u, setup, {}, trial) };
     });
   });
@@ -237,6 +244,16 @@ function register(app, S) {
     if (err) { S.secEvent(u.id, 'bad_battle_inputs', 2, { id, err }, ctx.ip); db.run("UPDATE battles SET status = 'rejected', flags = ?, finished_at = ? WHERE id = ?", 'bad_inputs', now(), id); throw bad('Battle data was malformed and was not counted'); }
     const ticket = json(row.ticket);
     const cStep = S_.clampInt(claimed && claimed.step, 0, MAX_STEPS, 0);
+    const adminCmds = inputs.filter(a => a[1] === 'x');
+    if (adminCmds.length) {          // owner console commands: only the owner's own Supreme battles may contain them
+      const ball = ticket.teams && ticket.teams[0] && ticket.teams[0][0] ? ticket.teams[0][0].ball : '';
+      if (!isOwner(u) || !withCatalog(u, () => { const d = core.getBall(ball); return d && d.supreme; })) {
+        S.secEvent(u.id, 'admin_command_forged', 3, { id, n: adminCmds.length }, ctx.ip);
+        db.run("UPDATE battles SET status = 'rejected', flags = 'forged_admin', finished_at = ? WHERE id = ?", now(), id);
+        throw new HttpError(403, 'Admin commands are only accepted from the game owner', 'NO_ACCESS');
+      }
+      S.audit(u.id, 'admin.delete_console', id, ctx.ip, { mode: row.mode, ball, commands: adminCmds.map(a => ({ step: a[0], cmd: Object.keys(core.ADMIN_CMDS).find(k => core.ADMIN_CMDS[k] === a[2]), target: a[3], v: [a[4], a[5]] })).slice(0, 40) });
+    }
     if (row.trial || row.mode === 'practice') {
       db.run("UPDATE battles SET status = 'verified', finished_at = ?, result = ? WHERE id = ?", now(), JSON.stringify({ practice: true }), id);
       return { verified: true, practice: true, result: { win: !!(claimed && claimed.win), mode: row.mode }, rewards: { coins: 0, exp: 0, rp: 0 }, save: savePayload(u) };

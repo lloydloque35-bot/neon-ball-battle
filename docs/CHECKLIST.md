@@ -1,4 +1,13 @@
-# Development checklist — v2.0 master upgrade
+# Development checklist — v2.0 master upgrade (+ 2.1.0)
+
+## 2.1.0 — Supreme Admin Balls ([SUPREME-ADMIN-BALLS.md](SUPREME-ADMIN-BALLS.md))
+- ✅ 15 owner-only Supreme balls, each with 5 unique abilities, an ultimate, a final-form ultimate and 3 forms changing in real time (Base / Awakened / Final God Form)
+- ✅ Transformation cinematic, special battlefield entrance, unique victory and defeat animations, aura, idle particles, wall-bounce effects and a sound profile for each ball
+- ✅ Archangel, Void Emperor and Omega upgraded in place (same ids, saved progress kept); Phoenix / Mirror / Infinity / Blood Moon have separate owner-only God versions, and the player balls are unchanged
+- ✅ ADMIN DELETE owner console: delete / restore / transform / properties / arena / settings — current match only; permanent disabling is a separate, confirmed, audit-logged action
+- ✅ Admin Ball Control Panel: previews, abilities on/off, cooldown multiplier, effects intensity, aura, Spawn & Test with a test bar
+- ✅ Server: owner-only access, validated admin commands (replayed in verification), forged commands rejected and logged, audit log, migration 004
+- ✅ Tests: `server/test/supreme.test.js` (75 abilities, all ultimates and forms, determinism, console replay, server rules)
 
 Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not implemented (by design, see notes)
 

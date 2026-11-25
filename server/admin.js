@@ -167,6 +167,24 @@ function register(app, S) {
     S.audit(me.id, exists ? 'admin.ball_updated' : 'admin.ball_created', id, ctx.ip, { name: def.name, published: !!pub });
     return { id };
   });
+  /* ---------- Admin Ball Control Panel: Supreme ball settings (owner only, validated, audit-logged) ---------- */
+  const supremeIds = () => core.supremeIds ? core.supremeIds() : [];
+  A('get', '/api/admin/supreme', () => {
+    const rows = Object.fromEntries(db.all('SELECT ball_id, settings, updated_at FROM admin_ball_tuning').map(r => [r.ball_id, r]));
+    return { balls: supremeIds().map(id => ({ id, tuning: rows[id] ? json(rows[id].settings, {}) : null, updatedAt: rows[id] ? rows[id].updated_at : null })) };
+  });
+  A('post', '/api/admin/supreme/:id', (ctx, me) => {
+    const id = str(ctx.params.id, 64), b = ctx.body || {};
+    if (!supremeIds().includes(id)) throw bad('Not a Supreme admin ball');
+    if (b.reset) { db.run('DELETE FROM admin_ball_tuning WHERE ball_id = ?', id); S.audit(me.id, 'admin.supreme_reset', id, ctx.ip); return { ok: true }; }
+    const nSkills = (core.ALL_BUILTIN.find(x => x.id === id) || { skills: [] }).skills.length;
+    const off = Array.isArray(b.off) ? [...new Set(b.off.filter(i => Number.isInteger(i) && i >= 0 && i < nSkills))].sort() : [];
+    if (off.length >= nSkills) throw bad('Keep at least one ability switched on');
+    const t = { cdMul: Math.round(num(b.cdMul, 0.2, 3, 1) * 10) / 10, off, fx: Math.round(num(b.fx, 0.2, 1.5, 1) * 10) / 10, aura: b.aura !== false };
+    db.run('INSERT INTO admin_ball_tuning (ball_id, settings, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(ball_id) DO UPDATE SET settings = excluded.settings, updated_by = excluded.updated_by, updated_at = excluded.updated_at', id, JSON.stringify(t), me.id, now());
+    S.audit(me.id, 'admin.supreme_tuning', id, ctx.ip, t);
+    return { ok: true, tuning: t };
+  });
   A('post', '/api/admin/balls/:id/flags', (ctx, me) => {
     const id = str(ctx.params.id, 64), dis = !!ctx.body.disabled;
     db.run('INSERT INTO ball_flags (ball_id, disabled) VALUES (?, ?) ON CONFLICT(ball_id) DO UPDATE SET disabled = excluded.disabled', id, dis ? 1 : 0);

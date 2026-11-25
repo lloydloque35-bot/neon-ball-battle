@@ -78,7 +78,7 @@ const Online = {
   async post(path, body) { const r = await API.post(path, body); if (r.save) this.applySave(r.save); return r; },
   /* battles: the server issues the ticket and verifies the result */
   async startBattle(S) {
-    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial });
+    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial, ...(S.adminTest ? { adminTest: true, startForm: S.startForm | 0 } : {}) });
     return r.ticket;
   },
   async tourStart(S) { return (await API.post('/api/tournament/start', { ball: S.ball, difficulty: S.difficulty })).tour; },
@@ -442,7 +442,7 @@ Object.assign(UI, {
   adTab: 'overview',
   render_admin() {
     const tabs = $('#adminTabs'); tabs.innerHTML = '';
-    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
+    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
       tabs.append(h('button', { class: 'tab admin-tab' + (this.adTab === k ? ' active' : ''), onclick: () => { this.adTab = k; this.render_admin(); } }, l));
     tabs.append(h('button', { class: 'btn admin small', style: { marginLeft: 'auto' }, onclick: () => this.openCreator(null) }, '＋ Create New Ball'));
     const body = $('#adminBody'); body.innerHTML = '<p class="muted">Loading…</p>';
@@ -602,6 +602,8 @@ class LockstepNet {
     else if (type === 'k') this.pending.push(['k', Math.max(0, Math.min(6, a | 0))]);
     else if (type === 'u') this.pending.push(['u', 0]);
   }
+  /* owner console (ADMIN DELETE): ['x', cmd, targetId, v1, v2], validated by the engine and the server */
+  adminCmd(a) { if (!this.dead && this.pending.length < 20 && Array.isArray(a) && a.length === 4) this.pending.push(['x', ...a.map(v => Math.max(-1000, Math.min(1000, v | 0)))]); }
   /* steering while in MANUAL (sampled every simulated step, only changes are sent) */
   sample(B) {
     if (this.dead || !this.localManual || !B.player || !B.player.alive) return;

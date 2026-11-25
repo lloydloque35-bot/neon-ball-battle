@@ -310,6 +310,7 @@ function register(app, S) {
     if (!Number.isInteger(b) || b !== M.next[s] || b > MAX_BLOCKS || b - M.confirmed > 600) return dropSlot(M, s, 'protocol', { b, expected: M.next[s] });
     const acts = core.cleanPvpActions(m.a == null ? [] : m.a);
     if (!acts) return dropSlot(M, s, 'bad_input');
+    if (acts.some(a => a[1] === 'x') && p.user.role !== 'owner') { S.secEvent(p.user.id, 'admin_command_forged', 3, { match: M.id }, null); return dropSlot(M, s, 'bad_input'); }   // owner console only
     M.last[s] = now();
     storeFrame(M, s, b, acts);
   }
