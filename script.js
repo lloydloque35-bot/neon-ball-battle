@@ -2595,9 +2595,10 @@ class Battle {
     this.seed = cfg.seed ?? ((Math.random() * 4294967296) >>> 0); seedRNG(this.seed);
     cfg.teams.forEach((team, ti) => team.forEach((spec, k) => this.spawn(spec, ti, k, team.length, cfg.teams.length)));
     this.pvp = !!cfg.pvp; this.limit = null; this.net = cfg.net || null;
-    if (this.pvp) {          // online PvP: two human-controlled balls, inputs tagged with the player's slot
+    this.outOrder = [];       // teams in the order they were knocked out (for placements)
+    if (this.pvp) {          // online: 2-5 human-controlled balls (plus AI seats), inputs tagged with each player's slot
       this.speed = 1;
-      this.slots = [0, 1].map(s => this.fighters.find(f => f.slot === s));
+      this.slots = this.fighters.filter(f => f.slot != null).sort((a, b) => a.slot - b.slot);
       for (const f of this.slots) { f.manual = false; f.inX = 0; f.inY = 0; f.inP = 0; }
       this.player = cfg.me != null ? this.slots[cfg.me] : null;
     } else {
@@ -2616,7 +2617,8 @@ class Battle {
     if (!spec.isPlayer || spec.ai || this.cfg.demo) f.ai = new AIController(f, spec.ai || spec.def.ai || 'intelligent', spec.diff || this.difficulty);
     if (spec.isPlayer) { f.ai = new AIController(f, spec.def.ai === 'boss' ? 'intelligent' : (spec.def.ai || 'intelligent'), spec.playerDiff || 'hard'); }
     if (spec.hp != null) f.hp = Math.min(f.maxHp, spec.hp);
-    if (spec.pvp) { f.slot = spec.slot; f.tag = String(spec.tag || '').slice(0, 20); }
+    if (spec.pvp) f.slot = spec.slot;
+    if (spec.tag) f.tag = String(spec.tag).slice(0, 20);
     this.fighters.push(f);
     FX.ring(x, y, TEAM_COLS[ti % 6], 120, 0.6, 6, f.r); FX.burst(x, y, spec.def.design.c3, 20, 260);
     return f;
@@ -2655,6 +2657,7 @@ class Battle {
   onDamage(src, tgt, amt) { if (src?.isPlayer) SAVE.stats.dmg += amt; }
   onDeath(f, killer) {
     if (f.isClone) return;
+    if (!this.outOrder.includes(f.team) && !this.fighters.some(x => x.alive && !x.isClone && x.team === f.team)) this.outOrder.push(f.team);
     if (killer && killer.team === 0 && f.team !== 0) { this.kills++; if (this.player) SAVE.stats.kills++; }
     this.cfg.onDeath?.(this, f, killer);
   }
@@ -2914,8 +2917,20 @@ class Battle {
     if (this.endTimer >= 0 || this.over) return;
     const pl = this.player;
     this.result = { win, mode: this.mode, time: this.time, kills: this.kills, wave: this.wave, step: this.stepN, hpPct: pl ? Math.max(0, pl.hp) / pl.maxHp : 0, stats: pl ? { ...pl.stats } : {}, rage: !!(pl && pl.rageEver), god: !!(pl && pl.godUsed), ...extra };
-    if (this.pvp) { this.result.slots = this.slots.map(f => ({ hpPct: Math.max(0, f.hp) / f.maxHp, stats: { ...f.stats }, rage: !!f.rageEver, god: !!f.godUsed })); if (this.player) this.result.win = this.result.winner === this.player.slot; }
+    if (this.pvp) {
+      this.result.slots = this.slots.map(f => ({ team: f.team, hpPct: Math.max(0, f.hp) / f.maxHp, stats: { ...f.stats }, rage: !!f.rageEver, god: !!f.godUsed }));
+      this.result.places = this.placesOf(this.result.winner);
+      if (this.player) this.result.win = this.result.winner === this.player.team;
+    }
     this.endTimer = 1.8;
+  }
+  /* 1st = the winner (or every team still standing on a draw), then teams in reverse knock-out order */
+  placesOf(winner) {
+    const n = this.cfg.teams.length, pl = new Array(n).fill(1), standing = [...Array(n).keys()].filter(t => !this.outOrder.includes(t));
+    let next = standing.length + 1;
+    for (const t of this.outOrder.slice().reverse()) pl[t] = next++;
+    if (winner >= 0) pl[winner] = 1;
+    return pl;
   }
   finish() {
     if (this.over) return;
@@ -3276,7 +3291,7 @@ Battle.prototype.drawFighter = function (ctx, f) {
     const deco = f.def.design.deco || [], top = deco.some(d => ['halo', 'crown', 'horns'].includes(d)) ? r * 1.62 : r * 1.12;
     ctx.font = '700 13px "Segoe UI", sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)';
     const lbl = (f.isPlayer || (f.holo && f.owner?.isPlayer) || (f.slot != null && f === this.player) ? '★ ' : '') + (f.tag ? f.tag + ' • ' : '') + f.name + (f.boss ? ' [BOSS]' : '');
-    ctx.strokeText(lbl, f.x, f.y - top - 8); ctx.fillStyle = f.team === 0 ? '#bfefff' : (this.cfg.teams.length > 2 ? TEAM_COLS[f.team % 6] : '#ffc2cc'); ctx.fillText(lbl, f.x, f.y - top - 8);
+    ctx.strokeText(lbl, f.x, f.y - top - 8); const myTeam = this.player ? this.player.team : 0; ctx.fillStyle = f.team === myTeam ? '#bfefff' : (this.cfg.teams.length > 2 ? TEAM_COLS[f.team % 6] : '#ffc2cc'); ctx.fillText(lbl, f.x, f.y - top - 8);
   }
   ctx.restore();
 };
@@ -3416,7 +3431,7 @@ Battle.prototype.drawHud = function (ctx) {
   if (this.mode === 'endless') top = 'KO ' + this.kills + '  ' + top;
   if (this.mode === 'tournament') top = (this.cfg.roundName || 'ROUND') + '  ' + top;
   ctx.strokeText(top, W / 2, 30); ctx.fillText(top, W / 2, 30);
-  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#8fa3cf'; ctx.fillText(MODES[this.mode]?.name + ' • ' + (this.pvp ? (this.cfg.ranked ? 'RANKED' : 'FRIENDLY') : DIFF[this.difficulty].label.toUpperCase()), W / 2, 46);
+  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#8fa3cf'; ctx.fillText((this.pvp ? (PVP_MODES[this.cfg.pmode] || PVP_MODES.duel).name : MODES[this.mode]?.name) + ' • ' + (this.pvp ? (this.cfg.ranked ? 'RANKED' : 'FRIENDLY') : DIFF[this.difficulty].label.toUpperCase()), W / 2, 46);
   ctx.restore();
 };
 function hudBar(ctx, x, y, w, hh, frac, c1, c2, back = 'rgba(255,255,255,.1)') {
@@ -3483,7 +3498,7 @@ function hudRows(ctx, list, right) {
     const y = 12 + i * 26, bw = 210, ix = right ? X - 12 : X + 12;
     drawBall(ctx, f.def, ix, y + 10, 10, { t: f.t, rot: f.rot, small: true, noAura: true, alpha: f.alive ? 1 : 0.3, god: f.god > 0, rage: f.rage });
     ctx.save(); ctx.font = '800 13px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'right' : 'left'; ctx.fillStyle = f.alive ? TEAM_COLS[f.team % 6] : '#666';
-    const nx = right ? X - 30 : X + 30; ctx.fillText((f.isPlayer ? '★ ' : '') + f.name + (f.rage ? ' 🔥' : '') + (f.god > 0 ? ' ✦' : ''), nx, y + 14);
+    const nx = right ? X - 30 : X + 30; ctx.fillText((f.isPlayer || (f.slot != null && f === BATTLE?.player) ? '★ ' : '') + (f.tag || f.name) + (f.rage ? ' 🔥' : '') + (f.god > 0 ? ' ✦' : ''), nx, y + 14);
     const bx = right ? X - 30 - 140 - bw : X + 30 + 140;
     hudBar(ctx, bx, y + 4, bw, 11, f.hp / f.maxHp, f.rage ? '#ff1a3c' : '#1aff8c', f.rage ? '#b026ff' : '#29e3ff');
     hudBar(ctx, bx, y + 16, bw, 3, f.ultMeter / 100, '#7b1fff', '#ff3cf2');
@@ -3635,13 +3650,41 @@ function createTicket(setup, prog0, rnd, extra = {}) {
 /* ---------- online PvP (shared by the game server and the browser) ---------- */
 const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
 /** createPvpTicket([{ball, level, evo, up, tree, cos, name}, …x2], seed) → ticket. Both balls run the same strong AI while on AUTO. */
-function createPvpTicket(players, seed) {
-  const teams = players.map((p, slot) => {
+/* online modes: seats per team. Empty seats are played by the AI */
+const PVP_MODES = {
+  duel: { name: '1 VS 1', ico: '⚔', seats: [0, 1], ranked: true },
+  team: { name: '2 VS 2', ico: '👥', seats: [0, 0, 1, 1], ranked: true },
+  ffa: { name: '5-PLAYER ARENA', ico: '✺', seats: [0, 1, 2, 3, 4], ranked: true },
+  coop: { name: 'CO-OP vs AI', ico: '🤝', seats: [0, 0, 1, 1], humans: 2, ranked: false },
+};
+/* season rank tiers (season points) */
+const RANK_TIERS = [
+  { id: 'bronze', name: 'Bronze', min: 0, coins: 300, col: '#cd7f32', ico: '🥉' }, { id: 'silver', name: 'Silver', min: 150, coins: 600, col: '#cfd8dc', ico: '🥈' },
+  { id: 'gold', name: 'Gold', min: 350, coins: 1000, col: '#ffd54f', ico: '🥇' }, { id: 'platinum', name: 'Platinum', min: 600, coins: 1600, col: '#80deea', ico: '💠' },
+  { id: 'diamond', name: 'Diamond', min: 900, coins: 2500, col: '#82b1ff', ico: '💎' }, { id: 'master', name: 'Master', min: 1250, coins: 3500, col: '#ea80fc', ico: '🔮' },
+  { id: 'legend', name: 'Legend', min: 1600, coins: 5000, col: '#ff5252', ico: '👑' },
+];
+function rankTier(points) {
+  let i = 0; while (i + 1 < RANK_TIERS.length && points >= RANK_TIERS[i + 1].min) i++;
+  const t = RANK_TIERS[i], nx = RANK_TIERS[i + 1] || null;
+  return { ...t, index: i, next: nx, progress: nx ? clamp((points - t.min) / (nx.min - t.min), 0, 1) : 1 };
+}
+/** createPvpTicket(seats, seed, pmode) → ticket. A seat is a human player { ball, level, evo, up, tree, cos, name, team }
+ *  or an AI seat { ai: true, ball, level, evo, tree, name, team }. Human seats get slots 0, 1, 2… in order and fight on AUTO
+ *  with the strong AI until their player switches to MANUAL. Without teams, every seat is its own team (1 VS 1). */
+function createPvpTicket(players, seed, pmode = 'duel') {
+  const teamed = players.some(p => p.team != null), nTeams = teamed ? Math.max(...players.map(p => p.team | 0)) + 1 : players.length;
+  const teams = Array.from({ length: nTeams }, () => []); let slot = 0;
+  players.forEach((p, i) => {
     const def = getBall(p.ball); if (!def) throw new Error('Ball not available: ' + p.ball);
-    const s = playerSpecFrom(def, p);
-    return [{ ...s, isPlayer: false, pvp: true, slot, tag: p.name || 'Player ' + (slot + 1), ai: def.ai === 'boss' ? 'intelligent' : (def.ai || 'intelligent'), diff: 'hard' }];
+    const s = playerSpecFrom(def, p), ai = def.ai === 'boss' ? 'intelligent' : (def.ai || 'intelligent');
+    let spec;
+    if (p.ai) spec = { ...s, isPlayer: false, pvp: false, tag: String(p.name || 'AI').slice(0, 20), ai, diff: 'hard', cos: null };
+    else { const sl = slot++; spec = { ...s, isPlayer: false, pvp: true, slot: sl, tag: p.name || 'Player ' + (sl + 1), ai, diff: 'hard' }; }
+    teams[teamed ? p.team | 0 : i].push(spec);
   });
-  return { v: 2, mode: 'pvp', difficulty: 'hard', seed: seed >>> 0, manual: false, teams, pool: [], opts: { pvp: true } };
+  if (teams.some(t => !t.length)) throw new Error('Every team needs at least one ball');
+  return { v: 3, mode: 'pvp', pmode, difficulty: 'hard', seed: seed >>> 0, manual: false, teams, pool: [], opts: { pvp: true, pmode } };
 }
 /** merges both players' input frames for one block into replay entries [step, slot, type, ...args] (same order everywhere) */
 function mergePvpBlock(b, frames) {
@@ -3672,7 +3715,7 @@ function buildBattleConfig(T, hooks = {}) {
   for (const t of T.teams) for (const s of t) if (!getBall(s.ball)) throw new Error('Ball not available: ' + s.ball);
   const cfg = { mode: T.mode, difficulty: T.difficulty, seed: T.seed, manual: T.manual, teams: T.teams.map(t => t.map(mk)), infiniteHp: T.mode === 'practice' && !!T.opts.infinite,
     dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless,
-    pvp: T.mode === 'pvp', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked };
+    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked };
   const pl = T.teams[0][0], diff = T.difficulty;
   const nextFrom = excl => { const c = T.pool.filter(id => !excl.includes(id)); return pick(c.length ? c : T.pool); };
   if (T.mode === 'survival') cfg.checkEnd = B => {
@@ -3706,7 +3749,7 @@ function simulateTicket(T, inputs = [], maxSteps = 240 * 60 * 30) {
   while (!B.result && B.stepN < maxSteps) B.step(STEP);
   const r = B.result;
   BATTLE = null;
-  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots } : { ok: false, reason: 'timeout', step: B.stepN };
+  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places } : { ok: false, reason: 'timeout', step: B.stepN };
 }
 /** rewards are computed from a (verified) result — identical on client (guest) and server */
 function computeRewards(T, r, opt = {}) {
@@ -4310,9 +4353,9 @@ Object.assign(UI, {
     }
     const b = getBall(r.ballId), p = prog(r.ballId);
     const surv = r.mode === 'survival' || r.mode === 'endless';
-    const title = surv ? (r.mode === 'survival' ? `WAVE ${r.wave}` : `${r.kills} KOs`) : r.draw ? 'DRAW' : r.win ? 'VICTORY!' : 'DEFEAT';
+    const title = surv ? (r.mode === 'survival' ? `WAVE ${r.wave}` : `${r.kills} KOs`) : r.draw ? 'DRAW' : r.win ? 'VICTORY!' : r.pvp && r.pvp.mode === 'ffa' && r.pvp.place ? `#${r.pvp.place} PLACE` : 'DEFEAT';
     body.append(h('h1', { class: 'results-title ' + (r.win ? 'win' : 'lose') }, title));
-    body.append(h('p', { class: 'muted', style: { margin: '2px' } }, r.pvp ? `🌐 Online PvP • ${r.pvp.ranked ? 'Ranked' : 'Friendly'} • vs ${r.pvp.opp}` : `${MODES[r.mode]?.name} • ${DIFF[Game.setup.difficulty].label}${r.extraMsg ? ' • ' + r.extraMsg : ''}`));
+    body.append(h('p', { class: 'muted', style: { margin: '2px' } }, r.pvp ? `🌐 ${(PVP_MODES[r.pvp.mode] || PVP_MODES.duel).name} • ${r.pvp.ranked ? 'Ranked' : 'Friendly'} • ${r.pvp.mode === 'ffa' ? (r.pvp.place ? `#${r.pvp.place} of ${r.pvp.teams}` : '') : /^(vs |with )/.test(r.pvp.opp || '') ? r.pvp.opp : 'vs ' + r.pvp.opp}` : `${MODES[r.mode]?.name} • ${DIFF[Game.setup.difficulty].label}${r.extraMsg ? ' • ' + r.extraMsg : ''}`));
     const cv = ballCanvas(b, 180, { evo: p.evo, big: true }); this.addLive(cv, b, { evo: p.evo, size: 180, big: true, spin: 2 });
     body.append(cv);
     const s = r.stats || {};
@@ -4323,7 +4366,7 @@ Object.assign(UI, {
       const nx = EVO[p.evo + 1]; if (nx && p.level >= nx.lvl) body.append(h('div', { class: 'reward-line', style: { color: '#ff9f1c' } }, `✦ ${b.name} can now evolve into ${nx.name} form!`));
     } else body.append(h('p', { class: 'muted' }, 'Practice mode — no rewards.'));
     if (r.tourMsg) body.append(h('div', { class: 'reward-line', style: { color: '#ffd54f', fontWeight: 800 } }, r.tourMsg));
-    if (r.pvp && r.pvp.ranked && r.pvp.rpBefore != null) body.append(h('div', { class: 'reward-line', style: { color: r.pvp.rpDelta >= 0 ? '#3dffa0' : '#ff8a9a', fontWeight: 800 } }, `🏅 Rank points ${fmtNum(r.pvp.rpBefore)} → ${fmtNum(r.pvp.rpAfter)} (${r.pvp.rpDelta >= 0 ? '+' : ''}${r.pvp.rpDelta})`));
+    if (r.pvp && r.pvp.ranked && r.pvp.rpBefore != null) body.append(h('div', { class: 'reward-line', style: { color: r.pvp.rpDelta >= 0 ? '#3dffa0' : '#ff8a9a', fontWeight: 800 } }, `🏅 Season points ${fmtNum(r.pvp.rpBefore)} → ${fmtNum(r.pvp.rpAfter)} (${r.pvp.rpDelta >= 0 ? '+' : ''}${r.pvp.rpDelta})${r.pvp.tier ? ' • ' + r.pvp.tier : ''}`));
     if (r.pvp && r.pvp.note) body.append(h('p', { class: 'muted' }, r.pvp.note));
     if (r.verified) body.append(h('p', { class: 'verified' }, '✔ Verified by the game server' + (r.mismatch ? ' — your device showed a different result, so the server result counts.' : '')));
     if (r.newAchievements && r.newAchievements.length) toast('🏅 Achievement: <b>' + r.newAchievements.map(esc).join(', ') + '</b> — claim it in Limited Events › Achievements', 'gold');
@@ -4681,7 +4724,7 @@ function boot() {
 window.NBB = { Game, UI, get save() { return SAVE; }, get battle() { return BATTLE; }, registry: () => allBalls(), Fighter, Battle };
 /* shared game core — the Node game server loads this file headlessly to verify battles */
 window.NBB_CORE = {
-  createTicket, buildBattleConfig, simulateTicket, computeRewards, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
+  createTicket, buildBattleConfig, simulateTicket, computeRewards, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, PVP_MODES, RANK_TIERS, rankTier, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
   Battle, Fighter, setCatalog, getBall, useSkill, useUltimate, unitsOf, dealDamage, spawnProj, allBalls, opponentPool, normDiff, enemySpec, playerSpecFrom, defaultSave, mulberry32, prog,
   DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
   COSMETICS, COSMETIC_SLOTS, DAILY_REWARDS, FUSION_COST, FUSION_MIN_LEVEL, FUSION_MAX, fusionEligible, makeFusionDef, mixColor, hashStr, sfxOf,

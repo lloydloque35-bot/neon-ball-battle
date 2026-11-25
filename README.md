@@ -36,7 +36,10 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
   - Five difficulties: Easy, Normal, Hard, Expert and Godlike.
   - It dodges attacks, braces against an enemy's God Mode and never wastes attacks on invulnerable targets.
 - **Modes:** 1 VS 1 (main), 2 VS 2, Free For All, Survival, Tournament, Boss, Endless and Practice. *Sudden Death* starts after 90 s.
-- **🌐 Online PvP:** real-time 1 VS 1 against other players, either a ranked Quick Match or a private room with a code. The server checks every match. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+- **🌐 Online & Ranked:** real-time battles against other players. The server checks every match. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+  - **Modes:** 1 VS 1, **2 VS 2** (play together with a friend), the **5-PLAYER ARENA** (everyone for themselves) and **CO-OP vs AI** (2 friends vs 2 AI balls).
+  - **Ranked queues:** empty seats are filled with AI balls after 20 seconds. Friend rooms work with a 5-letter code.
+  - **Monthly seasons:** rank tiers Bronze, Silver, Gold, Platinum, Diamond, Master and Legend, with coin rewards and a season ranking.
 - **Balls:**
   - 50 core balls
   - 6 limited event balls
@@ -61,6 +64,7 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
 ## ULTIMATE PREMIUM — $200 / YEAR
 - **What's included:**
   - Every regular, premium, legendary, mythical and non-admin limited ball, including both **Tech Balls**
+  - **2,000 free coins every month**
   - Premium cosmetics, effects and badge
   - +25% battle rewards, +50% daily coins and 20% off summons
   - Premium events

@@ -54,6 +54,8 @@ const Online = {
   },
   applySave(s) {
     this.save = s;
+    if (s.monthlyCoins && s.monthlyCoins.available && !this._mcHint) { this._mcHint = true; setTimeout(() => toast(`🎁 Your ${fmtNum(s.monthlyCoins.amount)} monthly Premium coins are ready! Open ★ Premium to claim them.`, 'gold'), 1200); }
+    if (s.season && s.season.pending && s.season.pending.length && !this._seasonHint) { this._seasonHint = true; setTimeout(() => toast('🏆 Last season is over: your season rewards are waiting in 🌐 Online &amp; Ranked.', 'gold'), 2400); }
     const base = defaultSave();
     SAVE = Object.assign(base, {
       coins: s.coins, balls: s.balls, stats: { ...base.stats, ...s.stats }, achievements: s.achievements, collectionClaimed: s.collectionClaimed,
@@ -276,7 +278,7 @@ Object.assign(UI, {
     const sel = (key, val) => h('select', { 'aria-label': key, onchange: e => act(() => Online.post('/api/profile', { [key]: e.target.value }), () => this.render_profile()) }, usable.map(b => h('option', { value: b.id, selected: b.id === val }, b.name)));
     const card = h('div', { class: 'card profile-card' }, cv, h('div', { style: { flex: 1, minWidth: '240px' } },
       h('h2', { style: { margin: '0 0 4px' } }, u.username, ' ', s.premium.active ? h('span', { class: 'badge-premium' }, '★ PREMIUM') : null, u.isOwner ? h('span', { class: 'badge-owner' }, 'OWNER') : null),
-      h('div', { class: 'muted' }, `Player level ${s.level} • ${fmtNum(s.rp)} rank points`), h('div', { class: 'bar exp', style: { margin: '6px 0 10px' } }, h('i', { style: { width: (s.exp / s.accountExpNeed * 100) + '%' } })),
+      h('div', { class: 'muted' }, `Player level ${s.level} • ${fmtNum(s.rp)} battle points`), s.season ? h('div', { class: 'tier-line', style: { color: s.season.tier.col } }, `${s.season.tier.ico} ${s.season.tier.name} • ${fmtNum(s.season.points)} season points`) : null, h('div', { class: 'bar exp', style: { margin: '6px 0 10px' } }, h('i', { style: { width: (s.exp / s.accountExpNeed * 100) + '%' } })),
       h('div', { class: 'fgrid' }, field('Avatar ball', sel('avatar', s.avatar)), field('Favorite ball', sel('favorite', s.favorite))),
       h('div', { class: 'results-stats', html: [['Battles', st.battles || 0], ['Wins', st.wins || 0], ['Losses', st.losses || 0], ['KOs', st.kills || 0], ['Tournaments', st.tourneyWins || 0], ['Bosses', st.bossWins || 0]].map(([k, v]) => `<div><b>${v}</b>${k}</div>`).join('') })));
     body.append(card);
@@ -329,7 +331,10 @@ Object.assign(UI, {
     hero.append(h('ul', { class: 'benefits' }, benefits.map(b => h('li', {}, '✔ ' + b))), h('p', { class: 'muted small' }, 'Admin access, admin-exclusive balls and owner-only abilities are never part of Premium.'));
     if (!Online.active) return body.append(needSignIn('Premium'));
     if (st.owner) { body.append(h('div', { class: 'card notice' }, h('h3', {}, '♛ Owner account'), h('p', {}, 'The owner account already has every feature. No subscription is needed.'))); return; }
-    const sub = st.subscription;
+    const sub = st.subscription, mc = Online.save && Online.save.monthlyCoins;
+    if (sub.active && mc) body.append(h('div', { class: 'card monthly-coins' }, h('h3', {}, '🎁 Monthly Premium coins'), h('p', { class: 'muted' }, `Every month, Premium members get ${fmtNum(mc.amount)} free coins.`),
+      h('button', { class: 'btn gold', disabled: !mc.available, onclick: () => act(() => Online.post('/api/premium/monthly-coins'), r => { toast(`🎁 +${fmtNum(r.coins)} coins! See you next month.`, 'gold'); this.render_membership(); }) },
+        mc.available ? `Claim ${fmtNum(mc.amount)} 🪙 for this month` : 'Claimed this month — come back on the 1st')));
     const STATUS = { free: 'Free', pending: 'Pending payment', active: 'Active', expired: 'Expired', cancelled: 'Cancelled', refunded: 'Refunded', payment_failed: 'Payment failed' };
     const card = h('div', { class: 'card' }, h('h3', {}, 'Your membership'),
       h('div', { class: 'kv' }, ...[['Current plan', sub.active ? 'ULTIMATE PREMIUM' : 'Free'], ['Status', STATUS[sub.status] || sub.status], ['Purchase date', dateStr(sub.startedAt)], ['Expiration date', dateStr(sub.expiresAt)],
@@ -586,7 +591,7 @@ Object.assign(UI, {
    ===================================================================== */
 class LockstepNet {
   constructor(m, send) {
-    this.K = m.block; this.D = m.delay; this.slot = m.slot; this.send = send;
+    this.K = m.block; this.D = m.delay; this.slot = m.slot; this.send = send; this.n = m.humans || 2;   // number of human players
     this.replay = []; this.frames = new Map(); this.confirmed = m.delay - 1; this.sent = m.delay - 1;
     this.pending = []; this.lastSteer = '0,0,0'; this.localManual = false; this.dead = false;
   }
@@ -594,7 +599,7 @@ class LockstepNet {
   local(type, a) {
     if (this.dead || this.pending.length >= 20) return;
     if (type === 'm') { this.localManual = !!a; this.pending.push(['m', a ? 1 : 0]); if (!a) this.lastSteer = '0,0,0'; }
-    else if (type === 'k') this.pending.push(['k', Math.max(0, Math.min(4, a | 0))]);
+    else if (type === 'k') this.pending.push(['k', Math.max(0, Math.min(6, a | 0))]);
     else if (type === 'u') this.pending.push(['u', 0]);
   }
   /* steering while in MANUAL (sampled every simulated step, only changes are sent) */
@@ -618,11 +623,11 @@ class LockstepNet {
   }
   remote(m) { if (m.s !== this.slot && Number.isInteger(m.b) && m.b > this.confirmed) this.store(m.s, m.b, m.a || []); }
   store(s, b, acts) {
-    let f = this.frames.get(b); if (!f) this.frames.set(b, f = [undefined, undefined]);
+    let f = this.frames.get(b); if (!f) this.frames.set(b, f = new Array(this.n).fill(undefined));
     f[s] = acts;
     for (;;) {
       const nb = this.confirmed + 1, fr = this.frames.get(nb);
-      if (!fr || fr[0] === undefined || fr[1] === undefined) break;
+      if (!fr || fr.some(x => x === undefined)) break;
       for (const e of mergePvpBlock(nb, fr)) this.replay.push(e);
       this.frames.delete(nb); this.confirmed = nb;
     }
@@ -630,7 +635,8 @@ class LockstepNet {
 }
 
 const PvP = {
-  ws: null, state: 'off', info: null, match: null, net: null, code: '', history: null, joinCode: '', waiting: false,
+  ws: null, state: 'off', info: null, match: null, net: null, code: '', history: null, joinCode: '', waiting: false, mode: 'duel', room: null, queueInfo: null,
+  mySpec(M) { return M ? M.ticket.teams.flat().find(s => s.pvp && s.slot === M.slot) : null; },
   url() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/pvp/ws'; },
   connect() {
     if (this.ws && this.ws.readyState <= 1) return this.ready || Promise.resolve();
@@ -650,13 +656,13 @@ const PvP = {
     switch (m.t) {
       case 'hello': this.info = m; this.state = 'idle'; this.rerender(); break;
       case 'ping': this.send({ t: 'pong', n: m.n }); if (this.info) { this.info.online = m.online; this.info.searching = m.searching; } const el = document.getElementById('pvpOnline'); if (el) el.textContent = this.onlineText(); break;
-      case 'queued': this.state = 'queue'; this.rerender(); break;
-      case 'room': this.state = 'room'; this.code = m.code; this.rerender(); break;
+      case 'queued': this.state = 'queue'; this.queueInfo = { ...m, at: Date.now() }; this.rerender(); break;
+      case 'room': this.state = 'room'; this.code = m.code; this.room = m.room || null; this.rerender(); break;
       case 'idle': if (this.state !== 'match') { this.state = 'idle'; this.rerender(); } break;
       case 'error': toast('⚠ ' + esc(m.msg), 'bad'); if (this.state !== 'match') { this.state = 'idle'; this.rerender(); } break;
       case 'start': this.start(m); break;
       case 'f': if (this.net) this.net.remote(m); break;
-      case 'oppLeft': if (this.match) toast(`📴 <b>${esc(this.match.opp.name)}</b> left. The AI is now controlling their ball, so keep fighting!`); break;
+      case 'oppLeft': case 'left': if (this.match) toast(`📴 <b>${esc(m.name || this.match.opp.name)}</b> left. The AI is now controlling their ball, so keep fighting!`); break;
       case 'dropped': this.dropped(m); break;
       case 'result': this.result(m); break;
     }
@@ -684,7 +690,9 @@ const PvP = {
     BATTLE.limit = m.delay * m.block;
     if (SAVE.settings.control === 'manual') this.net.local('m', 1);
     UI.syncHud();
-    toast(`⚔ <b>${esc(m.you.name)}</b> vs <b>${esc(m.opp.name)}</b> — ${m.ranked ? 'Ranked match' : 'Friendly match'}`, 'gold');
+    const md = PVP_MODES[m.mode || 'duel'] || PVP_MODES.duel;
+    toast(m.mode && m.mode !== 'duel' ? `${md.ico} <b>${esc(md.name)}</b> — ${(m.players || []).filter(x => !x.ai).length} players${(m.players || []).some(x => x.ai) ? ' + AI' : ''} • ${m.ranked ? 'Ranked' : 'Friendly'}` : `⚔ <b>${esc(m.you.name)}</b> vs <b>${esc(m.opp.name)}</b> — ${m.ranked ? 'Ranked match' : 'Friendly match'}`, 'gold');
+    if (m.note) toast(esc(m.note));
   },
   stopBattle() { if (this.net) this.net.dead = true; if (BATTLE && BATTLE.net && BATTLE.net === this.net) { BATTLE = null; FX.reset(); } $('#battleHud').classList.add('hidden'); },
   localEnd(r, B) {
@@ -692,7 +700,7 @@ const PvP = {
     $('#battleHud').classList.add('hidden');
     this.send({ t: 'end', step: r.step });
     this.waiting = true; this.localResult = { winner: r.winner, step: r.step };
-    const me = this.match.ticket.teams[this.match.slot][0];
+    const me = this.mySpec(this.match);
     UI.showResults({ ...r, pending: true, ballId: me.ball }, B);
     const p = $('#resultsBody p.muted'); if (p) p.textContent = 'Checking the match result with the game server…';
   },
@@ -703,7 +711,7 @@ const PvP = {
     const why = { quit: 'You left the match.', timeout: 'Your connection was too slow or the game was paused too long.', disconnect: 'You were disconnected.' }[m.why] || 'There was a connection problem.';
     this.stopBattle(); this.waiting = true;
     toast(`📴 ${why} The AI is finishing the fight for you.`);
-    if (this.match) UI.showResults({ pending: true, ballId: this.match.ticket.teams[this.match.slot][0].ball, mode: 'pvp' }, null);
+    if (this.match) UI.showResults({ pending: true, ballId: this.mySpec(this.match).ball, mode: 'pvp' }, null);
     const p = $('#resultsBody p.muted'); if (p) p.textContent = why + ' The AI is finishing your match. Waiting for the result…';
   },
   result(m) {
@@ -715,12 +723,12 @@ const PvP = {
     this.localResult = null;
     Sound.play(m.win ? 'win' : 'lose');
     const mine = (m.slots && m.slots[m.slot]) || {};
-    const res = { win: m.win, draw: m.draw, mode: 'pvp', time: m.time, stats: mine.stats || {}, coins: m.coins || 0, exp: m.exp || 0, ups: m.ups || 0, level: m.level, ballId: m.ball || (M && M.ticket.teams[m.slot][0].ball), hpPct: mine.hpPct, verified: true,
-      pvp: { ranked: m.ranked, opp: m.opp, rpBefore: m.rpBefore, rpAfter: m.rpAfter, rpDelta: m.rpDelta, note: m.note } };
+    const res = { win: m.win, draw: m.draw, mode: 'pvp', time: m.time, stats: mine.stats || {}, coins: m.coins || 0, exp: m.exp || 0, ups: m.ups || 0, level: m.level, ballId: m.ball || (M && this.mySpec(M).ball), hpPct: mine.hpPct, verified: true, place: m.place,
+      pvp: { ranked: m.ranked, opp: m.opp, mode: m.mode || 'duel', place: m.place, teams: m.teams, tier: m.tier, rpBefore: m.rpBefore, rpAfter: m.rpAfter, rpDelta: m.rpDelta, note: m.note } };
     if (UI.current === 'results' || !UI.current) UI.showResults(res, null);
-    else toast(`🌐 Online match vs <b>${esc(m.opp)}</b>: ${m.draw ? 'Draw' : m.win ? 'Victory!' : 'Defeat'}${m.ranked ? ` (${m.rpDelta >= 0 ? '+' : ''}${m.rpDelta} RP)` : ''}`, m.win ? 'gold' : '');
+    else toast(`🌐 Online match ${esc(m.opp)}: ${m.mode === 'ffa' ? '#' + m.place : m.draw ? 'Draw' : m.win ? 'Victory!' : 'Defeat'}${m.ranked ? ` (${m.rpDelta >= 0 ? '+' : ''}${m.rpDelta} pts)` : ''}`, m.win ? 'gold' : '');
   },
-  leaveLobby() { if (this.state === 'queue' || this.state === 'room') { this.send({ t: 'leave' }); this.state = 'idle'; } },
+  leaveLobby() { if (this.state === 'queue' || this.state === 'room') { this.send({ t: 'leave' }); this.state = 'idle'; this.room = null; this.queueInfo = null; } },
 };
 window.PvP = PvP;
 
@@ -729,8 +737,8 @@ Object.assign(UI, {
   pvpMenu() { PvP.quit(); },
   async render_pvp() {
     const body = $('#pvpBody'); body.innerHTML = '';
-    if (!Online.available) return body.append(needServer('Online PvP'));
-    if (!Online.active) return body.append(needSignIn('Online PvP'));
+    if (!Online.available) return body.append(needServer('Online battles'));
+    if (!Online.active) return body.append(needSignIn('Online battles'));
     if (PvP.state === 'off' || PvP.state === 'connecting') {
       body.append(h('div', { class: 'card' }, h('div', { class: 'spinner', style: { margin: '10px auto' } }), h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Connecting to online battles…')));
       try { await PvP.connect(); } catch (e) {
@@ -742,49 +750,115 @@ Object.assign(UI, {
     }
     const list = playableBalls().filter(b => !b.draft && (!b.adminOnly || isAdmin()));
     if (!this.pvpBall || !list.some(b => b.id === this.pvpBall)) this.pvpBall = (list.find(b => b.id === Game.setup.ball) || list[0] || {}).id;
-    const me = (Online.me && Online.me.user) || {}, st = SAVE.stats || {};
-    body.append(h('div', { class: 'card premium-hero', style: { textAlign: 'center' } },
-      h('h2', { style: { margin: '0 0 4px' } }, '🌐 Fight real players'),
-      h('p', { class: 'muted', style: { margin: '0 0 6px' } }, 'Live 1 VS 1 battles against other players. Your ball fights on AUTO; tap AUTO to switch to MANUAL and steer or use abilities yourself.'),
-      h('div', { class: 'row', style: { justifyContent: 'center', gap: '8px', flexWrap: 'wrap' } },
-        h('span', { class: 'pill', id: 'pvpOnline' }, PvP.onlineText()),
-        h('span', { class: 'pill' }, `🏅 ${fmtNum(Online.save ? Online.save.rp : 0)} RP`),
-        h('span', { class: 'pill' }, `⚔ ${st.pvpWins || 0}W / ${st.pvpLosses || 0}L`))));
-    const S = PvP.state;
-    if (S === 'queue' || S === 'room') {
-      const card = h('div', { class: 'card', style: { textAlign: 'center', marginTop: '12px' } });
-      if (S === 'queue') card.append(h('div', { class: 'spinner', style: { margin: '8px auto' } }), h('h3', {}, '🔎 Looking for an opponent…'), h('p', { class: 'muted' }, 'Keep this screen open. The battle starts as soon as another player joins Quick Match.'));
-      else card.append(h('h3', {}, '🏠 Your private room'), h('p', {}, 'Tell your friend to open ', h('b', {}, '🌐 Online PvP'), ', tap ', h('b', {}, 'Join room'), ' and type this code:'),
-        h('div', { class: 'room-code', 'aria-label': 'Room code' }, PvP.code), h('p', { class: 'muted' }, 'The battle starts as soon as they join. The room closes after 10 minutes.'));
-      card.append(h('button', { class: 'btn', onclick: () => { PvP.leaveLobby(); this.render_pvp(); } }, 'Cancel'));
-      body.append(card);
-      $('#scr-pvp .scr-body').scrollTo?.(0, 0);
+    body.append(this.seasonCard());
+    const S = PvP.state, MD = PVP_MODES;
+    if (S === 'queue') {
+      const q = PvP.queueInfo || {}, md = MD[q.mode] || MD.duel, left = q.fillIn != null ? Math.max(0, q.fillIn - Math.floor((Date.now() - q.at) / 1000)) : null;
+      body.append(h('div', { class: 'card', style: { textAlign: 'center', marginTop: '12px' } }, h('div', { class: 'spinner', style: { margin: '8px auto' } }),
+        h('h3', {}, `🔎 Ranked ${md.name} — searching…`),
+        q.party ? h('p', {}, '👥 Your team: ', h('b', {}, q.party.join(' & '))) : null,
+        q.seats > 2 ? h('div', { class: 'seat-dots' }, ...Array.from({ length: q.seats }, (_, i) => h('span', { class: i < (q.found || 1) ? 'on' : '' }))) : null,
+        h('p', { class: 'muted' }, q.seats > 2 ? `${q.found || 1} of ${q.seats} players found.` + (left != null ? (left > 0 ? ` If the arena is not full in ${left} s, AI balls take the empty seats.` : ' AI balls are joining…') : '') : 'Keep this screen open. The battle starts as soon as another player joins.'),
+        h('button', { class: 'btn', onclick: () => { PvP.leaveLobby(); this.render_pvp(); } }, 'Cancel')));
       return;
     }
+    if (S === 'room') { body.append(this.roomCard(PvP.room)); return; }
+    // ---- mode tabs ----
+    const mode = MD[PvP.mode] ? PvP.mode : 'duel', md = MD[mode];
+    const tabs = h('div', { class: 'pvp-modes', role: 'tablist' });
+    for (const [k, m] of Object.entries(MD)) tabs.append(h('button', { class: 'tab' + (k === mode ? ' active' : ''), role: 'tab', 'aria-selected': String(k === mode), onclick: () => { PvP.mode = k; Sound.play('click'); this.render_pvp(); } }, m.ico + ' ' + m.name));
+    const HELP = {
+      duel: 'One against one. Ranked matches move you up or down the season ladder.',
+      team: 'Two against two. Search alone, or create a room with a friend and press "Find opponents" to play on the same team. Empty seats are filled with AI after 20 seconds.',
+      ffa: 'Five balls in one arena, everyone for themselves. If fewer than 5 players are searching, AI balls fill the empty seats after 20 seconds. Points depend on your placement.',
+      coop: 'You and a friend on the same team against 2 AI balls. A friendly match: no season points.',
+    };
+    body.append(tabs, h('p', { class: 'muted small', style: { margin: '6px 2px 0' } }, HELP[mode]));
     const sel = getBall(this.pvpBall);
-    body.append(h('h3', { style: { margin: '14px 0 6px' } }, 'Choose your ball'));
+    body.append(h('h3', { style: { margin: '12px 0 6px' } }, 'Choose your ball'));
     const grid = h('div', { class: 'ball-grid pvp-grid' });
     for (const b of list) grid.append(this.ballCard(b, { selected: b.id === this.pvpBall, onclick: () => { this.pvpBall = b.id; Sound.play('click'); this.render_pvp(); } }));
     body.append(grid);
-    const code = h('input', { type: 'text', maxlength: 5, placeholder: 'CODE', value: PvP.joinCode, 'aria-label': 'Room code', class: 'code-input', autocapitalize: 'characters', autocomplete: 'off', oninput: e => { PvP.joinCode = e.target.value.toUpperCase(); } });
-    const go = (fn) => () => { if (!this.pvpBall) return toast('Choose a ball first'); Sound.init(); Sound.play('click'); fn(); };
-    body.append(h('div', { class: 'pvp-actions' },
-      h('div', { class: 'card' }, h('h3', {}, '⚡ Quick Match'), h('p', { class: 'muted' }, 'Ranked. Win to earn rank points and coins.'),
-        h('button', { class: 'btn big primary', disabled: !sel || (sel.adminOnly), onclick: go(() => PvP.send({ t: 'queue', ball: this.pvpBall })) }, sel && sel.adminOnly ? 'Admin balls: private rooms only' : `Find a match with ${sel ? sel.name : '…'}`)),
-      h('div', { class: 'card' }, h('h3', {}, '🏠 Play a friend'), h('p', { class: 'muted' }, 'Friendly match. No rank points or rewards.'),
-        h('button', { class: 'btn', onclick: go(() => PvP.send({ t: 'host', ball: this.pvpBall })) }, '＋ Create a room'),
-        h('div', { class: 'row', style: { gap: '6px', marginTop: '8px' } }, code, h('button', { class: 'btn', onclick: go(() => { if (!PvP.joinCode.trim()) return toast('Type the room code first'); PvP.send({ t: 'join', code: PvP.joinCode.trim(), ball: this.pvpBall }); }) }, 'Join room')))));
-    body.append(h('p', { class: 'muted small' }, 'If you leave or lose your connection, the AI finishes the fight for you and the result still counts. Admin balls can only be used in private rooms. Online battles need the game server; players on the free Guest link cannot join.'));
-    // match history
+    const code = h('input', { type: 'text', id: 'pvpJoinCode', maxlength: 5, placeholder: 'CODE', value: PvP.joinCode, 'aria-label': 'Room code', class: 'code-input', autocapitalize: 'characters', autocomplete: 'off', oninput: e => { PvP.joinCode = e.target.value.toUpperCase(); } });
+    const go = fn => () => { if (!this.pvpBall) return toast('Choose a ball first'); Sound.init(); Sound.play('click'); fn(); };
+    const actions = h('div', { class: 'pvp-actions' });
+    if (md.ranked) actions.append(h('div', { class: 'card' }, h('h3', {}, `⚡ Ranked ${md.name}`), h('p', { class: 'muted' }, mode === 'ffa' ? 'Climb the ladder: points and coins by placement.' : 'Win to earn season points and coins.'),
+      h('button', { class: 'btn big primary', disabled: !sel || sel.adminOnly, onclick: go(() => PvP.send({ t: 'queue', mode, ball: this.pvpBall })) }, sel && sel.adminOnly ? 'Admin balls: friend rooms only' : `Find a match with ${sel ? sel.name : '…'}`)));
+    actions.append(h('div', { class: 'card' }, h('h3', {}, mode === 'coop' ? '🤝 Team up with a friend' : '🏠 Play with friends'),
+      h('p', { class: 'muted' }, mode === 'coop' ? 'Create a room and share the code. The match starts when your friend joins.' : `Friendly match, up to ${md.humans || md.seats.length} players. No season points.`),
+      h('button', { class: 'btn', onclick: go(() => PvP.send({ t: 'host', mode, ball: this.pvpBall })) }, '＋ Create a room'),
+      h('div', { class: 'row', style: { gap: '6px', marginTop: '8px' } }, code, h('button', { class: 'btn', onclick: go(() => { if (!PvP.joinCode.trim()) return toast('Type the room code first'); PvP.send({ t: 'join', code: PvP.joinCode.trim(), ball: this.pvpBall }); }) }, 'Join room'))));
+    body.append(actions);
+    body.append(h('p', { class: 'muted small' }, 'Your ball fights on AUTO; tap AUTO to switch to MANUAL. If you leave or lose your connection, the AI finishes the fight for you and the result still counts. Admin balls can only be used in friend rooms.'));
+    // ---- match history ----
     const hist = h('div', { class: 'card', style: { marginTop: '12px' } }, h('h3', {}, '📜 Your recent online matches'));
     body.append(hist);
     if (!PvP.history) { try { PvP.history = (await API.get('/api/pvp/history')).matches; } catch { PvP.history = []; } if (UI.current !== 'pvp') return; }
     if (!PvP.history.length) hist.append(h('p', { class: 'muted' }, 'No online matches yet.'));
     else {
-      const tbl = h('table', { class: 'admin-table' }, h('tr', {}, ...['Result', 'Opponent', 'Your ball', 'RP', 'When'].map(t => h('th', {}, t))));
-      for (const x of PvP.history) tbl.append(h('tr', {}, h('td', {}, x.result === 'win' ? '🏆 Win' : x.result === 'draw' ? '🤝 Draw' : '✖ Loss'), h('td', {}, (x.opp || '?') + (x.ranked ? '' : ' (friendly)')), h('td', {}, (getBall(x.ball) || {}).name || x.ball), h('td', {}, x.ranked ? (x.rpDelta >= 0 ? '+' : '') + x.rpDelta : '—'), h('td', {}, dateStr(x.at))));
+      const tbl = h('table', { class: 'admin-table' }, h('tr', {}, ...['Result', 'Match', 'Your ball', 'Points', 'When'].map(t => h('th', {}, t))));
+      for (const x of PvP.history) tbl.append(h('tr', {},
+        h('td', {}, x.mode === 'ffa' && x.place ? (x.place === 1 ? '🏆 #1' : '#' + x.place) : x.result === 'win' ? '🏆 Win' : x.result === 'draw' ? '🤝 Draw' : '✖ Loss'),
+        h('td', {}, (MD[x.mode] && x.mode !== 'duel' ? MD[x.mode].ico + ' ' : '') + (x.opp || '?') + (x.ranked ? '' : ' (friendly)')), h('td', {}, (getBall(x.ball) || {}).name || x.ball),
+        h('td', {}, x.ranked ? (x.rpDelta >= 0 ? '+' : '') + x.rpDelta : '—'), h('td', {}, dateStr(x.at))));
       hist.append(h('div', { style: { overflowX: 'auto' } }, tbl));
     }
+  },
+  /* season ladder: tier badge, progress to the next tier, rewards and the season ranking */
+  seasonCard() {
+    const s = Online.save && Online.save.season, i = PvP.info || {};
+    const card = h('div', { class: 'card season-card' });
+    if (!s) return card.appendChild(h('p', { class: 'muted' }, '🌐 Fight real players online.')), card;
+    const t = s.tier, days = Math.max(0, Math.ceil((s.endsAt - Date.now()) / 86400e3));
+    card.style.setProperty('--tier', t.col);
+    card.append(
+      h('div', { class: 'tier-badge', 'aria-hidden': 'true' }, t.ico),
+      h('div', { class: 'tier-info' },
+        h('div', { class: 'tier-name' }, t.name, h('span', { class: 'muted small' }, `  Season ${s.season} • ends in ${days} day${days === 1 ? '' : 's'}`)),
+        h('div', { class: 'tier-bar' }, h('i', { style: { width: Math.round(t.progress * 100) + '%' } })),
+        h('div', { class: 'muted small' }, t.next ? `${fmtNum(s.points)} / ${fmtNum(t.next.min)} season points to ${t.next.name}` : `${fmtNum(s.points)} season points — the top tier!`, ` • ${s.wins}W / ${s.losses}L`),
+        h('div', { class: 'row', style: { gap: '6px', marginTop: '6px', flexWrap: 'wrap' } },
+          h('span', { class: 'pill', id: 'pvpOnline' }, PvP.onlineText()),
+          h('button', { class: 'btn small', onclick: () => this.seasonBoard() }, '🏆 Season ranking'),
+          s.pending && s.pending.length ? h('button', { class: 'btn small gold', onclick: () => act(() => API.post('/api/season/claim'), r => { Online.applySave(r.save); toast(`🎁 Season rewards: +${fmtNum(r.coins)} coins!`, 'gold'); this.render_pvp(); }) },
+            `🎁 Claim season rewards (+${fmtNum(s.pending.reduce((n, p) => n + p.coins, 0))})`) : null)));
+    return card;
+  },
+  async seasonBoard() {
+    let d; try { d = await API.get('/api/season'); } catch (e) { return toast('⚠ ' + esc(e.message), 'bad'); }
+    const tiers = h('div', { class: 'tier-list' }, ...d.tiers.map(t => h('div', { style: { color: t.col } }, h('b', {}, t.ico + ' ' + t.name), h('span', { class: 'muted small' }, ` ${fmtNum(t.min)}+ pts • reward ${fmtNum(t.coins)} 🪙`))));
+    const tbl = h('table', { class: 'admin-table' }, h('tr', {}, ...['#', 'Player', 'Tier', 'Points', 'W / L'].map(t => h('th', {}, t))));
+    for (const r of d.board) tbl.append(h('tr', { class: r.me ? 'me' : '' }, h('td', {}, r.rank), h('td', {}, r.username), h('td', {}, r.tier), h('td', {}, fmtNum(r.points)), h('td', {}, `${r.wins} / ${r.losses}`)));
+    this.modal(h('div', {}, h('h2', {}, `🏆 Season ${d.season}`),
+      h('p', { class: 'muted' }, d.place ? `You are #${d.place} with ${fmtNum(d.points)} points (${d.tier.name}).` : 'Play a ranked match to enter the season ranking.',
+        ` Season rewards are paid for the highest tier you reach, once the season ends (at least ${d.minMatches} ranked matches).`),
+      tiers, d.board.length ? h('div', { style: { overflowX: 'auto', marginTop: '10px' } }, tbl) : h('p', { class: 'muted' }, 'No ranked matches yet this season.')));
+  },
+  /* a friend room: code, members, teams, start */
+  roomCard(R) {
+    const card = h('div', { class: 'card room-card', style: { marginTop: '12px' } });
+    if (!R) return card;
+    const md = PVP_MODES[R.mode] || PVP_MODES.duel, me = R.members.find(m => m.you) || {};
+    card.append(h('h3', {}, `🏠 ${md.ico} ${md.name} room`), h('p', {}, 'Tell your friends to open ', h('b', {}, '🌐 Online'), ', choose ', h('b', {}, md.name), ', tap ', h('b', {}, 'Join room'), ' and type this code:'),
+      h('div', { class: 'room-code', 'aria-label': 'Room code' }, R.code));
+    const row = m => h('div', { class: 'member' + (m.you ? ' you' : '') }, h('b', {}, (m.host ? '★ ' : '') + m.name), h('span', { class: 'muted small' }, ` ${(getBall(m.ball) || {}).name || m.ball} • ${m.ico || ''} ${m.tier || ''}`));
+    if (R.mode === 'team') {
+      const col = t => h('div', { class: 'team-col' }, h('h4', {}, t ? '🔴 Team B' : '🔵 Team A'), ...R.members.filter(m => m.team === t).map(row),
+        ...Array.from({ length: Math.max(0, 2 - R.members.filter(m => m.team === t).length) }, () => h('div', { class: 'member empty muted' }, '🤖 AI (empty seat)')),
+        me.team !== t ? h('button', { class: 'btn small', onclick: () => PvP.send({ t: 'team', team: t }) }, 'Join this team') : null);
+      card.append(h('div', { class: 'teams' }, col(0), col(1)));
+    } else {
+      card.append(h('div', { class: 'members' }, ...R.members.map(row), ...Array.from({ length: R.cap - R.members.length }, () => h('div', { class: 'member empty muted' }, R.mode === 'duel' || R.mode === 'coop' ? '⏳ waiting for your friend…' : '🤖 AI (empty seat)'))));
+      if (R.mode === 'coop') card.append(h('p', { class: 'muted small' }, 'Your team: both of you. Opponents: 2 AI balls.'));
+    }
+    const btns = h('div', { class: 'row', style: { gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '10px' } });
+    if (R.isHost && (R.mode === 'team' || R.mode === 'ffa')) btns.append(h('button', { class: 'btn primary', disabled: R.members.length < 2, onclick: () => PvP.send({ t: 'go' }) }, R.members.length < 2 ? 'Waiting for friends…' : `▶ Start (${R.members.length} players${R.cap > R.members.length ? ' + ' + (R.cap - R.members.length) + ' AI' : ''})`));
+    if (R.isHost && R.mode === 'team' && R.members.length === 2) btns.append(h('button', { class: 'btn gold', onclick: () => PvP.send({ t: 'seek' }) }, '⚡ Find opponents together (ranked)'));
+    if (!R.isHost && (R.mode === 'team' || R.mode === 'ffa')) btns.append(h('p', { class: 'muted' }, 'Waiting for the host to start the match…'));
+    if (R.mode === 'duel' || R.mode === 'coop') btns.append(h('p', { class: 'muted' }, 'The match starts as soon as your friend joins. The room closes after 10 minutes.'));
+    btns.append(h('button', { class: 'btn', onclick: () => { PvP.leaveLobby(); this.render_pvp(); } }, 'Leave room'));
+    card.append(btns);
+    return card;
   },
 });
 /* leaving the PvP screen cancels a search or room */

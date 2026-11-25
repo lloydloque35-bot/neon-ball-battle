@@ -106,3 +106,11 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Server-side unlock rules (free / active premium; locked again on expiry with progress kept), unit caps, no infinite heal/summon/reflect, no permanent silence
 - ✅ Selection screen "NEW UPDATE" strip with FREE / PREMIUM — LOCKED / UNLOCKED status, ability + ultimate + passive details, ability showcase, 1–6 manual keys
 - ✅ Tests: every ability in real battles, determinism (AI + online PvP), balance simulations, premium access on the server
+
+## Online modes, ranked seasons & monthly coins
+- ✅ Online 2 VS 2 (solo queue or duo from a room), 5-player arena and co-op vs AI; 1 VS 1 kept
+- ✅ AI balls fill empty seats after 20 s; a lone player gets an unranked match vs AI after 45 s
+- ✅ Friend rooms for every mode (up to 5 players, team picking, host start)
+- ✅ Monthly seasons: Bronze → Legend tiers, Elo/placement points, soft reset, tier rewards, season ranking
+- ✅ Premium monthly coins (2,000 per month, server-checked)
+- ✅ Tests: every mode played through the real WebSocket server; five-browser end-to-end run

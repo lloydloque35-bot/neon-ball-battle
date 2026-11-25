@@ -85,9 +85,12 @@ test('ranked quick match: both screens get the same battle, the server decides t
   assert.equal(ra.win, sim.winner === A.slot);
   assert.equal(rb.win, sim.winner === B.slot);
   const [w, l] = ra.win ? [ra, rb] : [rb, ra];
-  assert.equal(w.rpDelta, 16); assert.equal(l.rpDelta, -16);
+  assert.equal(w.rpDelta, 20); assert.equal(l.rpDelta, 0);   // season points: +16 Elo +4 win bonus; never below 0 (both start at 0)
   assert.equal(w.coins, 80); assert.equal(l.coins, 20);
-  assert.equal(w.rpAfter, w.rpBefore + 16);
+  assert.equal(w.rpAfter, w.rpBefore + 20);
+  assert.equal(w.tier, 'Bronze');
+  const season = (await (ra.win ? A : B).c.get('/api/season')).data;
+  assert.equal(season.points, 20); assert.equal(season.wins, 1); assert.equal(season.board[0].points, 20);
   assert.ok(ra.save && typeof ra.save.coins === 'number');
   const hist = await A.c.get('/api/pvp/history');
   assert.equal(hist.data.matches.length, 1);
@@ -112,7 +115,7 @@ test('private room by code; a player who disconnects is replaced by the AI and t
   // slot 0 leaves: from its next block on, the server plays "no input" and switches it back to AUTO
   const gone = P[0], stay = P[1];
   gone.ws.close(); gone.live = false;
-  await stay.ws.next('oppLeft');
+  await stay.ws.next('left');
   const sim = expected(sa, 40000, { only: 1, from: leaveAt + 1 });
   const endBlock = Math.ceil(sim.step / K) + sa.delay + 1;
   await play(P, leaveAt + 1, endBlock);
@@ -132,7 +135,7 @@ test('a player who sends inputs for the wrong block is dropped, not trusted', as
   const sa = await A.ws.next('start'); await B.ws.next('start');
   A.ws.send({ t: 'f', b: sa.delay + 5, a: [] });                       // skips blocks
   assert.equal((await A.ws.next('dropped')).why, 'protocol');
-  await B.ws.next('oppLeft');
+  await B.ws.next('left');
   B.ws.send({ t: 'f', b: sa.delay, a: [[0, 'x', 1]] });                // unknown input type
   assert.equal((await B.ws.next('dropped')).why, 'bad_input');
   const r = await A.ws.next('result', 20000);                          // both gone: the AI finishes the fight

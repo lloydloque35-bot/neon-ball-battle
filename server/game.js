@@ -121,6 +121,7 @@ function register(app, S) {
       cosmetics: db.all('SELECT cosmetic_id FROM cosmetics_owned WHERE user_id = ?', uid).map(r => r.cosmetic_id),
       loadout: json(p.loadout, {}), settings: json(p.settings, {}), avatar: p.avatar_ball, favorite: p.favorite_ball,
       daily: dailyState(p), premium: S.premiumOf(uid), catalog: catalogFor(uid, isOwner(user)),
+      season: S.seasonBrief ? S.seasonBrief(uid) : null, monthlyCoins: S.monthlyCoins ? S.monthlyCoins(uid) : null,
       tournament: (t => t ? { id: t.id, ...json(t.state, {}) } : null)(db.get("SELECT * FROM tournaments WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1", uid)),
     };
   }
