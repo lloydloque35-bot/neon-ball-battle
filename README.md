@@ -41,6 +41,10 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
   - 50 core balls
   - 6 limited event balls
   - 6 Premium balls: Prism, Mirror, Toxic Reactor, Sonic, Magnetar, Rift
+  - **NEW — Anti Ball & Tech Balls update** ([docs/TECH-BALLS.md](docs/TECH-BALLS.md)):
+    - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
+    - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
+    - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
   - 15 **Admin Exclusive** balls: One Above All, Archangel, **Portal Master**, Omega, Phantom, Infinity Core, Chaos Emperor, Celestial Dragon, Miracle, Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme
   - **Portal Master Ball** (owner only):
     - opens portals anywhere and slips out of the arena and back
@@ -49,14 +53,14 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
     - ultimate: **INFINITE PORTAL**
   - unlimited owner-created balls and player fusions
 - **Progression:**
-  - Levels up to 50, a skill tree that unlocks the 3rd and 4th abilities, and three evolutions per ball.
+  - Levels up to 50, a skill tree that unlocks the 3rd ability (Lv 5) and the 4th+ abilities (Lv 12), and three evolutions per ball.
   - Upgrades and summons.
   - Achievements (including 100 battles and Perfect Victory), collection rewards, weekly limited events and 7-day daily rewards.
 - **Online extras:** global rankings, public profiles, AI tournaments, Ball Fusion, and cosmetics (aura, skin, trail, hit and victory effects).
 
 ## ULTIMATE PREMIUM — $200 / YEAR
 - **What's included:**
-  - Every regular, premium, legendary, mythical and non-admin limited ball
+  - Every regular, premium, legendary, mythical and non-admin limited ball, including both **Tech Balls**
   - Premium cosmetics, effects and badge
   - +25% battle rewards, +50% daily coins and 20% off summons
   - Premium events
@@ -64,7 +68,7 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
 - **What Premium never includes:** admin access, admin-exclusive balls or owner abilities.
 
 ## Controls
-- **Auto battle** (default), or **Manual** (press M or the AUTO button). In Manual: WASD, arrows or drag to steer; 1-4 for abilities; SPACE for the ultimate.
+- **Auto battle** (default), or **Manual** (press M or the AUTO button). In Manual: WASD, arrows or drag to steer; 1-6 for abilities (or the on-screen buttons); SPACE for the ultimate.
 - P / Esc pauses. The speed button cycles 1x / 1.5x / 2x / 3x.
 
 ## Project structure

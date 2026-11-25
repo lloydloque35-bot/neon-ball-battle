@@ -45,7 +45,8 @@ function register(app, S) {
     const r = ballRow(uid, id);
     return r ? { owned: !!r.owned, level: r.level, exp: r.exp, evo: r.evo, up: json(r.up, {}), tree: json(r.tree, {}), sp: r.sp, wins: r.wins, losses: r.losses } : { owned: false, level: 1, exp: 0, evo: 0, up: {}, tree: {}, sp: 1, wins: 0, losses: 0 };
   }
-  /** how (if at all) this user may use a ball: owned | premium | owner | trial | null */
+  /** how (if at all) this user may use a ball: owned | free | premium | owner | trial | null.
+   *  Premium balls need an ACTIVE subscription: when it lapses they lock again (progress rows are kept). */
   function access(user, def, { trial = false } = {}) {
     if (!def || def.summonOnly) return null;            // summon-only helpers exist only inside Portal Master Ball's portals
     const owner = isOwner(user);
@@ -54,6 +55,7 @@ function register(app, S) {
     if (def.adminOnly) return owner ? 'owner' : null;
     if (owner) return 'owner';
     if (ballRow(user.id, def.id)?.owned) return 'owned';
+    if (def.free) return 'free';                         // free for every player (Anti Ball)
     if (!def.fusion && S.premiumOf(user.id).active) return 'premium';
     if (trial && !def.fusion) return 'trial';
     return null;
@@ -161,7 +163,7 @@ function register(app, S) {
       const [step, type] = a;
       if (!Number.isInteger(step) || step < 1 || step > MAX_STEPS || step < last) return 'Malformed input step';
       last = step;
-      if (type === 'k') { if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 4 || a.length !== 3) return 'Malformed ability input'; }
+      if (type === 'k') { if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 6 || a.length !== 3) return 'Malformed ability input'; }   // up to 6 abilities + a copied one
       else if (type === 'u') { if (a.length !== 3 || a[2] !== 0) return 'Malformed ultimate input'; }
       else if (type === 'm') { if (a.length !== 3 || (a[2] !== 0 && a[2] !== 1)) return 'Malformed control input'; }
       else if (type === 's') { if (a.length !== 5 || ![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return 'Malformed steering input'; }

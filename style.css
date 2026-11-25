@@ -36,7 +36,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hud-btns button:hover { border-color: var(--cyan); }
 #btnAuto.manual { background: rgba(120, 20, 60, .8); border-color: var(--red); }
-#skillBar { position: absolute; bottom: 3%; left: 4.5%; display: flex; gap: 8px; pointer-events: auto; }
+#skillBar { position: absolute; bottom: 3%; left: 4.5%; display: flex; flex-wrap: wrap; max-width: 91%; gap: 8px; pointer-events: auto; }
 #skillBar button {
   width: clamp(44px, 6vw, 70px); height: clamp(44px, 6vw, 70px); border-radius: 50%;
   border: 2px solid var(--glow); background: rgba(8, 20, 60, .7); font-size: clamp(8px, 1vw, 11px); font-weight: 700;
@@ -145,6 +145,23 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer
 .ball-card .evo { position: absolute; top: 5px; right: 6px; font-size: 11px; color: var(--gold); }
 .ball-card.locked canvas { filter: grayscale(.85) brightness(.45); }
 .ball-card .lock { position: absolute; top: 34px; left: 0; right: 0; font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 0 4px #000; }
+.ball-card .tag-free, .ball-card .tag-new { position: absolute; top: 24px; font-size: 9px; font-weight: 900; letter-spacing: .6px; border-radius: 5px; padding: 1px 5px; }
+.ball-card .tag-free { left: 6px; background: #00c853; color: #00170a; box-shadow: 0 0 8px rgba(0,230,118,.6); }
+.ball-card .tag-new { right: 6px; background: #ff3cf2; color: #fff; box-shadow: 0 0 8px rgba(255,60,242,.6); }
+/* "NEW UPDATE" strip on the ball selection screen */
+.featured { margin: 0 0 10px; padding: 8px; border-radius: 12px; border: 1px solid rgba(255,60,242,.45); background: linear-gradient(90deg, rgba(124,77,255,.16), rgba(41,227,255,.10), rgba(255,23,68,.14)); }
+.featured .feat-title { font-size: 12px; font-weight: 900; letter-spacing: 1px; color: #ffd0fb; margin: 0 2px 6px; text-shadow: 0 0 8px rgba(255,60,242,.7); }
+.featured .feat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.featured .feat-card { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(120,170,255,.35); background: rgba(6,12,36,.75); color: #fff; cursor: pointer; font: inherit; }
+.featured .feat-card:hover { border-color: var(--cyan); }
+.featured .feat-card.selected { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,213,79,.5); }
+.featured .feat-card.locked canvas { filter: grayscale(.6) brightness(.6); }
+.featured .feat-card canvas { width: 60px; height: 60px; flex: none; }
+.featured .feat-txt { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.featured .feat-txt small { font-size: 9.5px; font-weight: 800; letter-spacing: .8px; color: #8fa3cf; }
+.featured .feat-txt b { font-size: 13px; letter-spacing: .3px; }
+.featured .feat-st { margin-top: 3px; font-size: 10px; font-weight: 900; letter-spacing: .4px; }
+.featured .feat-st.free { color: #69f0ae; } .featured .feat-st.on { color: #ffd54f; } .featured .feat-st.off { color: #ff8a80; }
 .ball-card.disabled { opacity: .45; }
 .rar-Common { color: #b0bec5; } .rar-Uncommon { color: #69f0ae; } .rar-Rare { color: #40c4ff; } .rar-Epic { color: #d500f9; }
 .rar-Legendary { color: #ffab00; } .rar-Mythical { color: #ff4081; } .rar-Ancient { color: #ff6e40; } .rar-Secret { color: #00e5ff; }

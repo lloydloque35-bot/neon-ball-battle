@@ -13,6 +13,7 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Requested "preserved" balls were **not in the project**, so they were created new:
   - Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme → **Admin Exclusive**
   - Prism, Mirror, Toxic Reactor, Sonic, Magnetar, Rift → **Premium**
+  - **Anti Ball → FREE for everyone**; Tech Ball 1 **Mecha Commander** and Tech Ball 2 **Cyber Overlord** → **Premium** (see [TECH-BALLS.md](TECH-BALLS.md))
 - ✅ New ability types: Phase (invisibility + illusion) and Reflect. New spherical armour attachment. A unique sound signature per ball.
 - ✅ Every ball has 3+ abilities, an ultimate, Rage and God Mode, and an AI personality
 
@@ -97,3 +98,11 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Cross-engine determinism: live Chrome battles replay bit-for-bit in Node
 - ✅ `.env.example`, migrations, backup and restore, deployment, error logging and recovery runbooks (docs/DEPLOYMENT.md)
 - 🟡 **Owner before launch:** host with HTTPS, create the owner account, set up Stripe (sandbox, then live), publish Terms, Privacy and refund policies, and set up off-site backups
+
+## Anti Ball & Tech Balls update
+- ✅ Anti Ball (free): 6 counter abilities, Absolute Zero, Anti-Adaptation passive (capped at 30%)
+- ✅ Mecha Commander (premium): robots with their own AI, factory, missiles, defense drone, robot fusion, automatic Emergency Repair, Titan Overdrive
+- ✅ Cyber Overlord (premium): laser grid, holograms, EMP, cyber trap, auto turret, overclock + heat/overheat, Skynet Protocol
+- ✅ Server-side unlock rules (free / active premium; locked again on expiry with progress kept), unit caps, no infinite heal/summon/reflect, no permanent silence
+- ✅ Selection screen "NEW UPDATE" strip with FREE / PREMIUM — LOCKED / UNLOCKED status, ability + ultimate + passive details, ability showcase, 1–6 manual keys
+- ✅ Tests: every ability in real battles, determinism (AI + online PvP), balance simulations, premium access on the server

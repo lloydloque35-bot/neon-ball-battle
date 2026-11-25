@@ -27,6 +27,7 @@ function register(app, S, H) {
   /* ---------- collection & upgrades ---------- */
   action('/api/shop/unlock', (u, b) => {
     const def = ballOrThrow(b.ball);
+    if (def.free) throw bad('This ball is free — it is already unlocked for every player');
     if (def.adminOnly || def.limited || def.premium || def.fusion || def.draft || def.enabled === false) throw bad('This ball cannot be bought with coins');
     if (H.ballRow(u.id, def.id)?.owned) throw bad('You already own this ball');
     spendCoins(u.id, core.RARITY_INFO[def.rarity]?.price || 1000);
