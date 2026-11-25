@@ -41,7 +41,12 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online
   - 50 core balls
   - 6 limited event balls
   - 6 Premium balls: Prism, Mirror, Toxic Reactor, Sonic, Magnetar, Rift
-  - 14 **Admin Exclusive** balls: One Above All, Archangel, Omega, Phantom, Infinity Core, Chaos Emperor, Celestial Dragon, Miracle, Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme
+  - 15 **Admin Exclusive** balls: One Above All, Archangel, **Portal Master**, Omega, Phantom, Infinity Core, Chaos Emperor, Celestial Dragon, Miracle, Glitch God, Creator God, Void Emperor, Chronos, Devourer, Admin Supreme
+  - **Portal Master Ball** (owner only):
+    - opens portals anywhere and slips out of the arena and back
+    - summons other balls through portals (Fire, Ice, Thunder, Electric, Spear, Cell, Zombie, Vampire, French Bread and more), each using its own abilities
+    - creates clone armies, some disguised as other balls
+    - ultimate: **INFINITE PORTAL**
   - unlimited owner-created balls and player fusions
 - **Progression:**
   - Levels up to 50, a skill tree that unlocks the 3rd and 4th abilities, and three evolutions per ball.

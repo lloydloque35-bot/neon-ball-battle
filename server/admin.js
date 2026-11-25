@@ -102,12 +102,12 @@ function register(app, S) {
     const isOwnerAcc = u.role === 'owner';
     const owned = new Set(db.all('SELECT ball_id FROM user_balls WHERE user_id = ? AND owned = 1', u.id).map(r => r.ball_id));
     const list = which === '*all*'
-      ? core.allBalls().filter(d => !d.draft && (owned.has(d.id) || (isOwnerAcc && !d.fusion)))
+      ? core.allBalls().filter(d => !d.draft && !d.summonOnly && (owned.has(d.id) || (isOwnerAcc && !d.fusion)))
       : [core.getBall(which)].filter(Boolean);
     if (!list.length) throw bad('Choose a ball to upgrade');
     const tree = Object.fromEntries(core.TREE.map(n => [n.id, 1])), up = { ...core.UPGRADE_CAPS }, evo = core.EVO.length - 1;
     for (const d of list) {
-      if (d.draft) throw bad('Draft balls cannot be upgraded');
+      if (d.draft || d.summonOnly) throw bad('That ball cannot be upgraded');
       if (!owned.has(d.id) && !(isOwnerAcc && !d.fusion)) throw bad(`${u.username} does not own ${d.name}`);
       S.ensureBallRow(u.id, d.id);
       db.run('UPDATE user_balls SET level = ?, exp = 0, evo = ?, up = ?, tree = ? WHERE user_id = ? AND ball_id = ?', core.MAX_LVL, evo, JSON.stringify(up), JSON.stringify(tree), u.id, d.id);

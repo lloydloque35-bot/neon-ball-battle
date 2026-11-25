@@ -47,7 +47,7 @@ function register(app, S) {
   }
   /** how (if at all) this user may use a ball: owned | premium | owner | trial | null */
   function access(user, def, { trial = false } = {}) {
-    if (!def) return null;
+    if (!def || def.summonOnly) return null;            // summon-only helpers exist only inside Portal Master Ball's portals
     const owner = isOwner(user);
     if (def.draft && !owner) return null;
     if (def.enabled === false && !owner && !ballRow(user.id, def.id)?.owned) return null;   // disabled: no NEW access, owners keep it

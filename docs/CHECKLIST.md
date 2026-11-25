@@ -16,6 +16,19 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ New ability types: Phase (invisibility + illusion) and Reflect. New spherical armour attachment. A unique sound signature per ball.
 - ✅ Every ball has 3+ abilities, an ultimate, Rage and God Mode, and an AI personality
 
+## Owner-exclusive character — Portal Master Ball
+- ✅ **Look:** a dark purple and black sphere with glowing violet eyes, floating portal symbols and a dimensional aura
+- ✅ **Abilities:**
+  - Portal Gate: opens a portal in front of itself and one behind the enemy, then strikes through it
+  - Dimensional Escape: leaves the arena through a wall portal, untouchable, and comes back through another portal
+  - Ball Summon: at most 3 summons at once; each keeps its own abilities and defends its master
+  - Clone Army: at most 4 clones, some disguised as other balls
+  - Ultimate: INFINITE PORTAL (ring of portals, army, coordinated volley, rift, finishing strike)
+- ✅ **Battle safety:** the AI uses every ability, including escaping danger. While "in the void" the ball has no collisions and takes no damage; it only *looks* like it leaves the arena. Summons and clones are temporary and never count as the main fighters
+- ✅ **New summon-only balls:** Electric, Spear, Cell, French Bread. They exist only inside the portals: never playable, sold, granted or AI opponents
+- ✅ **Exclusivity:** the server only allows the owner account to use it. It is hidden from players, never an AI opponent (not even for the owner), and not allowed in ranked PvP. It is balanced against One Above All (about 50/50) and beats every other ball
+- ✅ **Tests:** owner-only access, server-verified owner battles, deterministic replays and online lockstep
+
 ## Phase 3 — Private admin control
 - ✅ Server-side owner authentication with scrypt, TOTP 2FA, secure sessions, CSRF, rate limits, audit logs and a single-owner DB constraint
 - ✅ The old browser-stored admin PIN was removed; the owner is created only with the CLI

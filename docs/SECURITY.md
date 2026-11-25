@@ -41,6 +41,10 @@
 - Battles are against the AI, so a determined cheater could run the simulation offline to choose good manual inputs, the equivalent of a "bot". The verified result is still a real, legal battle, so it can never award more than an honestly played game.
 - Single-player battles are against the AI, so a determined cheater could run the simulation offline to choose good manual inputs.
 
+## Owner-only characters (One Above All, Archangel, Portal Master…)
+- On the game server, only the owner account (role checked in the database) can use admin balls. That covers battles, online PvP (private rooms only), tournaments, grants, the shop and events. Players can never unlock, buy or be granted them, and the AI never picks Portal Master Ball as an opponent.
+- **Limit of the free Guest copy** (for example GitHub Pages): there is no server there, so admin balls are locked by the browser alone. Someone who edits their own copy of the game files could unlock them on their own device. That cannot be prevented in a browser-only game. It never affects the real game: accounts, cloud saves, rankings, rewards and online PvP all run on the server, and the server ignores anything the browser claims.
+
 ## Online PvP
 - **Connecting:** the WebSocket needs the session cookie and a same-site `Origin`. Suspended and banned accounts are refused, and each account has one live connection.
 - **The match:** the server builds the match from each player's server-side progress. Browsers only send their own button presses. These are validated, must arrive in block order, and are rate-limited.
