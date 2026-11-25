@@ -333,3 +333,16 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* online PvP */
+.btn.pvp { background: linear-gradient(180deg, #1de9b6, #0b8f73); color: #00241c; border-color: #6fffe0; box-shadow: 0 0 18px rgba(29,233,182,.45); }
+.pvp-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+.pvp-actions h3 { margin: 0 0 4px; }
+.pvp-actions p { margin: 0 0 10px; }
+.pvp-grid { max-height: 46vh; overflow-y: auto; padding: 4px; }
+.room-code { font: 900 46px/1.1 "Segoe UI", Arial, sans-serif; letter-spacing: 10px; color: var(--gold); text-shadow: 0 0 18px rgba(255,159,28,.7); margin: 10px 0; user-select: all; -webkit-user-select: all; }
+.code-input { width: 110px; text-transform: uppercase; letter-spacing: 4px; font-weight: 800; text-align: center; }
+#btnSpeed.hidden { display: none; }
+.menu-buttons .big.pvp { grid-column: auto; }
+.menu-buttons .big.primary { grid-column: auto; }
+@media (min-width: 760px) { .menu-buttons .big.primary { grid-column: span 2; } }

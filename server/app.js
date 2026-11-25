@@ -22,12 +22,13 @@ function createGameServer(cfg, opts = {}) {
   S.version = VERSION;
   const app = new App({ root: cfg.root, secure: cfg.cookieSecure, trustProxy: cfg.trustProxy, log });
   // order matters: billing defines premium helpers used by auth/game; auth installs the session middleware
-  for (const mod of ['billing', 'auth', 'game', 'admin']) {
+  for (const mod of ['billing', 'auth', 'game', 'admin', 'pvp']) {
     const file = path.join(__dirname, mod + '.js');
     if (fs.existsSync(file)) require(file).register(app, S);
   }
   app.get('/api/health', () => ({ ok: true, version: VERSION, time: Date.now(), payments: S.paymentsPublic ? S.paymentsPublic().enabled : false }));
   const server = http.createServer((req, res) => app.handle(req, res));
+  server.on('upgrade', (req, socket, head) => { socket.on('error', () => socket.destroy()); if (S.onUpgrade) S.onUpgrade(req, socket, head); else socket.destroy(); });
   server.requestTimeout = 30000; server.headersTimeout = 15000; server.keepAliveTimeout = 5000;
   const timers = [];
   S.every = (ms, fn) => { const t = setInterval(() => { try { fn(); } catch (e) { log.error('[job]', e); } }, ms); t.unref?.(); timers.push(t); };
@@ -35,7 +36,7 @@ function createGameServer(cfg, opts = {}) {
   if (S.startJobs) S.startJobs();
   return {
     app, server, db, S,
-    async close() { timers.forEach(clearInterval); await new Promise(r => server.close(() => r())); if (S.verifier) await S.verifier.close(); db.close(); },
+    async close() { timers.forEach(clearInterval); (S.closers || []).forEach(fn => fn()); await new Promise(r => server.close(() => r())); if (S.verifier) await S.verifier.close(); db.close(); },
   };
 }
 

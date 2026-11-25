@@ -10,20 +10,23 @@ It runs two ways:
 | Progress | saved in this browser | cloud save, every device |
 | Battles | local | **server-verified** (anti-cheat) |
 | Accounts, Premium, rankings, fusion, cosmetics, Owner Dashboard | – | ✔ |
+| **Online PvP** (fight real players) | – | ✔ |
 
 **Windows, no typing:** double-click `CREATE-OWNER-ACCOUNT.bat` once, then `START-GAME-SERVER.bat` whenever you want to play or open the Admin Dashboard.
+
+**Update to the newest version:** close the server window, then double-click `UPDATE-GAME.bat`. It downloads the latest game from GitHub and never touches your `data` folder, which holds your accounts and progress.
 
 **Admin on your phone:** double-click `START-GAME-SERVER-PHONE.bat` on the PC, connect the phone to the **same home Wi-Fi**, and type the link it shows (for example `http://192.168.1.23:8080`) in the phone browser. The first time, Windows asks to allow Node.js: tick **Private networks** and click **Allow**. Use it only on your home Wi-Fi.
 
 ```bash
 cp .env.example .env
-npm test                                  # 39 automated tests
+npm test                                  # 44 automated tests
 npm start                                 # http://localhost:8080
 npm run owner -- create --username You    # the ONLY way to create the admin/owner account
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Multiplayer plan: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -33,6 +36,7 @@ Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Multip
   - Five difficulties: Easy, Normal, Hard, Expert and Godlike.
   - It dodges attacks, braces against an enemy's God Mode and never wastes attacks on invulnerable targets.
 - **Modes:** 1 VS 1 (main), 2 VS 2, Free For All, Survival, Tournament, Boss, Endless and Practice. *Sudden Death* starts after 90 s.
+- **🌐 Online PvP:** real-time 1 VS 1 against other players, either a ranked Quick Match or a private room with a code. The server checks every match. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 - **Balls:**
   - 50 core balls
   - 6 limited event balls
@@ -68,6 +72,7 @@ server/                              Node game server (no dependencies)
   game.js economy.js verifier.js     cloud save, verified battles (worker threads), economy
   billing.js                         Stripe subscription + signed webhooks
   admin.js                           owner-only API
+  pvp.js ws.js                       online PvP: matchmaking, rooms, lockstep relay (WebSocket)
   core.js                            loads script.js headlessly for server-side replays
   migrations/  cli/  test/
 docs/                                deployment, security, multiplayer, checklist

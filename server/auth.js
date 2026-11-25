@@ -48,6 +48,17 @@ function register(app, S) {
     }
   });
 
+  /** resolves the signed-in user from a raw Cookie header (used by the PvP WebSocket, which has no ctx) */
+  S.userFromCookieHeader = header => {
+    const tok = require('./http').parseCookies(header)[SID];
+    if (!tok || tok.length >= 200) return null;
+    const row = db.get(`SELECT s.id AS sid, s.expires_at, u.id, u.username, u.role, u.status, u.suspended_until FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?`, S_.sha256(tok));
+    if (!row || row.expires_at <= now() || row.status === 'banned') return null;
+    if (row.status === 'suspended' && (!row.suspended_until || row.suspended_until > now())) return null;
+    return { id: row.id, username: row.username, role: row.role, status: 'active', sessionId: row.sid };
+  };
+  S.originAllowed = (origin, host) => { if (!origin) return false; let h = ''; try { h = new URL(origin).host; } catch { /* invalid */ } return origin === cfg.appOrigin || (!!h && h === host); };
+
   /* ---------- helpers ---------- */
   function limit(ctx, key, max, windowMs, msg = 'Too many requests. Please slow down.') {
     if (!limiter.hit(key, max, windowMs)) { S.secEvent(ctx.user?.id, 'rate_limited', 1, { key: key.replace(/:[^:]*$/, '') }, ctx.ip); throw new HttpError(429, msg, 'RATE_LIMIT'); }

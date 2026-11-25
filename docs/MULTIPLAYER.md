@@ -1,30 +1,50 @@
-# Online multiplayer — prepared, not active
+# Online multiplayer (PvP)
 
-**Status: real-time player-vs-player is NOT implemented yet.** The game does not pretend otherwise: rankings and tournaments currently use server-verified battles against the AI, and the UI says so.
+**Status: real-time 1 VS 1 player-versus-player is implemented** (`server/pvp.js`, `server/ws.js`, the `LockstepNet` and `PvP` sections of `online.js`).
+It needs the game server. The free Guest copy, such as GitHub Pages, has no server, so its Online PvP screen says that the feature needs the server.
 
-## What is already in place
-- **Player accounts, sessions, profiles and friends-ready schema**: `users`, `profiles`, and `friends` (user_id, friend_id, status).
-- **Room and match tables**: `rooms` (code, host, mode, status) and `matches` (seed, players, inputs, result).
-- **A deterministic, server-authoritative simulation.** The same seed plus the same input stream gives the same battle on the server and in every browser. This is the hard part of PvP and it is done and tested.
-- **Input format**: `[step, type, ...args]`, applied on fixed 1/240 s steps. This is ready to be sent over a network.
+## What players get
+- **⚡ Quick Match (ranked):** pairs two waiting players.
+  - The winner gains rank points (Elo, K = 32) and 80 coins + 60 EXP. The loser gets 20 coins + 20 EXP. Premium gets +25%.
+  - Admin-exclusive balls are not allowed.
+- **🏠 Private rooms (friendly):**
+  - One player creates a room and gets a 5-character code. The friend types the code to join.
+  - No rank points or rewards. The owner may use admin balls here.
+- **During the battle:** both balls fight on **AUTO**. Either player can switch to **MANUAL** to steer and use abilities and the ultimate. There is no pause.
+- **Leaving:** a player who leaves, disconnects or stalls for 15 s is replaced by the AI. Their ball keeps fighting on AUTO and the result still counts.
+- **History:** the last 15 matches appear on the Online PvP screen.
 
-## Recommended design: deterministic lockstep with server authority
-1. **Matchmaking / private rooms.** A player creates a room (`rooms.code`, a 6-character code) or joins a queue that matches players by `profiles.rp`. Friend invites become `friends` rows plus a room code.
-2. **Transport.** Add a WebSocket endpoint (for example the `ws` package, or Node's built-in WebSocket client support on the browser side) at `/api/play`, authenticated by the existing session cookie.
-3. **Lockstep.**
-   - The server picks the seed and the fighters (from each player's server-side progress) and sends the ticket to both clients.
-   - Clients send their inputs tagged with a step number a few steps ahead, as input delay.
-   - The server relays the inputs and runs its own simulation (`simulateTicket` with merged inputs), so its result is authoritative.
-4. **Fair play.**
-   - The server drops inputs for steps that have already been simulated.
-   - It checks input rate limits and assigns each player a fighter slot, so a player can only control their own ball.
-   - Disconnects become an AI takeover.
-5. **Results.** The server stores `matches.inputs` and `matches.result`, and updates both players' RP with an Elo formula.
-6. **Player tournaments.** Brackets of rooms. The existing `tournaments` table and bracket UI can be reused, with `state` holding human participants.
+## How it works: deterministic lockstep, server-authoritative result
+1. **The server builds the match.** It creates the **ticket**: a random seed plus both fighters, built from each player's *server-side* progress (level, evolution, upgrades, skill tree). It also takes a **catalog snapshot**: the published balls and the players' own fusions.
+2. **The same simulation everywhere.** Both browsers run the same deterministic battle as the server (fixed 1/240 s steps, portable math).
+3. **Inputs travel in blocks.** A block is 12 steps (50 ms).
+   - A player's inputs for block *b* are sent while they simulate block *b − delay*.
+   - The delay is 2–10 blocks, chosen from both players' measured ping.
+   - A browser simulates block *b* only once it has both players' inputs for it, so both screens show exactly the same fight.
+4. **What the server does with inputs.** It only **relays and records** them:
+   - Each socket controls only its own slot.
+   - Inputs are validated (`cleanPvpActions`) and must arrive in block order.
+   - Flooding is rate-limited.
+   - A player who breaks the protocol is dropped and replaced by the AI. This is also logged as a security event.
+5. **The server decides the result.** At the end it re-simulates the whole match from the ticket and recorded inputs in a worker thread.
+   - Its result decides the winner, rank points and rewards.
+   - Browsers cannot report a result. A browser that shows a different ending logs a warning in the console.
 
-## Work remaining
-- WebSocket server, room lifecycle and a reconnection protocol.
-- Mapping multiple human input streams onto fighters: today the input stream controls the single `isPlayer` fighter.
-- A latency buffer and an input-delay setting.
-- PvP rating (Elo/Glicko) and anti-abuse rules (win-trading detection).
-- Load testing: one Node process can simulate roughly 5 concurrent battles per CPU core in real time with headroom. Larger scale means sharding rooms across processes.
+## Anti-abuse
+- **Ranked reward limits:**
+  - Rank points and rewards are given at most **3 times per day for the same pair** of players.
+  - Coins and EXP stop after **20 ranked matches per day** per player. Rank points still change.
+- **Connections:**
+  - One live connection per account. A second window takes over and the first is closed.
+  - Suspended or banned accounts cannot connect.
+  - The socket requires the session cookie and a same-site `Origin`.
+
+## Hosting notes
+- The socket is at `/api/pvp/ws`. A reverse proxy must pass WebSocket upgrades (Caddy does this automatically). Over HTTPS the browser uses `wss://`.
+- Everything runs in one Node process. Relaying costs very little; each finished match takes one verification of roughly 0.2–0.5 s in the worker pool (`VERIFY_WORKERS`).
+- Players are matched through the server, so with a laptop server only devices that can reach the laptop can play. That means the same Wi-Fi for `START-GAME-SERVER-PHONE.bat`. For players anywhere, host the server online (see DEPLOYMENT.md).
+
+## Not implemented yet
+- Reconnecting to a match in progress. A dropped player's ball is finished by the AI instead.
+- 2 VS 2, Free For All or player tournaments online.
+- Spectating, chat, friends lists and skill-based queue matching (the queue is first-come, first-served).

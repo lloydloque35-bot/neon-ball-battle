@@ -97,6 +97,7 @@ function register(app, S) {
     return true;
   }
   S.unlockBall = unlockBall; S.addCoins = addCoins; S.updateProfile = updateProfile;
+  S.profileRow = profileRow; S.progOf = progOf; S.giveBallExp = giveBallExp; S.giveAccountExp = giveAccountExp; S.ensureBallRow = ensureRow;
 
   function dailyState(p) {
     const last = p.daily_last, t = utcDay(), y = utcDay(now() - 86400e3);
@@ -192,7 +193,7 @@ function register(app, S) {
     const u = S.requirePlayable(ctx);
     S.limit(ctx, 'bstart:' + u.id, 40, 60e3);
     const b = ctx.body, mode = String(b.mode || '');
-    if (!core.MODES[mode] || mode === 'tournament') throw bad('Unknown battle mode');
+    if (!core.MODES[mode] || mode === 'tournament' || core.MODES[mode].online) throw bad('Unknown battle mode');
     return withCatalog(u, () => {
       const def = core.getBall(String(b.ball || ''));
       const trial = mode === 'practice' && !!b.trial;

@@ -100,6 +100,7 @@ game.example.com {
 }
 ```
 Set `TRUST_PROXY=true` only when the game sits behind a proxy like this, so rate limits see real client IPs.
+Online PvP uses a WebSocket at `/api/pvp/ws`, so the proxy must pass WebSocket upgrades. Caddy does this automatically; for nginx, add `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`.
 
 **Keep it running (systemd):**
 ```ini

@@ -60,9 +60,11 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Cloud save: progress, unlocks, upgrades, achievements and settings live on the server and sync across devices
 - ✅ Guest mode, a premium trial, and account recovery (recovery codes plus optional email)
 
-## Phase 11 — Multiplayer preparation
-- ✅ Accounts, rooms, matches and friends schema, plus a deterministic server simulation (see MULTIPLAYER.md)
-- ⛔ Real-time PvP, matchmaking and player tournaments are **not implemented**, and the UI says so
+## Phase 11 — Online multiplayer
+- ✅ Real-time 1 VS 1 PvP over WebSocket: ranked Quick Match (Elo rank points, rewards) and private rooms with a code (see MULTIPLAYER.md)
+- ✅ Deterministic lockstep; the server relays validated inputs and re-simulates every match, so its result decides the winner
+- ✅ Leavers, disconnects and stalls are replaced by the AI; protocol abuse is dropped and logged; daily anti-farming limits
+- ⛔ Reconnecting mid-match, online 2v2 / FFA / player tournaments, spectating and chat are **not implemented**
 
 ## Phase 12 — Security & anti-cheat
 - ✅ Battle results re-simulated on the server, mismatch flagging, a too-fast guard, single submission, forfeit-on-abandon, input validation, transactional economy, crypto RNG, security event log
@@ -75,7 +77,8 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Battle verification runs in worker threads (~0.2 s per battle) so it never blocks other players
 
 ## Phase 16 — Testing & deployment
-- ✅ `npm test`: 39 automated tests (auth, escalation, CSRF, lockout, recovery, 2FA, anti-cheat, economy races, fusion, tournaments, rankings, billing lifecycle, admin access)
+- ✅ `npm test`: 44 automated tests (auth, escalation, CSRF, lockout, recovery, 2FA, anti-cheat, economy races, fusion, tournaments, rankings, billing lifecycle, admin access, online PvP)
+- ✅ Two-browser online matches (PC + phone): same fight on both screens, server result matches, leaving mid-match handled
 - ✅ Browser end-to-end runs: sign up → verified battle → daily reward → premium page → rankings → owner 2FA login → dashboard → creator publish
 - ✅ Cross-engine determinism: live Chrome battles replay bit-for-bit in Node
 - ✅ `.env.example`, migrations, backup and restore, deployment, error logging and recovery runbooks (docs/DEPLOYMENT.md)

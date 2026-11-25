@@ -39,7 +39,14 @@
 
 **Known limits:**
 - Battles are against the AI, so a determined cheater could run the simulation offline to choose good manual inputs, the equivalent of a "bot". The verified result is still a real, legal battle, so it can never award more than an honestly played game.
-- Real-time PvP would need the lockstep design in `MULTIPLAYER.md`.
+- Single-player battles are against the AI, so a determined cheater could run the simulation offline to choose good manual inputs.
+
+## Online PvP
+- **Connecting:** the WebSocket needs the session cookie and a same-site `Origin`. Suspended and banned accounts are refused, and each account has one live connection.
+- **The match:** the server builds the match from each player's server-side progress. Browsers only send their own button presses. These are validated, must arrive in block order, and are rate-limited.
+- **The result:** the server re-simulates every match, and only its result changes rank points or rewards.
+- **Protocol abuse:** the player is dropped (their ball finishes on AUTO) and the event is logged.
+- **Known limit:** both browsers know the whole battle state (lockstep). A modified client could show or predict more than the normal UI does, but it cannot change the outcome beyond pressing buttons.
 
 ## Economy
 - Every purchase, upgrade, evolution, skill-tree node, summon, claim, cosmetic and fusion runs in a database transaction that re-reads the balance.

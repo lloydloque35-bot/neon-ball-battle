@@ -1786,7 +1786,7 @@ const Input = {
       const k = e.key.toLowerCase();
       if (k === 'p' || k === 'escape') { BATTLE.togglePause(); e.preventDefault(); }
       if (k === 'm') toggleControl();
-      const pl = BATTLE.player; if (!pl || !pl.manual || BATTLE.paused) return;
+      const pl = BATTLE.player; if (!pl || !localManual() || BATTLE.paused) return;
       const idx = { '1': 0, '2': 1, '3': 2, '4': 3, j: 0, k: 1, l: 2, ';': 3 }[k];
       if (k === ' ') { BATTLE.queue('u'); e.preventDefault(); }
       else if (idx != null) BATTLE.queue('k', idx);
@@ -1796,7 +1796,7 @@ const Input = {
     addEventListener('blur', () => this.keys.clear());
     const cv = $('#game');
     const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; };
-    cv.addEventListener('pointerdown', e => { if (BATTLE?.player?.manual) { this.pointer = pos(e); cv.setPointerCapture(e.pointerId); } });
+    cv.addEventListener('pointerdown', e => { if (BATTLE?.player && localManual()) { this.pointer = pos(e); cv.setPointerCapture(e.pointerId); } });
     cv.addEventListener('pointermove', e => { if (this.pointer) this.pointer = pos(e); });
     const up = () => { this.pointer = null; };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -1826,6 +1826,7 @@ const MODES = {
   'boss': { name: 'Boss Battle', ico: '☠', desc: 'Face a giant God-tier boss ball with phases and minions.' },
   'endless': { name: 'Endless Battle', ico: '∞', desc: 'One enemy after another, each stronger. How many KOs?' },
   'practice': { name: 'Practice', ico: '◎', desc: 'Train against any ball. No rewards, optional infinite HP.' },
+  'pvp': { name: 'Online PvP', ico: '🌐', desc: 'Fight a real player online.', online: true },
 };
 
 class Battle {
@@ -1839,8 +1840,16 @@ class Battle {
     FX.reset(); FX.off = !!cfg.headless; BATTLE = this;
     this.seed = cfg.seed ?? ((Math.random() * 4294967296) >>> 0); seedRNG(this.seed);
     cfg.teams.forEach((team, ti) => team.forEach((spec, k) => this.spawn(spec, ti, k, team.length, cfg.teams.length)));
-    this.player = this.fighters.find(f => f.isPlayer) || null;
-    if (this.player) { this.player.manual = !!cfg.manual && !cfg.demo; this.player.inX = 0; this.player.inY = 0; this.player.inP = 0; }
+    this.pvp = !!cfg.pvp; this.limit = null; this.net = cfg.net || null;
+    if (this.pvp) {          // online PvP: two human-controlled balls, inputs tagged with the player's slot
+      this.speed = 1;
+      this.slots = [0, 1].map(s => this.fighters.find(f => f.slot === s));
+      for (const f of this.slots) { f.manual = false; f.inX = 0; f.inY = 0; f.inP = 0; }
+      this.player = cfg.me != null ? this.slots[cfg.me] : null;
+    } else {
+      this.player = this.fighters.find(f => f.isPlayer) || null;
+      if (this.player) { this.player.manual = !!cfg.manual && !cfg.demo; this.player.inX = 0; this.player.inY = 0; this.player.inP = 0; }
+    }
     if (cfg.dummy) this.fighters.filter(f => f.team !== 0).forEach(f => { f.ai = null; f.skills = []; });
   }
   spawn(spec, ti, k, n, nTeams) {
@@ -1853,14 +1862,18 @@ class Battle {
     if (!spec.isPlayer || spec.ai || this.cfg.demo) f.ai = new AIController(f, spec.ai || spec.def.ai || 'intelligent', spec.diff || this.difficulty);
     if (spec.isPlayer) { f.ai = new AIController(f, spec.def.ai === 'boss' ? 'intelligent' : (spec.def.ai || 'intelligent'), spec.playerDiff || 'hard'); }
     if (spec.hp != null) f.hp = Math.min(f.maxHp, spec.hp);
+    if (spec.pvp) { f.slot = spec.slot; f.tag = String(spec.tag || '').slice(0, 20); }
     this.fighters.push(f);
     FX.ring(x, y, TEAM_COLS[ti % 6], 120, 0.6, 6, f.r); FX.burst(x, y, spec.def.design.c3, 20, 260);
     return f;
   }
   /* player actions are queued and applied at the start of the next fixed step, and recorded for replay */
-  queue(type, a = 0) { if (!this.replay && !this.over && this.player) this.actions.push([type, a]); }
-  applyAction(a) {
-    const pl = this.player; if (!pl) return;
+  queue(type, a = 0) {
+    if (this.net) { if (!this.over && this.player) this.net.local(type, a); return; }   // online: sent to the server, applied when confirmed
+    if (!this.replay && !this.over && this.player) this.actions.push([type, a]);
+  }
+  applyAction(a, pl = this.player) {
+    if (!pl) return;
     switch (a[0]) {
       case 'k': { const sk = pl.allSkills()[a[1]]; if (sk) useSkill(pl, sk); break; }
       case 'u': useUltimate(pl); break;
@@ -1869,7 +1882,12 @@ class Battle {
     }
   }
   pumpInputs() {
-    if (this.replay) { while (this.ri < this.replay.length && this.replay[this.ri][0] === this.stepN) { const r = this.replay[this.ri++]; this.applyAction(r.slice(1)); } return; }
+    if (this.replay) {
+      // PvP inputs are [step, slot, type, ...args]; single-player inputs are [step, type, ...args]
+      while (this.ri < this.replay.length && this.replay[this.ri][0] === this.stepN) { const r = this.replay[this.ri++]; if (this.pvp) this.applyAction(r.slice(2), this.slots[r[1]]); else this.applyAction(r.slice(1)); }
+      if (this.net) this.net.sample(this);
+      return;
+    }
     for (const a of this.actions) { this.rec.push([this.stepN, ...a]); this.applyAction(a); }
     this.actions.length = 0;
     const pl = this.player;
@@ -1878,7 +1896,7 @@ class Battle {
       if (key !== this.lastSteer) { this.lastSteer = key; const a = ['s', ...st]; this.rec.push([this.stepN, ...a]); this.applyAction(a); }
     }
   }
-  togglePause(v) { if (this.over) return; this.paused = v ?? !this.paused; UI.pauseMenu(this.paused); }
+  togglePause(v) { if (this.over) return; if (this.pvp) { if (v === undefined) UI.pvpMenu?.(); return; } this.paused = v ?? !this.paused; UI.pauseMenu(this.paused); }
   teamsAlive() { const s = new Set(); for (const f of this.fighters) if (f.alive && !f.isClone) s.add(f.team); return s; }
   onDamage(src, tgt, amt) { if (src?.isPlayer) SAVE.stats.dmg += amt; }
   onDeath(f, killer) {
@@ -1896,8 +1914,13 @@ class Battle {
     }
     this.acc += Math.min(0.05, realDt) * this.speed * scale;
     let n = 0;
-    while (this.acc >= STEP && n < 48) { this.step(STEP); this.acc -= STEP; n++; }
-    if (n >= 48) this.acc = 0;
+    if (this.limit != null) {   // online lockstep: never simulate past the last step both players have confirmed
+      const behind = this.limit - this.stepN - this.acc / STEP;
+      if (behind > 96) this.acc += Math.min(0.05, realDt) * 0.5 * scale;   // catch up gently after a hiccup
+      if (this.net) this.net.tick(this);
+    }
+    while (this.acc >= STEP && n < 48 && (this.limit == null || this.stepN < this.limit)) { this.step(STEP); this.acc -= STEP; n++; if (this.net) this.net.tick(this); }
+    if (n >= 48 || (this.limit != null && this.stepN >= this.limit)) this.acc = Math.min(this.acc, STEP);
     FX.update(realDt * Math.max(this.cinematic ? 0.6 : scale, 0.3) * Math.min(2, this.speed));
     if (this.endTimer >= 0) { this.endTimer -= realDt; if (this.endTimer < 0) this.finish(); }
   }
@@ -1920,7 +1943,7 @@ class Battle {
       if (!f.alive) continue;
       tickFighter(f, h);
       if (!f.alive || f.st.timestop > 0) continue;
-      if (f.isPlayer && f.manual) { f.steerX = f.inX; f.steerY = f.inY; f.steerPow = f.inP; } else if (f.ai) f.ai.update(h);
+      if (f.manual) { f.steerX = f.inX; f.steerY = f.inY; f.steerPow = f.inP; } else if (f.ai) f.ai.update(h);
       if (f.steerPow > 0 && f.st.stun <= 0) { f.vx += f.steerX * f.steerPow * h; f.vy += f.steerY * f.steerPow * h; }
       const target = f.baseSpeed * f.speedMul() * (f.casting > 0 ? 0.25 : 1) * (f.st.stun > 0 ? 0.6 : 1);
       let sp = len(f.vx, f.vy);
@@ -2118,12 +2141,13 @@ class Battle {
   }
   defaultEnd() {
     const alive = this.teamsAlive();
-    if (alive.size <= 1) this.endWith(alive.has(0));
+    if (alive.size <= 1) this.endWith(alive.has(0), this.pvp ? { winner: alive.size === 1 ? [...alive][0] : -1 } : {});
   }
   endWith(win, extra = {}) {
     if (this.endTimer >= 0 || this.over) return;
     const pl = this.player;
     this.result = { win, mode: this.mode, time: this.time, kills: this.kills, wave: this.wave, step: this.stepN, hpPct: pl ? Math.max(0, pl.hp) / pl.maxHp : 0, stats: pl ? { ...pl.stats } : {}, rage: !!(pl && pl.rageEver), god: !!(pl && pl.godUsed), ...extra };
+    if (this.pvp) { this.result.slots = this.slots.map(f => ({ hpPct: Math.max(0, f.hp) / f.maxHp, stats: { ...f.stats }, rage: !!f.rageEver, god: !!f.godUsed })); if (this.player) this.result.win = this.result.winner === this.player.slot; }
     this.endTimer = 1.8;
   }
   finish() {
@@ -2208,7 +2232,7 @@ Battle.prototype.drawFighter = function (ctx, f) {
   if (SAVE.settings.labels) {
     const deco = f.def.design.deco || [], top = deco.some(d => ['halo', 'crown', 'horns'].includes(d)) ? r * 1.62 : r * 1.12;
     ctx.font = '700 13px "Segoe UI", sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)';
-    const lbl = (f.isPlayer ? '★ ' : '') + f.name + (f.boss ? ' [BOSS]' : '');
+    const lbl = (f.isPlayer || (f.slot != null && f === this.player) ? '★ ' : '') + (f.tag ? f.tag + ' • ' : '') + f.name + (f.boss ? ' [BOSS]' : '');
     ctx.strokeText(lbl, f.x, f.y - top - 8); ctx.fillStyle = f.team === 0 ? '#bfefff' : (this.cfg.teams.length > 2 ? TEAM_COLS[f.team % 6] : '#ffc2cc'); ctx.fillText(lbl, f.x, f.y - top - 8);
   }
   ctx.restore();
@@ -2306,7 +2330,7 @@ Battle.prototype.drawHud = function (ctx) {
   if (this.mode === 'endless') top = 'KO ' + this.kills + '  ' + top;
   if (this.mode === 'tournament') top = (this.cfg.roundName || 'ROUND') + '  ' + top;
   ctx.strokeText(top, W / 2, 30); ctx.fillText(top, W / 2, 30);
-  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#8fa3cf'; ctx.fillText(MODES[this.mode]?.name + ' • ' + DIFF[this.difficulty].label.toUpperCase(), W / 2, 46);
+  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#8fa3cf'; ctx.fillText(MODES[this.mode]?.name + ' • ' + (this.pvp ? (this.cfg.ranked ? 'RANKED' : 'FRIENDLY') : DIFF[this.difficulty].label.toUpperCase()), W / 2, 46);
   ctx.restore();
 };
 function hudBar(ctx, x, y, w, hh, frac, c1, c2, back = 'rgba(255,255,255,.1)') {
@@ -2322,10 +2346,10 @@ function hudPanel(ctx, f, right) {
   ctx.save(); ctx.textAlign = right ? 'right' : 'left'; ctx.textBaseline = 'alphabetic';
   ctx.font = '800 18px "Segoe UI", sans-serif'; ctx.fillStyle = '#fff';
   const nx = right ? bx + bw : bx;
-  const nm = (f.isPlayer ? '★ ' : '') + f.name; ctx.fillText(nm, nx, 26);
+  const nm = (f.isPlayer || (f.slot != null && f === BATTLE?.player) ? '★ ' : '') + (f.tag ? f.tag + ' • ' : '') + f.name; ctx.fillText(nm, nx, 26);
   const nw = ctx.measureText(nm).width;
   ctx.font = '700 11px "Segoe UI", sans-serif'; ctx.fillStyle = RARITY_INFO[f.def.rarity]?.col || '#aaa';
-  const sub = `Lv ${f.level}${f.evo ? ' ★' + f.evo : ''} • ${f.def.rarity.toUpperCase()}${f.ai && !f.isPlayer ? ' • ' + f.ai.pers.toUpperCase() : ''}`;
+  const sub = `Lv ${f.level}${f.evo ? ' ★' + f.evo : ''} • ${f.def.rarity.toUpperCase()}${f.slot != null ? (f.manual ? ' • MANUAL' : ' • AUTO') : f.ai && !f.isPlayer ? ' • ' + f.ai.pers.toUpperCase() : ''}`;
   ctx.fillText(sub, nx + dir * (nw + 8), 25);
   const sw = ctx.measureText(sub).width;
   // chips
@@ -2513,12 +2537,47 @@ function createTicket(setup, prog0, rnd, extra = {}) {
   return { v: 2, mode: MODES[S.mode] ? S.mode : '1v1', difficulty: diff, seed: (Math.floor(rnd() * 4294967296) >>> 0), manual: !!S.manual, teams, pool,
     opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0 } };
 }
+/* ---------- online PvP (shared by the game server and the browser) ---------- */
+const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
+/** createPvpTicket([{ball, level, evo, up, tree, cos, name}, …x2], seed) → ticket. Both balls run the same strong AI while on AUTO. */
+function createPvpTicket(players, seed) {
+  const teams = players.map((p, slot) => {
+    const def = getBall(p.ball); if (!def) throw new Error('Ball not available: ' + p.ball);
+    const s = playerSpecFrom(def, p);
+    return [{ ...s, isPlayer: false, pvp: true, slot, tag: p.name || 'Player ' + (slot + 1), ai: def.ai === 'boss' ? 'intelligent' : (def.ai || 'intelligent'), diff: 'hard' }];
+  });
+  return { v: 2, mode: 'pvp', difficulty: 'hard', seed: seed >>> 0, manual: false, teams, pool: [], opts: { pvp: true } };
+}
+/** merges both players' input frames for one block into replay entries [step, slot, type, ...args] (same order everywhere) */
+function mergePvpBlock(b, frames) {
+  const out = [];
+  frames.forEach((acts, slot) => { for (const a of acts || []) out.push([b * PVP.BLOCK + a[0] + 1, slot, ...a.slice(1)]); });
+  return out.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+}
+/** validates one player's actions for a block: [[offset, type, ...args]] → cleaned copy, or null if invalid */
+function cleanPvpActions(list) {
+  if (!Array.isArray(list) || list.length > 24) return null;
+  const out = [];
+  for (const a of list) {
+    if (!Array.isArray(a) || !Number.isInteger(a[0]) || a[0] < 0 || a[0] >= PVP.BLOCK) return null;
+    switch (a[1]) {
+      case 'k': if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 4) return null; out.push([a[0], 'k', a[2]]); break;
+      case 'u': out.push([a[0], 'u', 0]); break;
+      case 'm': out.push([a[0], 'm', a[2] ? 1 : 0]); break;
+      case 's': if (![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return null; out.push([a[0], 's', a[2], a[3], a[4]]); break;
+      default: return null;
+    }
+  }
+  if (out.some((a, i) => i && a[0] < out[i - 1][0])) return null;
+  return out;
+}
 /** buildBattleConfig(ticket, hooks) → Battle config with mode rules (survival waves, endless, practice respawn) */
 function buildBattleConfig(T, hooks = {}) {
   const mk = s => ({ ...s, def: getBall(s.ball) });
   for (const t of T.teams) for (const s of t) if (!getBall(s.ball)) throw new Error('Ball not available: ' + s.ball);
   const cfg = { mode: T.mode, difficulty: T.difficulty, seed: T.seed, manual: T.manual, teams: T.teams.map(t => t.map(mk)), infiniteHp: T.mode === 'practice' && !!T.opts.infinite,
-    dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless };
+    dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless,
+    pvp: T.mode === 'pvp', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked };
   const pl = T.teams[0][0], diff = T.difficulty;
   const nextFrom = excl => { const c = T.pool.filter(id => !excl.includes(id)); return pick(c.length ? c : T.pool); };
   if (T.mode === 'survival') cfg.checkEnd = B => {
@@ -2552,7 +2611,7 @@ function simulateTicket(T, inputs = [], maxSteps = 240 * 60 * 30) {
   while (!B.result && B.stepN < maxSteps) B.step(STEP);
   const r = B.result;
   BATTLE = null;
-  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god } : { ok: false, reason: 'timeout', step: B.stepN };
+  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots } : { ok: false, reason: 'timeout', step: B.stepN };
 }
 /** rewards are computed from a (verified) result — identical on client (guest) and server */
 function computeRewards(T, r, opt = {}) {
@@ -2737,7 +2796,7 @@ const Game = {
 /* =====================================================================
    12. UI SCREENS
    ===================================================================== */
-const PARENT = { play: 'menu', select: 'play', collection: 'menu', shop: 'menu', events: 'menu', admin: 'menu', creator: 'admin', settings: 'menu', bracket: 'menu', results: 'menu', account: 'menu', profile: 'menu', membership: 'menu', leaderboard: 'menu', fusion: 'menu' };
+const PARENT = { pvp: 'menu', play: 'menu', select: 'play', collection: 'menu', shop: 'menu', events: 'menu', admin: 'menu', creator: 'admin', settings: 'menu', bracket: 'menu', results: 'menu', account: 'menu', profile: 'menu', membership: 'menu', leaderboard: 'menu', fusion: 'menu' };
 function ballCanvas(def, size = 84, opts = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const c = h('canvas', { width: Math.round(size * dpr), height: Math.round(size * dpr), style: { width: size + 'px', height: size + 'px' } });
@@ -2809,6 +2868,7 @@ const UI = {
   render_play() {
     const g = $('#modeGrid'); g.innerHTML = '';
     for (const [id, m] of Object.entries(MODES)) {
+      if (m.online) continue;
       g.append(h('div', { class: 'mode-card' + (m.main ? ' main' : ''), onclick: () => { Sound.play('click'); Game.setup.mode = id; this.show('select'); } },
         m.main ? h('span', { class: 'tag' }, 'MAIN MODE') : null, h('div', { class: 'ico' }, m.ico), h('h3', {}, m.name), h('p', {}, m.desc)));
     }
@@ -3131,9 +3191,9 @@ Object.assign(UI, {
     }
     const b = getBall(r.ballId), p = prog(r.ballId);
     const surv = r.mode === 'survival' || r.mode === 'endless';
-    const title = surv ? (r.mode === 'survival' ? `WAVE ${r.wave}` : `${r.kills} KOs`) : r.win ? 'VICTORY!' : 'DEFEAT';
+    const title = surv ? (r.mode === 'survival' ? `WAVE ${r.wave}` : `${r.kills} KOs`) : r.draw ? 'DRAW' : r.win ? 'VICTORY!' : 'DEFEAT';
     body.append(h('h1', { class: 'results-title ' + (r.win ? 'win' : 'lose') }, title));
-    body.append(h('p', { class: 'muted', style: { margin: '2px' } }, `${MODES[r.mode]?.name} • ${DIFF[Game.setup.difficulty].label}${r.extraMsg ? ' • ' + r.extraMsg : ''}`));
+    body.append(h('p', { class: 'muted', style: { margin: '2px' } }, r.pvp ? `🌐 Online PvP • ${r.pvp.ranked ? 'Ranked' : 'Friendly'} • vs ${r.pvp.opp}` : `${MODES[r.mode]?.name} • ${DIFF[Game.setup.difficulty].label}${r.extraMsg ? ' • ' + r.extraMsg : ''}`));
     const cv = ballCanvas(b, 180, { evo: p.evo, big: true }); this.addLive(cv, b, { evo: p.evo, size: 180, big: true, spin: 2 });
     body.append(cv);
     const s = r.stats || {};
@@ -3144,14 +3204,18 @@ Object.assign(UI, {
       const nx = EVO[p.evo + 1]; if (nx && p.level >= nx.lvl) body.append(h('div', { class: 'reward-line', style: { color: '#ff9f1c' } }, `✦ ${b.name} can now evolve into ${nx.name} form!`));
     } else body.append(h('p', { class: 'muted' }, 'Practice mode — no rewards.'));
     if (r.tourMsg) body.append(h('div', { class: 'reward-line', style: { color: '#ffd54f', fontWeight: 800 } }, r.tourMsg));
+    if (r.pvp && r.pvp.ranked && r.pvp.rpBefore != null) body.append(h('div', { class: 'reward-line', style: { color: r.pvp.rpDelta >= 0 ? '#3dffa0' : '#ff8a9a', fontWeight: 800 } }, `🏅 Rank points ${fmtNum(r.pvp.rpBefore)} → ${fmtNum(r.pvp.rpAfter)} (${r.pvp.rpDelta >= 0 ? '+' : ''}${r.pvp.rpDelta})`));
+    if (r.pvp && r.pvp.note) body.append(h('p', { class: 'muted' }, r.pvp.note));
     if (r.verified) body.append(h('p', { class: 'verified' }, '✔ Verified by the game server' + (r.mismatch ? ' — your device showed a different result, so the server result counts.' : '')));
     if (r.newAchievements && r.newAchievements.length) toast('🏅 Achievement: <b>' + r.newAchievements.map(esc).join(', ') + '</b> — claim it in Limited Events › Achievements', 'gold');
     if (r.win && window.Online && window.Online.victoryFx) window.Online.victoryFx(body);
     const row = h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '14px' } });
-    if (r.mode === 'tournament' && Game.tour) {
+    if (r.pvp) row.append(h('button', { class: 'btn big primary', onclick: () => this.show('pvp') }, '🌐 Play online again'));
+    else if (r.mode === 'tournament' && Game.tour) {
       row.append(h('button', { class: 'btn big primary', onclick: () => this.show('bracket') }, Game.tour.done || !Game.tour.alive ? '🏆 View Bracket' : '▶ Continue Tournament'));
     } else row.append(h('button', { class: 'btn big primary', onclick: () => Game.start(r.mode) }, '↻ Rematch'));
-    row.append(h('button', { class: 'btn', onclick: () => this.show('select') }, '◉ Change Ball'), h('button', { class: 'btn', onclick: () => this.show('menu') }, '⌂ Main Menu'));
+    if (!r.pvp) row.append(h('button', { class: 'btn', onclick: () => this.show('select') }, '◉ Change Ball'));
+    row.append(h('button', { class: 'btn', onclick: () => this.show('menu') }, '⌂ Main Menu'));
     body.append(row);
   },
 
@@ -3191,7 +3255,8 @@ Object.assign(UI, {
   syncHud() {
     if (!BATTLE) return;
     $('#btnSpeed').textContent = BATTLE.speed + 'x';
-    const man = BATTLE.player?.manual; $('#btnAuto').textContent = man ? 'MANUAL' : 'AUTO'; $('#btnAuto').classList.toggle('manual', !!man);
+    const man = localManual(); $('#btnPause').textContent = BATTLE.pvp ? '✕' : '❚❚'; $('#btnSpeed').classList.toggle('hidden', !!BATTLE.pvp);
+    $('#btnAuto').textContent = man ? 'MANUAL' : 'AUTO'; $('#btnAuto').classList.toggle('manual', !!man);
     const bar = $('#skillBar'); bar.classList.toggle('hidden', !man); bar.innerHTML = '';
     if (!man) return;
     const pl = BATTLE.player;
@@ -3199,15 +3264,17 @@ Object.assign(UI, {
     bar.append(h('button', { class: 'ult', 'aria-label': 'Use ultimate', onpointerdown: e => { e.stopPropagation(); BATTLE.queue('u'); } }, h('div', { class: 'cd' }), h('span', { class: 'lbl' }, 'ULT\n★')));
   },
   updateSkillBar() {
-    const pl = BATTLE?.player; if (!pl || !pl.manual) return;
+    const pl = BATTLE?.player; if (!pl || !localManual()) return;
     const btns = $$('#skillBar button');
     pl.skills.forEach((s, i) => { const c = btns[i]?.firstChild; if (c) c.style.height = (s.locked ? 100 : clamp(s.cdLeft / (s.cd || 6), 0, 1) * 100) + '%'; });
     const u = btns[pl.skills.length]?.firstChild; if (u) u.style.height = (100 - pl.ultMeter) + '%';
   },
 });
+/* what the local player chose (online, the battle itself switches when both players have the input) */
+function localManual() { return BATTLE ? (BATTLE.net ? !!BATTLE.net.localManual : !!BATTLE.player?.manual) : false; }
 function toggleControl() {
-  if (!BATTLE?.player) return;
-  const want = !BATTLE.player.manual; BATTLE.queue('m', want ? 1 : 0); BATTLE.player.manual = want; SAVE.settings.control = want ? 'manual' : 'auto'; persist();
+  if (!BATTLE?.player || BATTLE.over) return;
+  const want = !localManual(); BATTLE.queue('m', want ? 1 : 0); if (!BATTLE.net) BATTLE.player.manual = want; SAVE.settings.control = want ? 'manual' : 'auto'; persist();
   toast(want ? '🎮 Manual control — steer with WASD/drag, abilities 1-4, SPACE ultimate' : '🤖 Auto battle — AI controls your ball');
   UI.syncHud();
 }
@@ -3495,7 +3562,7 @@ function boot() {
 window.NBB = { Game, UI, get save() { return SAVE; }, get battle() { return BATTLE; }, registry: () => allBalls(), Fighter, Battle };
 /* shared game core — the Node game server loads this file headlessly to verify battles */
 window.NBB_CORE = {
-  createTicket, buildBattleConfig, simulateTicket, computeRewards, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
+  createTicket, buildBattleConfig, simulateTicket, computeRewards, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
   Battle, Fighter, setCatalog, getBall, allBalls, opponentPool, normDiff, enemySpec, playerSpecFrom, defaultSave, mulberry32, prog,
   DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
   COSMETICS, COSMETIC_SLOTS, DAILY_REWARDS, FUSION_COST, FUSION_MIN_LEVEL, FUSION_MAX, fusionEligible, makeFusionDef, mixColor, hashStr, sfxOf,
