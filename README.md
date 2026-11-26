@@ -74,7 +74,8 @@ Version **2.3.1**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
   - Achievements (including 100 battles and Perfect Victory), collection rewards, weekly limited events and 7-day daily rewards.
 - **Online extras:** global rankings, public profiles, AI tournaments, Ball Fusion, and cosmetics (aura, skin, trail, hit and victory effects).
 
-## ULTIMATE PREMIUM — $200 / YEAR
+## ULTIMATE PREMIUM — PHP 499 / YEAR by QR (or $200 / year by Stripe card)
+- **Pay by QR (2.3.1):** the player pays the owner's Maya / MariBank QR and sends the reference number; the owner approves it and Premium turns on for 365 days (no automatic renewal; the owner sets the price in the Admin Dashboard, default PHP 499).
 - **What's included:**
   - Every regular, premium, legendary, mythical and non-admin limited ball, including both **Tech Balls**
   - **2,000 free coins every month**

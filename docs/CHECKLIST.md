@@ -8,6 +8,7 @@
 - 🟡 Owner setup: PayMongo account + keys, then "Register webhook" in the Admin Dashboard. Until then the shop stays closed (never simulated)
 - ✅ Tests: `server/test/gods2.test.js` with a local fake PayMongo API
 - ✅ 2.3.1 QR payments (Maya / MariBank / any QR Ph app): owner uploads QR, player sends the reference number, owner approves or rejects; one reference = one payment; tests in `server/test/manualpay.test.js`
+- ✅ 2.3.1 ULTIMATE PREMIUM by QR: PHP 499 / year (owner-set price), 365 days per approved payment, adds to an active year, no automatic renewal
 - 🟡 Owner: upload your QR codes in Admin Dashboard → 💳 God Shop (PHP) and turn QR payments ON
 
 ## 2.2.0 — Four Supreme God Balls, FREE ([GOD-BALLS.md](GOD-BALLS.md))

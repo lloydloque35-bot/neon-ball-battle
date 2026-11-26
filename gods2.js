@@ -648,7 +648,8 @@ async function paymongoBuy(product) {
 }
 /* QR payment: the player pays the owner's QR, then sends the reference number. The OWNER approves it — the page unlocks nothing. */
 function manualPay(product, shop) {
-  const P = shop.products.find(p => p.id === product), accs = shop.manual.accounts; if (!P || !accs.length) return;
+  const P = shop.products.find(p => p.id === product) || (shop.premium && shop.premium.id === product ? shop.premium : null), accs = shop.manual.accounts; if (!P || !accs.length) return;
+  const isPrem = product === 'premium_year';
   let acc = null;
   const img = h('img', { class: 'gshop-qr', alt: 'Payment QR code' }), who = h('div', { class: 'gshop-qr-who' }), tabs = h('div', { class: 'gshop-tabs' });
   const save = h('a', { class: 'btn small', download: 'payment-qr', style: { display: 'none' } }, '⬇ Save QR to my phone');
@@ -670,14 +671,15 @@ function manualPay(product, shop) {
       const r = await API.post('/api/godshop/manual/submit', { product, account: acc.id, reference: ref.value, note: note.value });
       UI.closeModal(); Sound.play('click');
       UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '✔ Sent!'),
-        h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then unlock ${r.purchase.name}.`),
+        h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then ${isPrem ? 'turn on ULTIMATE PREMIUM for 1 year' : 'unlock ' + r.purchase.name}.`),
         h('p', { class: 'muted' }, 'Payments are checked by hand, so this can take a while. You will see a message in the game when it is approved. You can also check 🧾 Transaction history.'),
-        h('button', { class: 'btn gold', onclick: () => { UI.closeModal(); UI.render_godshop(); } }, 'OK')));
+        h('button', { class: 'btn gold', onclick: () => { UI.closeModal(); UI.current === 'membership' ? UI.render_membership() : UI.render_godshop(); } }, 'OK')));
       godShopNotify.waiting = true;
     } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); send.disabled = false; }
   };
   UI.modal(h('div', { class: 'gshop-pay' },
-    h('h2', {}, `💎 ${P.name} — PHP ${P.price}`),
+    h('h2', {}, `${isPrem ? '★' : '💎'} ${P.name} — PHP ${P.price}`),
+    isPrem ? h('p', { class: 'muted', style: { margin: '0 0 6px', fontSize: '13px' } }, 'Premium paid by QR lasts 365 days and does not renew by itself. Pay again any time to add another year.') : null,
     h('ol', { class: 'gshop-steps' },
       h('li', {}, 'Pick where to pay. Scan the QR with Maya, MariBank, GCash or any bank app (QR Ph / InstaPay).'),
       h('li', {}, h('b', {}, `Send exactly PHP ${P.price}.00.`)),
@@ -686,7 +688,7 @@ function manualPay(product, shop) {
     h('div', { style: { textAlign: 'center' } }, save),
     h('small', { class: 'muted', style: { display: 'block', textAlign: 'center' } }, 'Paying on this same phone? Save the QR, then in your bank app choose Scan QR → upload from gallery.'),
     h('label', {}, 'Reference number', ref), h('label', {}, 'Your name or last 4 digits (optional — helps the owner find it)', note), send,
-    h('p', { class: 'muted', style: { fontSize: '12px', marginBottom: 0 } }, '🔒 The ball unlocks only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.')));
+    h('p', { class: 'muted', style: { fontSize: '12px', marginBottom: 0 } }, isPrem ? '🔒 Premium turns on only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.' : '🔒 The ball unlocks only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.')));
   pick(accs[0]);
 }
 UI.render_godshop = async function () {
@@ -755,8 +757,8 @@ async function godShopNotify() {
     godShopNotify.waiting = r.purchases.some(p => p.status === 'awaiting');
     const fresh = r.purchases.filter(p => p.provider === 'manual' && (p.status === 'paid' || p.status === 'rejected') && !seen.includes(p.id + ':' + p.status));
     if (fresh.length) {
-      if (fresh.some(p => p.status === 'paid')) { await Online.refresh(); Sound.play('evolve'); if (UI.current === 'godshop') UI.render_godshop(); }
-      for (const p of fresh) toast(p.status === 'paid' ? `✔ Payment approved — ${esc(p.name)} is yours forever!` : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
+      if (fresh.some(p => p.status === 'paid')) { await Online.refresh(); Sound.play('evolve'); if (UI.current === 'godshop') UI.render_godshop(); if (UI.current === 'membership') UI.render_membership(); }
+      for (const p of fresh) toast(p.status === 'paid' ? (p.product === 'premium_year' ? '★ Payment approved — ULTIMATE PREMIUM is active! Enjoy every ball.' : `✔ Payment approved — ${esc(p.name)} is yours forever!`) : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
       try { localStorage.setItem('nbb_gshop_seen', JSON.stringify([...seen, ...fresh.map(p => p.id + ':' + p.status)].slice(-200))); } catch { /* private mode */ }
     }
     if (Online.isOwner() && !godShopNotify.ownerTold) { const s = await API.get('/api/godshop'); if (s.awaitingCount) { godShopNotify.ownerTold = true; toast(`💳 ${s.awaitingCount} QR payment(s) waiting for your check — Admin Dashboard → 💳 God Shop`, 'gold'); } }
@@ -824,7 +826,7 @@ function adminQrCard(s) {
   const M = s.manual, card = h('div', { class: 'card' });
   card.append(h('h3', {}, '📱 QR payments — Maya / MariBank'),
     h('p', {}, M.open ? h('b', { style: { color: '#69f0ae' } }, '✔ QR payments are ON — players can pay you by QR') : h('b', { style: { color: '#ffab40' } }, '⏸ QR payments are OFF — players cannot pay yet')),
-    h('p', { class: 'muted' }, 'Players scan your QR, pay, and send the reference number. Nothing unlocks until YOU press Approve here. Your QR is kept on the server (not in the public game files) and only shown to signed-in players who press Buy.'));
+    h('p', { class: 'muted' }, 'For the Premium God Balls (PHP 99 each) and ULTIMATE PREMIUM (1 year). Players scan your QR, pay, and send the reference number. Nothing unlocks until YOU press Approve here. Your QR is kept on the server (not in the public game files) and only shown to signed-in players who press Buy.'));
   // waiting list
   const wait = h('div', { class: 'card gshop-wait' }, h('h3', {}, `⏳ Waiting for your check (${M.awaiting.length})`));
   if (!M.awaiting.length) wait.append(h('p', { class: 'muted' }, 'Nothing to check right now.'));
@@ -841,7 +843,8 @@ function adminQrCard(s) {
   // accounts + QR images
   const rows = M.accounts.length ? M.accounts.map(a => ({ ...a })) : [{ kind: 'maya', label: 'Maya', name: '', note: '' }, { kind: 'maribank', label: 'MariBank', name: '', note: '' }];
   const on = h('input', { type: 'checkbox', checked: M.enabled });
-  const payload = enabled => ({ enabled, accounts: rows.map(({ id, kind, label, name, note }) => ({ id, kind, label, name, note })) });
+  const prem = h('input', { type: 'number', min: '49', max: '100000', step: '1', value: String(M.premiumPrice), style: { width: '120px' } });
+  const payload = enabled => ({ enabled, premiumPricePhp: Math.round(Number(prem.value) || M.premiumPrice), accounts: rows.map(({ id, kind, label, name, note }) => ({ id, kind, label, name, note })) });
   const list = h('div');
   const draw = () => { list.innerHTML = ''; rows.forEach((a, i) => {
     const kind = h('select', { onchange: e => { a.kind = e.target.value; } }, ...M.kinds.map(k => h('option', { value: k.id, selected: k.id === a.kind }, k.name)));
@@ -865,6 +868,7 @@ function adminQrCard(s) {
     h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
       rows.length < M.maxAccounts ? h('button', { class: 'btn small', onclick: () => { rows.push({ kind: 'qrph', label: '', name: '', note: '' }); draw(); } }, '＋ Add account') : null,
       h('label', { class: 'chk' }, on, ' Turn QR payments ON'),
+      h('label', { class: 'chk', title: 'Price of 1 year of ULTIMATE PREMIUM when paid by QR' }, '★ Premium (1 year): PHP ', prem),
       h('button', { class: 'btn gold', onclick: () => adminDo(() => API.post('/api/admin/godshop/manual/settings', payload(on.checked)), () => UI.render_admin()) }, '💾 Save')));
   return card;
 }

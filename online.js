@@ -327,6 +327,14 @@ Object.assign(UI, {
     let st = null;
     if (Online.active) { try { st = await API.get('/api/billing/status'); } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); } }
     const plan = st ? st.plan : null, pay = (st && st.payments) || Online.payments || { enabled: false };
+    // 2.3.1: Premium can be paid by QR (Maya / MariBank) in pesos — the owner approves each payment
+    let gs = null, mine = []; try { gs = await API.get('/api/godshop'); if (Online.active) mine = (await API.get('/api/godshop/purchases')).purchases; } catch { /* QR info is optional */ }
+    const qrOn = !!(gs && gs.manual && gs.manual.enabled && gs.premium), php = gs && gs.premium ? gs.premium.price : null;
+    if (php && (qrOn || !pay.enabled)) { hero.querySelector('.big').textContent = 'PHP ' + fmtNum(php); }
+    const premWait = mine.find(p => p.product === 'premium_year' && p.status === 'awaiting'), premRej = mine.find(p => p.product === 'premium_year' && p.status === 'rejected' && p.createdAt > Date.now() - 7 * 86400e3);
+    const qrBtn = (label, agree) => h('button', { class: 'btn gold big', disabled: !!premWait, onclick: () => { if (agree && !agree.checked) return toast('Please confirm the price first', 'bad'); manualPay('premium_year', gs); } }, premWait ? '⏳ Waiting for owner check' : label);
+    const qrNotes = () => [premWait ? h('div', { class: 'gshop-note gshop-wait' }, `⏳ Waiting for the owner to check your payment (ref ${premWait.reference}). Premium turns on as soon as it is approved.`) : null,
+      !premWait && premRej ? h('div', { class: 'gshop-note' }, `✖ Your last Premium payment (ref ${premRej.reference}) was not approved: ${premRej.note || 'payment not found'}. If you really paid, contact the game owner with your receipt.`) : null].filter(Boolean);
     const benefits = (plan && plan.benefits) || ['Unlock every regular, premium, legendary, mythical and non-admin limited ball', 'Premium cosmetics and particle effects', 'Premium badge', '+25% battle rewards', 'Premium-exclusive events'];
     hero.append(h('ul', { class: 'benefits' }, benefits.map(b => h('li', {}, '✔ ' + b))), h('p', { class: 'muted small' }, 'Admin access, admin-exclusive balls and owner-only abilities are never part of Premium.'));
     if (!Online.active) return body.append(needSignIn('Premium'));
@@ -343,7 +351,17 @@ Object.assign(UI, {
       if (sub.provider === 'stripe') card.append(sub.autoRenew
         ? h('button', { class: 'btn', onclick: () => this.confirm('Turn off automatic renewal? You keep Premium until ' + dateStr(sub.expiresAt) + '.', () => act(() => API.post('/api/billing/cancel'), () => this.render_membership()), 'Turn off renewal') }, 'Turn off automatic renewal')
         : h('button', { class: 'btn green', onclick: () => act(() => API.post('/api/billing/resume'), () => this.render_membership()) }, 'Turn renewal back on'));
-      else card.append(h('p', { class: 'muted small' }, 'This is a promotional membership and does not renew.'));
+      else card.append(h('p', { class: 'muted small' }, sub.provider === 'qr' ? 'Paid by QR. It does not renew by itself — add another year any time.' : 'This is a promotional membership and does not renew.'));
+      if (qrOn && sub.provider !== 'stripe') card.append(...qrNotes(), qrBtn(`📱 Add 1 more year — PHP ${fmtNum(php)}`));
+    } else if (qrOn) {
+      const agree = h('input', { type: 'checkbox', id: 'agreeTerms' });
+      card.append(h('p', { class: 'disclosure' }, `ULTIMATE PREMIUM costs PHP ${fmtNum(php)} for 1 year (365 days), paid by QR to the game owner (Maya / MariBank — any bank app or GCash can scan it). It does NOT renew automatically: pay again any time to add another year. Premium never includes admin access, admin-exclusive balls or the paid Premium God Balls.`),
+        ...qrNotes(), h('label', { class: 'chk' }, agree, 'I understand the price and that it does not renew by itself'), qrBtn(`📱 Pay by QR — PHP ${fmtNum(php)} / year`, agree),
+        h('p', { class: 'muted small' }, 'You pay from your own Maya, MariBank, GCash or bank app. The game never sees your PIN, OTP or password.'));
+      if (pay.enabled) card.append(h('button', { class: 'btn', style: { marginTop: '8px' }, onclick: async () => {
+        if (!agree.checked) return toast('Please confirm the price first', 'bad');
+        try { const r = await API.post('/api/billing/checkout'); location.href = r.url; } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); }
+      } }, `Or pay by card — $200 / year (Stripe, renews yearly)${pay.mode === 'test' ? ' (TEST MODE)' : ''}`));
     } else {
       const disclosure = h('p', { class: 'disclosure' }, plan.disclosure);
       const agree = h('input', { type: 'checkbox', id: 'agreeTerms' });
@@ -357,7 +375,7 @@ Object.assign(UI, {
     }
     body.append(card);
     const tbl = h('table', { class: 'admin-table' }, h('tr', {}, ['Date', 'Item', 'Amount', 'Status'].map(t => h('th', {}, t))));
-    for (const p of st.history) tbl.append(h('tr', {}, h('td', {}, dateStr(p.at)), h('td', {}, p.description || p.kind), h('td', {}, (p.amount < 0 ? '−' : '') + usd(Math.abs(p.amount)) + ' ' + p.currency), h('td', {}, p.status)));
+    for (const p of st.history) tbl.append(h('tr', {}, h('td', {}, dateStr(p.at)), h('td', {}, p.description || p.kind), h('td', {}, (p.amount < 0 ? '−' : '') + (p.currency === 'PHP' ? 'PHP ' + Math.abs(p.amount).toFixed(2) : usd(Math.abs(p.amount)) + ' ' + p.currency)), h('td', {}, p.status)));
     body.append(h('div', { class: 'card' }, h('h3', {}, 'Transaction history'), st.history.length ? h('div', { style: { overflowX: 'auto' } }, tbl) : h('p', { class: 'muted' }, 'No transactions yet.')));
     // premium trial
     const trial = h('div', { class: 'ball-grid' });

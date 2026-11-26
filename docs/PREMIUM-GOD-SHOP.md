@@ -93,9 +93,16 @@ How it stays safe:
 
 ## 📱 QR payments — Maya / MariBank (2.3.1)
 
+QR payments work for the two Premium God Balls **and for ULTIMATE PREMIUM**:
+- **ULTIMATE PREMIUM — PHP 499 for 1 year** (the owner can change the price next to "Turn QR payments ON").
+- Open **★ Premium** → tick the box → **📱 Pay by QR**. After the owner approves, Premium is active for **365 days**.
+- It does **not** renew by itself. Paying again adds another year to the end of the current one ("📱 Add 1 more year").
+- A price change never changes what a player who already sent a payment was asked to pay.
+- Premium still never includes admin access, admin-exclusive balls or the paid Premium God Balls.
+
 ### How a player pays
 1. Opens **💎 Premium God Shop** (signed in) and presses **Buy**.
-2. Picks **Maya** or **MariBank**, scans the QR (or saves it and uploads it in their bank app if they are on the same phone).
+2. (For Premium: opens **★ Premium** and presses **📱 Pay by QR**.) Picks **Maya** or **MariBank**, scans the QR (or saves it and uploads it in their bank app if they are on the same phone).
 3. Sends **exactly PHP 99** (or PHP 198 for both).
 4. Types the **reference number** from their receipt and presses **I paid — send for checking**.
 5. Sees "⏳ Waiting for the owner to check your payment". When the owner approves, the game says **"Payment approved — … is yours forever!"** and the ball unlocks on every device.
@@ -104,13 +111,13 @@ How it stays safe:
 1. Open the Maya or MariBank app → **Receive money / My QR** → take a screenshot.
 2. In the game: **Admin Dashboard → 💳 God Shop (PHP)**.
 3. Press **⬆ Upload QR picture** for Maya, then for MariBank. Type the name buyers should see (for example `JUAN D.`).
-4. Tick **Turn QR payments ON** and press **💾 Save**.
+4. Check the **★ Premium (1 year)** price (default PHP 499), tick **Turn QR payments ON** and press **💾 Save**.
 
 ### How the owner checks a payment
 1. You get a message in the game when payments are waiting ("💳 … QR payment(s) waiting").
 2. Open **Admin Dashboard → 💳 God Shop (PHP)** → **⏳ Waiting for your check**.
 3. Open your Maya / MariBank app. Find the payment with the **same reference number** and the **right amount**.
-4. Found it → **✔ Approve** (the ball unlocks right away). Not found → **✖ Reject** with a reason (the player sees it). You can still approve a rejected one later.
+4. Found it → **✔ Approve** (the ball unlocks / Premium turns on right away). Not found → **✖ Reject** with a reason (the player sees it). You can still approve a rejected one later.
 
 ### Why it is safe
 - **Only the owner's Approve unlocks a ball** (owner account + 2FA, checked on the server, audit-logged). The player's "I paid" screen unlocks nothing.
@@ -194,9 +201,9 @@ The tab also shows:
 - all 10 skills in all 3 forms, both ultimates and the forms
 - the Infinite Void: entry, isolation from bystanders, copies, damage, safe return, God Portal dying inside, the 3-dimension final form, and PvP replay
 
-`server/test/manualpay.test.js` covers QR payments: closed until set up, owner-only setup / approve / reject, real images only, QR hidden from guests, nothing unlocked before approval, one reference = one payment, approve → permanent ownership, reject → nothing (and approve later), and turning it off.
+`server/test/manualpay.test.js` covers QR payments: Premium by QR (owner price, 365 days, adds to an active year, no renewal), closed until set up, owner-only setup / approve / reject, real images only, QR hidden from guests, nothing unlocked before approval, one reference = one payment, approve → permanent ownership, reject → nothing (and approve later), and turning it off.
 
-The full suite has 101 tests, all passing.
+The full suite has 102 tests, all passing.
 
 ## Balance
 

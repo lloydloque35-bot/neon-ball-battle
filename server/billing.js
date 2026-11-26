@@ -70,6 +70,14 @@ function register(app, S) {
     recordPayment(uid, 'promo_' + S_.randomToken(9), 'promo', 0, 'granted', `${days} days promotional premium (granted by owner #${actorId})`);
   };
 
+  /** ULTIMATE PREMIUM paid by QR (PHP) — called only from the owner's Approve in the God Shop panel. Adds `days` to any active period, never renews by itself. */
+  S.grantPremiumQr = (uid, days, ref, amountCentavos) => {
+    const cur = subOf(uid), active = !!(cur && cur.status === 'active' && cur.current_period_end > now()), stripe = active && cur.provider === 'stripe';
+    setSub(uid, { status: 'active', provider: stripe ? 'stripe' : 'qr', started_at: active ? cur.started_at : now(), current_period_end: (active ? cur.current_period_end : now()) + days * 86400e3, auto_renew: stripe ? cur.auto_renew : 0 });
+    db.run("INSERT INTO payments (user_id, provider, provider_ref, kind, amount_cents, currency, status, description, created_at) VALUES (?, 'qr', ?, 'checkout', ?, 'php', 'paid', ?, ?)",
+      uid, ref, amountCentavos, `ULTIMATE PREMIUM — ${days} days (QR payment approved by the owner)`, now());
+  };
+
   async function stripe(method, path, params, idem) {
     const headers = { Authorization: `Bearer ${P.secretKey}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Stripe-Version': '2024-06-20' };
     if (idem) headers['Idempotency-Key'] = idem;
@@ -88,7 +96,7 @@ function register(app, S) {
     return {
       plan: { ...PLAN, autoRenew: P.autoRenew, benefits: BENEFITS,
         disclosure: `ULTIMATE PREMIUM costs $${PLAN.priceUsd} USD per year (365 days). ${P.autoRenew ? 'It renews automatically every year until you turn renewal off. You can turn off renewal at any time and keep Premium until the end of the paid year.' : 'It does not renew automatically.'} Premium never includes admin access or admin-exclusive balls.` },
-      payments: S.paymentsPublic(), subscription: S.premiumOf(u.id), owner: u.role === 'owner', history,
+      payments: S.paymentsPublic(), qr: S.qrPremium ? S.qrPremium() : null, subscription: S.premiumOf(u.id), owner: u.role === 'owner', history,
     };
   });
 

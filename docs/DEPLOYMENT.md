@@ -41,7 +41,7 @@ npm run owner -- reset-password   # signs out all owner sessions
 
 ## 2. Payments — sandbox first
 
-Premium is **ULTIMATE PREMIUM, $200 USD / year (365 days)**, sold through Stripe Checkout as a yearly subscription. It renews automatically until the player turns renewal off, and this is disclosed on the Premium screen before checkout.
+Premium can be paid **by QR (PHP 499 / year by default, set in Admin Dashboard → 💳 God Shop (PHP))** — the owner approves each payment, no Stripe needed — and/or as **ULTIMATE PREMIUM, $200 USD / year (365 days)** through Stripe Checkout as a yearly subscription. It renews automatically until the player turns renewal off, and this is disclosed on the Premium screen before checkout.
 
 1. In the Stripe Dashboard, in **Test mode**:
    1. Create a product called "Ultimate Premium" with a **recurring price of 200.00 USD, billed yearly**. Copy the `price_...` id.

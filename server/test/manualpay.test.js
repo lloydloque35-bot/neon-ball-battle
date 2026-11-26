@@ -142,3 +142,40 @@ test('owner turning QR payments off closes them at once; helpers validate input'
   assert.throws(() => parseQrImage('data:image/jpeg;base64,' + Buffer.from('not a jpeg at all, just some text that is long enough to pass the size check').toString('base64')));
   assert.equal(parseQrImage(PNG), PNG);
 });
+
+test('ULTIMATE PREMIUM by QR: owner-set PHP price, nothing before approval, approve = 365 days (adds to an active year), no auto-renew', async () => {
+  const fan = new Client(srv.base); fan.name = 'prem_fan'; await fan.register(fan.name);
+  const a = (await owner.get('/api/admin/godshop')).data.manual;
+  assert.equal(a.premiumPrice, 499, 'default PHP 499');
+  assert.equal((await owner.post('/api/admin/godshop/manual/settings', { enabled: true, accounts: a.accounts, premiumPricePhp: 5 })).status, 400, 'too cheap');
+  assert.equal((await owner.post('/api/admin/godshop/manual/settings', { enabled: true, accounts: a.accounts, premiumPricePhp: 499.5 })).status, 400, 'whole pesos only');
+  assert.equal((await fan.post('/api/admin/godshop/manual/settings', { enabled: true, accounts: a.accounts, premiumPricePhp: 1 })).status, 403, 'players cannot set the price');
+  assert.equal((await owner.post('/api/admin/godshop/manual/settings', { enabled: true, accounts: a.accounts, premiumPricePhp: 499 })).status, 200);
+  const st = (await fan.get('/api/billing/status')).data;
+  assert.deepEqual([st.qr.enabled, st.qr.price, st.qr.days], [true, 499, 365]); assert.equal(st.subscription.active, false);
+  const shop = (await fan.get('/api/godshop')).data; assert.equal(shop.premium.price, 499);
+  const acc = shop.manual.accounts[0].id;
+  assert.equal((await owner.post('/api/godshop/manual/submit', { product: 'premium_year', account: acc, reference: 'OWNER12345' })).status, 400, 'owner needs nothing');
+  const r = await fan.post('/api/godshop/manual/submit', { product: 'premium_year', account: acc, reference: 'PREM 2026 0001' });
+  assert.equal(r.status, 200); assert.equal(r.data.purchase.amount, 499); assert.equal(r.data.purchase.name, 'ULTIMATE PREMIUM — 1 year');
+  assert.equal((await fan.get('/api/billing/status')).data.subscription.active, false, 'nothing before approval');
+  assert.equal((await fan.post('/api/godshop/manual/submit', { product: 'premium_year', account: acc, reference: 'PREM20260002' })).status, 409, 'one waiting premium payment at a time');
+  // a waiting Premium payment does not block buying a ball, and vice versa
+  const gp = await fan.post('/api/godshop/manual/submit', { product: 'godportal', account: acc, reference: 'GP20260001' });
+  assert.equal(gp.status, 200);
+  // a price change later does not change what this player was asked to pay
+  await owner.post('/api/admin/godshop/manual/settings', { enabled: true, accounts: a.accounts, premiumPricePhp: 599 });
+  assert.equal((await owner.post(`/api/admin/godshop/manual/${r.data.purchase.id}/approve`)).status, 200);
+  let sub = (await fan.get('/api/billing/status')).data;
+  assert.equal(sub.subscription.active, true); assert.equal(sub.subscription.autoRenew, false); assert.equal(sub.subscription.provider, 'qr');
+  assert.ok(sub.subscription.remainingDays >= 364 && sub.subscription.remainingDays <= 365);
+  assert.ok(sub.history.some(h => h.currency === 'PHP' && h.amount === 499 && h.status === 'paid'));
+  assert.equal(owns(fan, 'godportal'), false, 'Premium never includes the paid God Balls');
+  // a second year adds to the end of the first
+  const r2 = await fan.post('/api/godshop/manual/submit', { product: 'premium_year', account: acc, reference: 'PREM20260003' });
+  assert.equal(r2.data.purchase.amount, 599);
+  await owner.post(`/api/admin/godshop/manual/${r2.data.purchase.id}/approve`);
+  sub = (await fan.get('/api/billing/status')).data.subscription; assert.ok(sub.remainingDays >= 729 && sub.remainingDays <= 730, String(sub.remainingDays));
+  assert.equal((await owner.post(`/api/admin/godshop/manual/${r2.data.purchase.id}/approve`)).status, 409, 'cannot add a year twice');
+  await owner.post(`/api/admin/godshop/manual/${gp.data.purchase.id}/approve`); assert.equal(owns(fan, 'godportal'), true);
+});

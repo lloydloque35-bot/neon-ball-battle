@@ -32,6 +32,8 @@ const PRODUCTS = {
 };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };
 const PAID_EVENTS = ['checkout_session.payment.paid'];
+/** ULTIMATE PREMIUM can also be paid by QR: 365 days, no automatic renewal, price set by the owner (default PHP 499) */
+const PREMIUM = { id: 'premium_year', name: 'ULTIMATE PREMIUM — 1 year', days: 365, defaultPhp: 499, minPhp: 49, maxPhp: 100000 };
 const MANUAL_KINDS = { maya: 'Maya', maribank: 'MariBank', gcash: 'GCash', qrph: 'Other bank / e-wallet (QR Ph)' };
 const MAX_ACCOUNTS = 4, MAX_QR_BYTES = 400 * 1024, MAX_AWAITING = 3;
 const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max);
@@ -87,6 +89,9 @@ function register(app, S) {
   const saveManual = m => setSetting('manual_pay', JSON.stringify({ enabled: !!m.enabled, accounts: m.accounts }));
   const manualAccounts = () => manualCfg().accounts.filter(a => MANUAL_KINDS[a.kind] && a.qr);
   const manualOpen = () => manualCfg().enabled && manualAccounts().length > 0;
+  const premiumPrice = () => { const v = parseInt(setting('premium_price_php') || '', 10); return v >= PREMIUM.minPhp && v <= PREMIUM.maxPhp ? v : PREMIUM.defaultPhp; };
+  const premiumView = () => ({ id: PREMIUM.id, name: PREMIUM.name, price: premiumPrice(), days: PREMIUM.days });
+  S.qrPremium = () => ({ enabled: manualOpen(), ...premiumView() });
   const accountView = a => ({ id: a.id, kind: a.kind, kindName: MANUAL_KINDS[a.kind], label: a.label || MANUAL_KINDS[a.kind], name: a.name || '', note: a.note || '' });
   /** the shop is open when at least one way to pay is ready */
   function status() { const p = pmStatus(), m = manualOpen(); return { ...p, enabled: p.enabled || m, paymongo: p.enabled, manual: m }; }
@@ -103,7 +108,7 @@ function register(app, S) {
   }
   const requireOpen = () => { const s = pmStatus(); if (!s.enabled) throw new HttpError(503, 'The Premium God Shop is not open yet: the owner has not finished setting up payments. Nothing was charged.', 'SHOP_DISABLED'); };
   const owns = (uid, ball) => !!db.get('SELECT 1 FROM user_balls WHERE user_id = ? AND ball_id = ? AND owned = 1', uid, ball);
-  const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || {}).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status,
+  const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || (p.product === PREMIUM.id ? PREMIUM : {})).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status,
     provider: p.provider, method: p.method || null, methodName: p.provider === 'manual' ? `${MANUAL_KINDS[p.method] || p.method} (QR)` : (METHODS[p.method] || p.method || null),
     reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
 
@@ -149,7 +154,7 @@ function register(app, S) {
   app.get('/api/godshop', ctx => {
     const s = status(), u = ctx.user;
     return { enabled: s.enabled, mode: s.mode, currency: 'PHP', paymongo: s.paymongo, methods: s.paymongo ? methods().map(id => ({ id, name: METHODS[id] })) : [],
-      manual: { enabled: s.manual, accounts: u && s.manual ? manualAccounts().map(accountView) : [] },
+      manual: { enabled: s.manual, accounts: u && s.manual ? manualAccounts().map(accountView) : [] }, premium: premiumView(),
       awaitingCount: u && u.role === 'owner' ? db.get("SELECT COUNT(*) AS n FROM shop_purchases WHERE provider = 'manual' AND status = 'awaiting'").n : undefined,
       products: Object.values(PRODUCTS).map(p => ({ id: p.id, name: p.name, price: p.amount / 100, balls: p.balls, owned: u ? p.balls.every(b => owns(u.id, b) || u.role === 'owner') : false })) };
   });
@@ -215,16 +220,18 @@ function register(app, S) {
     const u = S.requirePlayable(ctx);
     if (!manualOpen()) throw new HttpError(503, 'QR payments are not open right now. Please do not send money yet.', 'SHOP_DISABLED');
     S.limit(ctx, 'shopman:' + u.id, 10, 3600e3, 'Too many payment reports. Please wait for the owner to check the ones you sent.');
-    const P = PRODUCTS[String(ctx.body.product || '')]; if (!P) throw bad('Unknown product');
-    if (u.role === 'owner') throw bad('The owner account already has every ball — nothing to buy');
+    const pid = String(ctx.body.product || ''), isPrem = pid === PREMIUM.id;
+    const P = isPrem ? { id: PREMIUM.id, name: PREMIUM.name, amount: premiumPrice() * 100, balls: [] } : PRODUCTS[pid]; if (!P) throw bad('Unknown product');
+    if (u.role === 'owner') throw bad('The owner account already has every feature — nothing to buy');
     const a = manualAccounts().find(x => x.id === String(ctx.body.account || '')); if (!a) throw bad('Choose where you sent the payment');
     const have = P.balls.filter(b => owns(u.id, b));
-    if (have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
-    if (have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
+    if (!isPrem && have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
+    if (!isPrem && have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
     const ref = normRef(ctx.body.reference);
     if (!/^[A-Z0-9]{6,32}$/.test(ref)) throw bad('Type the reference number from your payment receipt (6 to 32 letters or numbers)');
     const waiting = db.all("SELECT product FROM shop_purchases WHERE user_id = ? AND provider = 'manual' AND status = 'awaiting'", u.id);
-    if (waiting.some(w => w.product === P.id || w.product === 'god_bundle' || P.id === 'god_bundle')) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
+    const wBalls = waiting.filter(w => w.product !== PREMIUM.id);
+    if (isPrem ? waiting.some(w => w.product === PREMIUM.id) : wBalls.some(w => w.product === P.id || w.product === 'god_bundle' || P.id === 'god_bundle')) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
     if (waiting.length >= MAX_AWAITING) throw new HttpError(429, 'Please wait for the owner to check the payments you already sent.', 'AWAITING');
     if (db.get('SELECT 1 FROM shop_purchases WHERE payment_ref = ?', 'manual:' + ref)) {
       S.secEvent(u.id, 'shop_manual_ref_reused', 2, { ref }, ctx.ip);
@@ -280,7 +287,7 @@ function register(app, S) {
       webhookUrl: `${cfg.appOrigin}/api/godshop/webhook/paymongo`, events: PAID_EVENTS, liveConfirmed: C.liveConfirmed,
       methods: methods(), allMethods: Object.entries(METHODS).map(([id, name]) => ({ id, name })),
       totals: { paid: paid.n, revenue: paid.total / 100 }, purchases: rows.map(p => ({ ...purchaseView(p), username: p.username, payerNote: p.payer_note || null, ref: p.provider_ref ? p.provider_ref.slice(0, 12) + '…' : null })),
-      manual: { enabled: M.enabled, open: s.manual, kinds: Object.entries(MANUAL_KINDS).map(([id, name]) => ({ id, name })), maxAccounts: MAX_ACCOUNTS,
+      manual: { enabled: M.enabled, open: s.manual, premiumPrice: premiumPrice(), kinds: Object.entries(MANUAL_KINDS).map(([id, name]) => ({ id, name })), maxAccounts: MAX_ACCOUNTS,
         accounts: M.accounts.map(a => ({ ...accountView(a), hasQr: !!a.qr })), awaiting: awaiting.map(p => ({ ...purchaseView(p), username: p.username, payerNote: p.payer_note || null })) } };
   });
   app.post('/api/admin/godshop/test', async ctx => {
@@ -318,9 +325,14 @@ function register(app, S) {
     });
     const enabled = !!ctx.body.enabled;
     if (enabled && !accounts.some(a => a.qr)) throw bad('Upload at least one QR code before turning QR payments on');
+    if (ctx.body.premiumPricePhp != null) {
+      const v = Number(ctx.body.premiumPricePhp);
+      if (!Number.isInteger(v) || v < PREMIUM.minPhp || v > PREMIUM.maxPhp) throw bad(`Premium price must be a whole number from PHP ${PREMIUM.minPhp} to ${PREMIUM.maxPhp}`);
+      setSetting('premium_price_php', String(v));
+    }
     saveManual({ enabled, accounts });
-    S.audit(me.id, 'admin.shop_manual_settings', null, ctx.ip, { enabled, accounts: accounts.map(a => ({ kind: a.kind, label: a.label, qr: !!a.qr })) });
-    return { ok: true, manual: { enabled, open: manualOpen(), accounts: accounts.map(a => ({ ...accountView(a), hasQr: !!a.qr })) } };
+    S.audit(me.id, 'admin.shop_manual_settings', null, ctx.ip, { enabled, premiumPrice: premiumPrice(), accounts: accounts.map(a => ({ kind: a.kind, label: a.label, qr: !!a.qr })) });
+    return { ok: true, manual: { enabled, open: manualOpen(), premiumPrice: premiumPrice(), accounts: accounts.map(a => ({ ...accountView(a), hasQr: !!a.qr })) } };
   });
   app.post('/api/admin/godshop/manual/qr', { bodyLimit: 700 * 1024 }, ctx => {
     const me = owner(ctx), M = manualCfg(), a = M.accounts.find(x => x.id === String(ctx.body.account || ''));
@@ -339,10 +351,11 @@ function register(app, S) {
       const p = db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id);
       if (p.status === 'paid') throw new HttpError(409, 'This payment was already approved');
       if (p.status !== 'awaiting' && p.status !== 'rejected') throw bad('This payment cannot be approved');
-      const balls = JSON.parse(p.balls), already = balls.every(b => owns(p.user_id, b));
+      const prem = p.product === PREMIUM.id, balls = JSON.parse(p.balls), already = !prem && balls.every(b => owns(p.user_id, b));
       db.run("UPDATE shop_purchases SET status = 'paid', paid_at = ?, updated_at = ?, reviewed_by = ?, reviewed_at = ?, note = ? WHERE id = ?", now(), now(), me.id, now(),
         already ? 'The player already owned this — please refund this payment' : null, p.id);
-      grantBalls(p.user_id, balls, p.id);
+      if (prem) { if (!S.grantPremiumQr) throw new HttpError(500, 'Premium is not available on this server'); S.grantPremiumQr(p.user_id, PREMIUM.days, p.id, p.amount); }
+      else grantBalls(p.user_id, balls, p.id);
       S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, duplicate: already });
     });
     return { ok: true, purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id)) };
@@ -358,4 +371,4 @@ function register(app, S) {
   });
 }
 
-module.exports = { register, PRODUCTS, METHODS, MANUAL_KINDS, verifyPaymongoSignature, parseQrImage, normRef };
+module.exports = { register, PRODUCTS, PREMIUM, METHODS, MANUAL_KINDS, verifyPaymongoSignature, parseQrImage, normRef };
