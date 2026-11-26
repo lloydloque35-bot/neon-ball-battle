@@ -90,7 +90,9 @@ test('all 20 skills work in all 3 forms, and every form behaves differently', ()
     for (let k = 0; k < 240 * 4; k++) { B.step(STEP); maxP = Math.max(maxP, B.projs.length); maxZ = Math.max(maxZ, B.zones.length); maxL = Math.max(maxL, B.lasers.length); minions = Math.max(minions, B.fighters.filter(x => x.minion && x.alive).length); }
     assert.ok(before !== after || hp0 - foe.hp > 0.5, `${id} ${s.name} @${form} does something`);
     for (const f of B.fighters) assert.ok(Number.isFinite(f.hp) && Number.isFinite(f.x));
-    (sig[id + s.type] || (sig[id + s.type] = [])).push(`${Math.round(hp0 - foe.hp)}|${maxP}|${maxZ}|${maxL}|${minions}`);
+    // effect strengths left on the target (e.g. how strong a scan or mark is) also tell the forms apart
+    const marks = Object.entries(foe.sx || {}).filter(([k, v]) => typeof v === 'number' && !k.endsWith('T')).map(([k, v]) => k + ':' + Math.round(v * 100)).sort().join(',');
+    (sig[id + s.type] || (sig[id + s.type] = [])).push(`${Math.round(hp0 - foe.hp)}|${maxP}|${maxZ}|${maxL}|${minions}|${marks}`);
   });
   for (const [k, v] of Object.entries(sig)) assert.ok(!(v[0] === v[1] && v[1] === v[2]), k + ' changes between forms');
 });

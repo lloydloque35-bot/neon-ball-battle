@@ -109,11 +109,13 @@ Play → **🎯 Skill Training** (or the button in a ball's details):
 ## Balance rules
 
 - **Cast pacing:** one ability every 0.45 s per ball (players and AI). No spam.
-- **Bigger kits hit a little lighter:** with more than 5 unlocked abilities each hits slightly softer, (5/n)^0.2.
+- **Bigger kits hit a little lighter:** with more than 5 unlocked damage abilities each hits slightly softer, (5/n)^0.2.
+  Guards, dashes, buffs and passives do not count (they add options, not damage).
 - **No stun loops:** after 3.2 s of chained stuns/freezes/time stops a ball becomes UNSTOPPABLE for 2 s.
 - **No permanent invulnerability:** after 4.5 s of near-continuous invulnerability a ball is EXPOSED for 2.5 s
   (scripted moments — transformations, clashes, portals, God of Absolute's trips — are exempt).
-- **Underdog Spirit:** a ball fighting a higher rarity deals +5% damage and takes 3% less per rarity step (max +40% / −24%).
+- **Underdog Spirit:** a ball fighting an enemy two or more rarity steps higher deals +4% damage and takes 2% less
+  per step beyond the first (max +32% / −16%). Neighbouring rarities get no bonus.
 - Telegraphs: big new area attacks show their area before they land.
 
 ## New abilities by ball (187)
@@ -148,7 +150,7 @@ Every one has its own mechanic, look and sound. Unlock = the ball level needed (
 | Eclipse Ball | **Corona Crown** | Transformation | Lv 48 | Ignites a corona for 5 s: +15% attack and a burning halo that scorches enemies who come close |
 | Prism Ball | **Color Wheel** | Offensive | Lv 15 | Each cast fires the next colour of the wheel: red burns the ground, blue freezes, green spreads poison to nearby enemies |
 | Prism Ball | **Rainbow Bridge** | Mobility | Lv 48 | Lays a rainbow bridge and races along it; allies on the bridge are faster for 3 s, enemies it crosses are dazzled |
-| Mirror Ball | **Mirror Maze** | Arena Manipulation | Lv 15 | Raises four mirror panels across the arena for 5 s: enemy shots that hit a panel bounce off it |
+| Mirror Ball | **Mirror Maze** | Arena Manipulation | Lv 15 | Raises four mirror panels across the arena for 5 s: enemy shots that hit a panel bounce off and fly back as the Mirror’s own shots |
 | Mirror Ball | **Reverse Image** | Counterattack | Lv 48 | Shows the target its reverse image: its movement flips for 1.5 s and the mirror steals its active shield and power-up |
 | Sonic Ball | **Sound Barrier** | Defensive | Lv 15 | Breaks the sound barrier for 3 s: hits from the front lose 60% of their damage and ramming an enemy at full speed sends out a boom |
 | Sonic Ball | **Resonance** | Offensive | Lv 48 | Tunes every enemy within 500 px to its frequency for 4 s: each ability it uses meanwhile makes them all vibrate for damage |
@@ -258,7 +260,7 @@ Every one has its own mechanic, look and sound. Unlock = the ball level needed (
 | Frost Crown Ball | **Royal Icicle Guard** | Summoning | Lv 32 | Plants three ice sentinels around itself; they stand guard for 6 s and fire freezing shards at enemies in range |
 | Frost Crown Ball | **Permafrost** | Environmental Control | Lv 40 + 12 wins | Freezes the floor around it for 4 s: enemies on the ice slide helplessly (they can barely steer) while the Frost Crown skates 20% faster |
 | Frost Crown Ball | **Avalanche** | Offensive | Lv 48 + 30 wins | Rolls a snowball that gathers snow as it goes — it grows, speeds up and flattens whatever it hits with a huge knockback |
-| Solar Flare Ball | **Coronal Loop** | Offensive | Lv 15 | Throws an arc of plasma out to the target and back in a loop, burning everything along both halves of the arc |
+| Solar Flare Ball | **Coronal Loop** | Offensive | Lv 15 | Throws an arc of plasma that bends after the target and loops back, burning everything along both halves of the arc |
 | Solar Flare Ball | **Sun Shield** | Defensive | Lv 23 | A blazing shield for 3 s: it blocks 35% (50% if enemies nearby are already burning) and sets attackers on fire |
 | Solar Flare Ball | **Solar Cycle** | Passive | Lv 32 | PASSIVE — every 8 s the sun reaches its maximum: the next ability it uses is 40% stronger |
 | Solar Flare Ball | **Helios Beam** | Environmental Control | Lv 40 + 12 wins | A beam of sunlight from the sky sweeps across a band of the arena through the target’s position |

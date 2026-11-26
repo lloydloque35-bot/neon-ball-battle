@@ -164,7 +164,7 @@ test('Mecha Commander: robots (capped), factory, missiles, drone, fusion, emerge
   core.dealDamage(foe, fac, 1e6, { kind: 'skill', noDef: true }); assert.equal(fac.alive, false, 'factory can be destroyed');
   // missiles: limited count, tracking, explode
   const before = B.projs.length; assert.equal(cast(me, 'missiles'), true); run(B, 0.6);
-  assert.ok(B.projs.filter(p => p.style === 'missile').length > 0 && B.projs.length - before <= 8);
+  const mine = B.projs.slice(before).filter(p => p.owner === me); assert.ok(mine.some(p => p.style === 'missile') && mine.length <= 8, 'limited missiles (the enemy’s own shots are not counted)');
   // defense drone blocks part of the damage until destroyed
   assert.equal(cast(me, 'drone'), true); const dr = me.guard; assert.ok(dr && dr.alive && dr.tether);
   me.st.invuln = 0; me.st.shield = 0; const h0 = me.hp, d0 = dr.hp; core.dealDamage(foe, me, 20, { kind: 'skill', noCrit: true, noDef: true });

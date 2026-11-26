@@ -204,6 +204,7 @@ function skCheckProposal(p, list = skillRegistry()) {
 }
 
 /* ---------------- fighters: unlocks, evolutions, pacing ---------------- */
+const KIT_UTIL = { defense: 1, mobility: 1, passive: 1, transform: 1 };
 function skillInit26(f, o) {
   f.skUse = {}; f.skDmg = {}; f.gcd = 0; f.ccT = 0; f.ccImm = 0; f.invT = 0; f.exposeT = 0;
   f.sevo = o.sevo && typeof o.sevo === 'object' ? o.sevo : null; f.mast = o.mast && typeof o.mast === 'object' ? o.mast : null;
@@ -214,8 +215,10 @@ function skillInit26(f, o) {
     s.locked = s.disabled ? true : !(all || skUnlocked(s, f.level, o.wins, human));
     if (o.only26 && s.uid === o.only26) s.locked = false;          // skill preview: this one skill only
   }
-  const n = f.skills.filter(s => !s.locked).length;
-  f.kitK = n > 5 ? Math.pow(5 / n, 0.2) : 1;          // a bigger kit casts more often, so each ability hits a little lighter
+  // a bigger kit casts more damage more often, so each ability hits a little lighter — only the abilities that deal
+  // damage count (guards, dashes, buffs and passives add options, not damage)
+  const n = f.skills.filter(s => !s.locked && !s.passive && !KIT_UTIL[catOf(s)]).length;
+  f.kitK = n > 5 ? Math.pow(5 / n, 0.2) : 1;
 }
 const _ssp26 = supSkillPower;
 supSkillPower = function (f, sk, P) { P = _ssp26(f, sk, P); if (f.kitK && f.kitK !== 1) P *= f.kitK; const st = f.sevo && sk.uid ? f.sevo[sk.uid] | 0 : 0; if (st) P *= 1 + 0.04 * st; return P; };
@@ -280,9 +283,16 @@ performUlt = function (f) {
 };
 
 /* damage credited per skill (training statistics, combinations) */
-const _dealDamage26 = dealDamage;
+const _dealDamageRaw26 = dealDamage;
+/* hooks (walls, zones, arena effects) call this one: it counts the damage but runs no twists or combinations;
+   damage that belongs to no skill goes to "_fx" (shown as "Effects & passives" in Skill Training) */
+const _dealDamage26 = function (src, tgt, amt, o = {}) {
+  const got = _dealDamageRaw26(src, tgt, amt, o), cr = src && src.credit;
+  if (got > 0 && cr && cr.skDmg && tgt && cr.team !== tgt.team) { const k = (o && o.sk) || src.sk26 || CUR_SK || '_fx'; cr.skDmg[k] = (cr.skDmg[k] || 0) + got; }
+  return got;
+};
 dealDamage = function (src, tgt, amt, o = {}) {
-  const sk = (o && o.sk) || CUR_SK || (o && o.kind === 'collision' && src && src.dashSkT > 0 ? src.dashSk : null), got = _dealDamage26(src, tgt, amt, o);
+  const sk = (o && o.sk) || CUR_SK || (src && src.sk26) || (o && o.kind === 'collision' && src && src.dashSkT > 0 ? src.dashSk : null), got = _dealDamageRaw26(src, tgt, amt, o);
   if (got > 0 && sk) {
     const cr = src && src.credit; if (cr && cr.skDmg) cr.skDmg[sk] = (cr.skDmg[sk] || 0) + got;
     if (cr && cr.team !== tgt.team) { const pw = CUR_TW, pk = CUR_SK; CUR_TW = true; CUR_SK = sk; try { for (const t of skTwistsC(cr, sk)) { const T = TW[t.t]; if (T && T.hit) T.hit(cr, tgt, got, { ...o, sk }, t.a || {}); } if (COMBO_BY[sk]) comboHit(cr, tgt, sk, got, o); } finally { CUR_TW = pw; CUR_SK = pk; } }
@@ -807,7 +817,7 @@ SUP.dmgHooks.push((src, tgt, amt, o) => tgt.k26 && tgt.k26.taken !== 1 && o.kind
 
 /* ---------------- arena walls (barriers that block movement and/or shots) ---------------- */
 function addWall26(f, x1, y1, x2, y2, o = {}) {
-  const w = { reflect: !!o.reflect, dmg: o.dmg || 0, x1, y1, x2, y2, w: o.w || 16, life: o.life || 3, max: o.life || 3, team: f.team, owner: f, col: o.col || '#ffffff', move: o.move !== false, shots: o.shots !== false, onEnd: o.onEnd || null, hp: o.hp || 0 };
+  const w = { reflect: !!o.reflect, dmg: o.dmg || 0, x1, y1, x2, y2, w: o.w || 16, life: o.life || 3, max: o.life || 3, team: f.team, owner: f, col: o.col || '#ffffff', move: o.move !== false, shots: o.shots !== false, onEnd: o.onEnd || null, hp: o.hp || 0, sk: CUR_SK, capture: !!o.capture };
   (BATTLE.walls26 || (BATTLE.walls26 = [])).push(w);
   if (!FX.off) vfx((ctx, q) => { if (w.life <= 0) return; const a = Math.min(1, w.life / 0.4, (w.max - w.life) / 0.2 + 0.2); ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = rgba(w.col, 0.35); ctx.lineWidth = w.w * 2.2; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(w.x1, w.y1); ctx.lineTo(w.x2, w.y2); ctx.stroke(); ctx.strokeStyle = w.col; ctx.lineWidth = w.w * 0.7; ctx.stroke(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -BATTLE.time * 60; ctx.stroke(); ctx.restore(); }, w.life + 0.1, { keep: true });
@@ -817,7 +827,7 @@ SUP.worldHooks.push((B, h) => {
   const W = B.walls26; if (!W || !W.length) return;
   for (let i = W.length - 1; i >= 0; i--) {
     const w = W[i]; w.life -= h;
-    if (w.life <= 0) { W.splice(i, 1); if (w.onEnd) w.onEnd(w); continue; }
+    if (w.life <= 0) { W.splice(i, 1); if (w.onEnd) { const pk = CUR_SK, L = skLens(B); CUR_SK = w.sk || null; try { w.onEnd(w); } finally { CUR_SK = pk; if (w.sk) skMark(B, L, w.sk); } } continue; }
     const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = len(dx, dy) || 1, nx = -dy / L, ny = dx / L;
     if (w.move) for (const f of B.fighters) {
       if (!f.alive || f.team === w.team || f.st.outside > 0 || f.beyond) continue;
@@ -828,7 +838,7 @@ SUP.worldHooks.push((B, h) => {
       if (w.dmg && twReady(f, 'wall' + w.max, 0.6)) _dealDamage26(w.owner, f, w.dmg, { kind: 'skill', tag: 'collision', noCrit: true, sk: w.sk });
     }
     if (w.shots) for (let k = B.projs.length - 1; k >= 0; k--) { const p = B.projs[k]; if (p.team === w.team || p.ult) continue; if (segDist(p.x, p.y, w.x1, w.y1, w.x2, w.y2) < p.r + w.w / 2) {
-      if (w.reflect) { if (p.refl26 === w) continue; const vn = p.vx * nx + p.vy * ny; p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.refl26 = w; p.hits = null; if (!FX.off) FX.sparks(p.x, p.y, '#ffffff', 6, 260); continue; }
+      if (w.reflect) { if (p.refl26 === w) continue; const vn = p.vx * nx + p.vy * ny; p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.refl26 = w; p.hits = null; if (w.capture && w.owner.alive) { p.reflected = true; p.team = w.team; p.owner = w.owner; p.sk = w.sk; p.target = null; p.life = Math.max(p.life, 1); } if (!FX.off) FX.sparks(p.x, p.y, '#ffffff', 6, 260); continue; }
       if (!FX.off) FX.burst(p.x, p.y, w.col, 6, 180, 3, 0.3); B.projs.splice(k, 1); } }
   }
 });
@@ -836,7 +846,7 @@ SUP.worldHooks.push((B, h) => {
 /* ---------------- helpers for the new abilities ---------------- */
 const MD = (id, name, c1, c2, c3, pat, deco = [], st = [70, 55, 40, 70, 12]) => UNITB('m26_' + id, name, st, D(c1, c2, c3, pat, deco));
 function summon26(f, def, x, y, P, o = {}) { return supMinion(f, def, x, y, { P, life: o.life || 7, hp: o.hp || 0.08, statMul: o.statMul || 0.6, rScale: o.rScale || 0.5, shot: o.shot, onDeath: o.onDeath, cap: o.cap }); }
-function anchor26(f, def, x, y, P, o = {}) { const u = spawnUnit(f, 'minion', x, y, { def, force: true, P, life: o.life || 6, hp: o.hp || 0.12, statMul: o.statMul || 0.5, rScale: o.rScale || 0.6, anchored: true, build: 0.3 }); if (u) { u.minion = true; u.ballLook = true; u.mech = false; if (o.shot) u.mshot = o.shot; if (o.tick) u.tick26 = o.tick; if (o.onDeath) u.minionDeath = o.onDeath; } return u; }
+function anchor26(f, def, x, y, P, o = {}) { const u = spawnUnit(f, 'minion', x, y, { def, force: true, P, life: o.life || 6, hp: o.hp || 0.12, statMul: o.statMul || 0.5, rScale: o.rScale || 0.6, anchored: true, build: 0.3 }); if (u) { u.minion = true; u.ballLook = true; u.mech = false; u.sk26 = CUR_SK || null; if (o.shot) u.mshot = o.shot; if (o.tick) u.tick26 = o.tick; if (o.onDeath) u.minionDeath = o.onDeath; } return u; }
 SUP.worldHooks.push((B, h) => { for (const u of B.fighters) if (u.tick26 && u.alive) u.tick26(u, h); });
 const tele = (x, y, r, col, life = 0.8) => { if (!FX.off) vfx((ctx, q) => { ctx.save(); ctx.globalAlpha = 0.25 + 0.5 * q; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); ctx.fillStyle = rgba(col, 0.12 * q); ctx.fill(); ctx.restore(); }, life, { keep: true }); };
 const teleLine = (x1, y1, x2, y2, col, life = 0.6, w = 10) => { if (!FX.off) vfx((ctx, q) => { ctx.save(); ctx.globalAlpha = 0.25 + 0.55 * q; ctx.strokeStyle = col; ctx.lineWidth = w * (0.4 + q * 0.6); ctx.setLineDash([12, 8]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore(); }, life, { keep: true }); };
@@ -871,13 +881,14 @@ SUP.projStyles = Object.assign(SUP.projStyles || {}, {
 });
 
 /* ---------------- UNDERDOG SPIRIT — rarity is potential, never a guaranteed win ----------------
-   A ball fighting enemies of a higher rarity gets +5% damage and takes 3% less damage per rarity step of difference
-   (up to +40% / -24%). Shown on the battle HUD. Clones, summons and units use their master's value. */
-const UNDERDOG = { DMG: 0.05, TAKEN: 0.6, MAX: 0.4 };
+   A ball fighting enemies two or more rarity steps above it gets +4% damage and takes 2% less damage per step beyond
+   the first (up to +32% / -16%). Neighbouring rarities are close enough already. Shown on the battle HUD. Clones,
+   summons and units use their master's value. */
+const UNDERDOG = { DMG: 0.04, TAKEN: 0.5, MAX: 0.32, FREE: 1 };
 const rarIdx = d => { const i = RARITIES.indexOf(d && d.rarity); return i < 0 ? 4 : Math.min(i, 9); };
 function underdogOf(f, B) { const me = f.owner || f; if (me.underdog26 != null && me.udT > B.time) return me.underdog26; let top = -1;
   for (const e of B.fighters) if (e.alive && e.team !== me.team && !e.isClone && !e.unit) top = Math.max(top, rarIdx(e.baseDef || e.def));
-  const gap = top - rarIdx(me.baseDef || me.def); me.underdog26 = gap > 0 ? Math.min(UNDERDOG.MAX, gap * UNDERDOG.DMG) : 0; me.udT = B.time + 0.5; if (me.underdog26 && !me.sx) sx(me); return me.underdog26; }
+  const gap = top - rarIdx(me.baseDef || me.def); me.underdog26 = gap > UNDERDOG.FREE ? Math.min(UNDERDOG.MAX, (gap - UNDERDOG.FREE) * UNDERDOG.DMG) : 0; me.udT = B.time + 0.5; if (me.underdog26 && !me.sx) sx(me); return me.underdog26; }
 SUP.worldHooks.push(B => { for (const f of B.fighters) if (f.alive && !f.isClone && !f.unit && (f.udT == null || f.udT <= B.time)) underdogOf(f, B); });
 SUP.dmgHooks.push((src, tgt, amt, o) => { const B = BATTLE; if (!B || o.kind === 'dot') return amt; const a = src ? underdogOf(src.credit || src, B) : 0, d = underdogOf(tgt, B); return amt * (1 + a) * (1 - d * UNDERDOG.TAKEN); });
 /* =====================================================================
@@ -997,9 +1008,9 @@ K('prism', { t: 'k_bridge', n: 'Rainbow Bridge', c: 'mobility', r: 'mobility', i
     for (const e of supEnemies(f)) if (segDist(e.x, e.y, x0, y0, x1, y1) < e.r + 30 && !e.boss) e.st.slow = Math.max(e.st.slow, 1);
     if (!FX.off) vfx((ctx, q) => { ctx.save(); ctx.globalAlpha = 0.7 * (1 - q); ctx.lineCap = 'round'; ['#ff5252', '#ffab40', '#ffee58', '#69f0ae', '#40c4ff', '#b388ff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 4; const o = (i - 2.5) * 4; ctx.beginPath(); ctx.moveTo(x0 + o, y0 + o); ctx.lineTo(x1 + o, y1 + o); ctx.stroke(); }); ctx.restore(); }, 3); } });
 K('mirror', { t: 'k_maze', n: 'Mirror Maze', c: 'arena', r: 'control', i: '▱', cd: 15, p: 45, col: '#e0f7fa', self: true,
-  d: 'Raises four mirror panels across the arena for 5 s: enemy shots that hit a panel bounce off it',
+  d: 'Raises four mirror panels across the arena for 5 s: enemy shots that hit a panel bounce off and fly back as the Mirror’s own shots',
   m: ['reflective-panels', 'arena-objects'], tg: 'global', an: 'maze',
-  fn(f, s, P, col) { const ph = rand(TAU); for (let i = 0; i < 4; i++) { const a = ph + i / 4 * TAU, cx = ARENA.cx + dcos(a) * 260, cy = ARENA.cy + dsin(a) * 160, o = a + Math.PI / 2; addWall26(f, cx - dcos(o) * 60, cy - dsin(o) * 60, cx + dcos(o) * 60, cy + dsin(o) * 60, { life: 5, w: 10, col, move: false, shots: true, reflect: true }); } } });
+  fn(f, s, P, col) { const ph = rand(TAU); for (let i = 0; i < 4; i++) { const a = ph + i / 4 * TAU, cx = ARENA.cx + dcos(a) * 260, cy = ARENA.cy + dsin(a) * 160, o = a + Math.PI / 2; addWall26(f, cx - dcos(o) * 60, cy - dsin(o) * 60, cx + dcos(o) * 60, cy + dsin(o) * 60, { life: 5, w: 10, col, move: false, shots: true, reflect: true, capture: true }); } } });
 K('mirror', { t: 'k_reverseimg', n: 'Reverse Image', c: 'counter', r: 'control', i: '⇋', cd: 12, p: 50, col: '#b2ebf2',
   d: 'Shows the target its reverse image: its movement flips for 1.5 s and the mirror steals its active shield and power-up',
   m: ['steal-buffs', 'reverse-motion'], tg: 'target', an: 'reverseimg',
@@ -1541,7 +1552,7 @@ K('aurora', { t: 'k_solarwind', n: 'Solar Wind', c: 'environment', r: 'control',
 K('aurora', { t: 'k_ribbon', n: 'Ribbon Dance', c: 'mobility', r: 'mobility', i: '〜', cd: 10, p: 50, col: '#a7ffeb',
   d: 'Dances along a wavy path for 1 s, trailing ribbons of light that hurt and slow enemies who cross them',
   m: ['wavy-movement', 'ribbon-zones'], tg: 'aim', an: 'ribbon',
-  fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); const a0 = t ? angTo(f, t) : f.rot; sx(f).ribbonT = 1; sx(f).ribbonA = a0; sx(f).ribbonP = P; } });
+  fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); const a0 = t ? angTo(f, t) : f.rot; sx(f).ribbonT = 1; sx(f).ribbonA = a0; sx(f).ribbonP = P; sx(f).ribbonSk = CUR_SK; } });
 K('aurora', { t: 'k_magnetosphere', n: 'Magnetosphere', c: 'counter', r: 'defense', i: '◉', cd: 12, p: 45, col: '#18ffff', self: true,
   d: 'For 3 s beams and lasers that hit it lose half their power, and each one recharges its cooldowns by 1 s',
   m: ['beam-resist', 'cooldown-recharge'], tg: 'self', an: 'magnetosphere',
@@ -1555,17 +1566,17 @@ K('frostcrown', { t: 'k_icewall', n: 'Ice Wall', c: 'arena', r: 'control', i: '�
   d: 'Raises a wall of ice between it and the target: it blocks movement and shots for 3 s, then shatters into flying shards',
   m: ['barrier-wall', 'shatter-shards', 'blocks-movement'], tg: 'aim', an: 'icewall',
   fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t) return false; const a = angTo(f, t), d = Math.min(len(t.x - f.x, t.y - f.y) / 2, 160), cx = f.x + dcos(a) * d, cy = f.y + dsin(a) * d, o = a + Math.PI / 2;
-    addWall26(f, cx - dcos(o) * 80, cy - dsin(o) * 80, cx + dcos(o) * 80, cy + dsin(o) * 80, { life: 3, w: 18, col, move: true, shots: true, onEnd: w => { for (let i = 0; i < 8; i++) supShot(f, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, i / 8 * TAU, { speed: 420, r: 6, dmg: SDk(f, P, 0.14), col, effect: 'freeze', life: 0.8, style: 'shard', power: P }); burst26((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, col, 24, 320, 5, 0.5, 'shard'); } }); } });
+    addWall26(f, cx - dcos(o) * 80, cy - dsin(o) * 80, cx + dcos(o) * 80, cy + dsin(o) * 80, { life: 3, w: 18, col, move: true, shots: true, onEnd: w => { for (let i = 0; i < 8; i++) supShot(f, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, i / 8 * TAU, { speed: 460, r: 7, dmg: SDk(f, P, 0.22), col, effect: 'freeze', life: 0.8, style: 'shard', power: P }); burst26((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, col, 24, 320, 5, 0.5, 'shard'); } }); } });
 K('frostcrown', { t: 'k_freezecmd', n: 'Freeze Command', c: 'counter', r: 'control', i: '⏸', cd: 13, p: 45, col: '#e1f5fe',
   d: 'A royal command freezes the target’s readiest ability: it is put back on its full cooldown',
   m: ['lock-enemy-ability'], tg: 'target', an: 'freezecmd',
   fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t || !t.skills || !t.skills.length) return false; const k = t.skills.filter(x => !x.locked).sort((a, b) => a.cdLeft - b.cdLeft)[0]; if (!k) return false;
-    k.cdLeft = Math.max(k.cdLeft, k.cd || 6); dealDamage(f, t, SDk(f, P, 0.3), { kind: 'skill', tag: 'skill', power: P, effect: 'slow' }); if (!FX.off) FX.text(t.x, t.y - t.r - 26, 'FROZEN: ' + k.name, col, 13, { life: 1 }); } });
+    k.cdLeft = Math.max(k.cdLeft, k.cd || 6); dealDamage(f, t, SDk(f, P, 0.45), { kind: 'skill', tag: 'skill', power: P, effect: 'slow' }); if (!FX.off) FX.text(t.x, t.y - t.r - 26, 'FROZEN: ' + k.name, col, 13, { life: 1 }); } });
 const ICE_SENTINEL = MD('icesentinel', 'Ice Sentinel', '#e1f5fe', '#4fc3f7', '#b3e5fc', 'ice', ['crystals'], [60, 50, 50, 0, 10]);
 K('frostcrown', { t: 'k_sentinels', n: 'Royal Icicle Guard', c: 'summon', r: 'summon', i: '♜', cd: 16, p: 50, col: '#81d4fa', self: true,
   d: 'Plants three ice sentinels around itself; they stand guard for 6 s and fire freezing shards at enemies in range',
   m: ['turret-minions', 'freeze-shots'], tg: 'self', an: 'sentinels',
-  fn(f, s, P, col) { let n = 0; for (let i = 0; i < 3; i++) { const a = f.rot + i / 3 * TAU; if (anchor26(f, ICE_SENTINEL, f.x + dcos(a) * 120, f.y + dsin(a) * 120, P, { life: 6, hp: 0.05, rScale: 0.42, shot: { range: 420, cd: 1.3, fire: (m, t) => supShot(m, m.x, m.y, aimAngle(m, t, 520), { speed: 520, r: 6, dmg: SDk(f, P, 0.1), col, effect: 'slow', style: 'shard', life: 1.2, power: P }) } })) n++; } return n ? undefined : false; } });
+  fn(f, s, P, col) { let n = 0; for (let i = 0; i < 3; i++) { const a = f.rot + i / 3 * TAU; if (anchor26(f, ICE_SENTINEL, f.x + dcos(a) * 120, f.y + dsin(a) * 120, P, { life: 6, hp: 0.05, rScale: 0.42, shot: { range: 420, cd: 1.3, fire: (m, t) => supShot(m, m.x, m.y, aimAngle(m, t, 520), { speed: 560, r: 7, dmg: SDk(f, P, 0.16), col, effect: 'slow', style: 'shard', life: 1.2, power: P }) } })) n++; } return n ? undefined : false; } });
 K('frostcrown', { t: 'k_permafrost', n: 'Permafrost', c: 'environment', r: 'control', i: '⛸', cd: 13, p: 45, col: '#b2ebf2', self: true,
   d: 'Freezes the floor around it for 4 s: enemies on the ice slide helplessly (they can barely steer) while the Frost Crown skates 20% faster',
   m: ['slippery-floor', 'momentum'], tg: 'self', an: 'permafrost',
@@ -1575,13 +1586,13 @@ K('frostcrown', { t: 'k_avalanche', n: 'Avalanche', c: 'offense', r: 'ranged', i
   d: 'Rolls a snowball that gathers snow as it goes — it grows, speeds up and flattens whatever it hits with a huge knockback',
   m: ['rolling-boulder', 'growing', 'knockback'], tg: 'aim', an: 'avalanche',
   fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t) return false;
-    supShot(f, f.x, f.y, aimAngle(f, t, 300), { speed: 300, r: 10, dmg: SDk(f, P, 0.6), col, life: 2.6, pierce: 2, style: 'k_snow', power: P, tick: (p, h) => { p.r = Math.min(34, p.r + 12 * h); p.dmg *= 1 + 0.25 * h; const m = 1 + 0.4 * h; p.vx *= m; p.vy *= m; p.speed *= m; }, onHit: (p, e) => knock(e, p.x, p.y, 700) }); } });
+    supShot(f, f.x, f.y, aimAngle(f, t, 380), { speed: 380, r: 12, dmg: SDk(f, P, 0.8), col, life: 2.6, pierce: 2, style: 'k_snow', power: P, tick: (p, h) => { p.r = Math.min(34, p.r + 12 * h); p.dmg *= 1 + 0.25 * h; const m = 1 + 0.4 * h; p.vx *= m; p.vy *= m; p.speed *= m; }, onHit: (p, e) => knock(e, p.x, p.y, 700) }); } });
 /* ---- Solar Flare ---- */
 K('solarflare', { t: 'k_coronalloop', n: 'Coronal Loop', c: 'offense', r: 'ranged', i: '⌒', cd: 9, p: 55, col: '#ffab00',
-  d: 'Throws an arc of plasma out to the target and back in a loop, burning everything along both halves of the arc',
+  d: 'Throws an arc of plasma that bends after the target and loops back, burning everything along both halves of the arc',
   m: ['arc-path', 'return-loop'], tg: 'target', an: 'coronalloop',
-  fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t) return false; const x0 = f.x, y0 = f.y, x1 = t.x, y1 = t.y;
-    supShot(f, x0, y0, 0, { speed: 1, r: 11, dmg: SDk(f, P, 0.45), col, life: 1.2, pierce: 9, style: 'flare', effect: 'burn', power: P, data: { age: 0 }, tick: (p, h) => { const D = p.data; D.age += h; const q = D.age / 1.2, a = q * TAU, mx = (x0 + x1) / 2, my = (y0 + y1) / 2, L = len(x1 - x0, y1 - y0) / 2, ang = datan2(y1 - y0, x1 - x0);
+  fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t) return false; const x0 = f.x, y0 = f.y; let x1 = t.x, y1 = t.y;
+    supShot(f, x0, y0, 0, { speed: 1, r: 18, dmg: SDk(f, P, 0.6), col, life: 1.2, pierce: 9, style: 'flare', effect: 'burn', power: P, data: { age: 0 }, tick: (p, h) => { const D = p.data; D.age += h; if (t.alive && D.age < 0.6) { const k = Math.min(1, 5 * h); x1 += (t.x - x1) * k; y1 += (t.y - y1) * k; } const q = D.age / 1.2, a = q * TAU, mx = (x0 + x1) / 2, my = (y0 + y1) / 2, L = len(x1 - x0, y1 - y0) / 2, ang = datan2(y1 - y0, x1 - x0);
       const lx = -Math.cos(a) * L, ly = Math.sin(a) * L * 0.6; p.vx = 0; p.vy = 0; p.x = mx + lx * dcos(ang) - ly * dsin(ang); p.y = my + lx * dsin(ang) + ly * dcos(ang); if (q > 0.5 && !D.back) { D.back = true; p.hits = new Set(); } } }); } });
 K('solarflare', { t: 'k_sunshield', n: 'Sun Shield', c: 'defense', r: 'defense', i: '☼', cd: 12, p: 50, col: '#ffd740', self: true,
   d: 'A blazing shield for 3 s: it blocks 35% (50% if enemies nearby are already burning) and sets attackers on fire',
@@ -1595,12 +1606,12 @@ K('solarflare', { t: 'k_helios', n: 'Helios Beam', c: 'environment', r: 'aoe', i
   d: 'A beam of sunlight from the sky sweeps across a band of the arena through the target’s position',
   m: ['sky-beam', 'column-sweep'], tg: 'area', ac: 'charge', an: 'helios',
   fn(f, s, P, col, tgt) { const t = tgtOr(f, tgt); if (!t) return false; const vert = RNG() < 0.5;
-    addLaser(f, [0, 0, 0, 0], { charge: 0.6, dur: 1.4, w: 26, dmg: SDk(f, P, 0.3), col, sweep: vert ? { cx: t.x - 220, cy: ARENA.cy, a0: Math.PI / 2, av: 0, len: 400 } : { cx: ARENA.cx, cy: t.y - 160, a0: 0, av: 0, len: 700 } });
+    addLaser(f, [0, 0, 0, 0], { charge: 0.6, dur: 1.4, w: 30, dmg: SDk(f, P, 0.42), col, sweep: vert ? { cx: t.x - 220, cy: ARENA.cy, a0: Math.PI / 2, av: 0, len: 400 } : { cx: ARENA.cx, cy: t.y - 160, a0: 0, av: 0, len: 700 } });
     const L = lastLaser(); if (L) { L.drift26 = vert ? { vx: 320, vy: 0 } : { vx: 0, vy: 230 }; } } });
 K('solarflare', { t: 'k_minisun', n: 'Mini Sun', c: 'summon', r: 'summon', i: '☀', cd: 16, p: 50, col: '#ff6f00', self: true,
   d: 'Creates a miniature sun that circles the middle of the arena for 5 s, scorching any enemy that comes close to it',
   m: ['orbiting-hazard', 'burn-aura'], tg: 'global', an: 'minisun',
-  fn(f, s, P, col) { const m = { by: f, team: f.team, t: 5, a: rand(TAU), dmg: SDk(f, P, 0.14), col }; BATTLE.minisun26 = (BATTLE.minisun26 || []).concat([m]);
+  fn(f, s, P, col) { const m = { by: f, team: f.team, t: 5, a: rand(TAU), dmg: SDk(f, P, 0.22), col, sk: CUR_SK }; BATTLE.minisun26 = (BATTLE.minisun26 || []).concat([m]);
     if (!FX.off) vfx((ctx, q) => { if (m.x == null || m.t <= 0) return; ctx.save(); ctx.drawImage(glowSprite(col), m.x - 70, m.y - 70, 140, 140); ctx.fillStyle = '#fff59d'; ctx.beginPath(); ctx.arc(m.x, m.y, 22, 0, TAU); ctx.fill(); ctx.strokeStyle = rgba(col, 0.6); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, 90, 0, TAU); ctx.stroke(); ctx.restore(); }, 5); } });
 /* ---- Glitch ---- */
 K('glitch', { t: 'k_lag', n: 'Lag Spike', c: 'environment', r: 'control', i: '⌛', cd: 12, p: 45, col: '#00e676',
@@ -1680,13 +1691,13 @@ SUP.worldHooks.push((B, h) => {
   const W = B.wind26;
   if (W) { W.t -= h; if (W.t <= 0) B.wind26 = null; else for (const e of B.fighters) { if (!e.alive || e.st.outside > 0 || e.anchored) continue; if (e.team === W.team) sx(e).windIn = 1; else { e.vx += dcos(W.a) * 700 * h * (e.boss ? 0.4 : 1); e.vy += dsin(W.a) * 700 * h * (e.boss ? 0.4 : 1); } } }
   if (B.minisun26 && B.minisun26.length) { B.minisun26 = B.minisun26.filter(m => (m.t -= h) > 0 && m.by.alive); for (const m of B.minisun26) { m.a += 1.3 * h; const x = ARENA.cx + dcos(m.a) * 260, y = ARENA.cy + dsin(m.a) * 160; m.x = x; m.y = y;
-      for (const e of B.fighters) if (e.alive && e.team !== m.team && !(e.st.outside > 0) && len(e.x - x, e.y - y) < 90 + e.r && twReady(e, 'sun' + m.by.sid, 0.5)) _dealDamage26(m.by, e, m.dmg, { kind: 'skill', effect: 'burn', power: 55, noCrit: true });
+      for (const e of B.fighters) if (e.alive && e.team !== m.team && !(e.st.outside > 0) && len(e.x - x, e.y - y) < 90 + e.r && twReady(e, 'sun' + m.by.sid, 0.5)) _dealDamage26(m.by, e, m.dmg, { kind: 'skill', effect: 'burn', power: 55, noCrit: true, sk: m.sk });
       if (!FX.off) { FX.p(x + vr(-20, 20), y + vr(-20, 20), vr(-40, 40), vr(-40, 40), 0.4, vr(8, 16), m.col, 'dot', 1); if (Math.random() < 0.3) FX.ring(x, y, '#ffeb3b', 90, 0.3, 2, 70); } } }
   for (const L of B.lasers) if (L.drift26 && L.sweep && L.t >= L.charge) { L.sweep.cx += L.drift26.vx * h; L.sweep.cy += L.drift26.vy * h; }
   for (const f of B.fighters) {
     if (!f.alive) continue; const S = f.sx; if (!S) continue;
     if (S.onIce > 0) S.onIce -= h;
-    if (S.ribbonT > 0) { const a = S.ribbonA + Math.sin(S.ribbonT * 14) * 0.9, sp = f.baseSpeed * 1.9; f.vx = dcos(a) * sp; f.vy = dsin(a) * sp; if ((S.rbT = (S.rbT || 0) - h) <= 0) { S.rbT = 0.1; if (B.zones.length < 50) twMiniZone(f, f.x, f.y, 30, 2.5, skillDmg(f, S.ribbonP || 50) * 0.08, '#a7ffeb', 'slow'); } }
+    if (S.ribbonT > 0) { const a = S.ribbonA + Math.sin(S.ribbonT * 14) * 0.9, sp = f.baseSpeed * 1.9; f.vx = dcos(a) * sp; f.vy = dsin(a) * sp; if ((S.rbT = (S.rbT || 0) - h) <= 0) { S.rbT = 0.1; if (B.zones.length < 50) { const z = twMiniZone(f, f.x, f.y, 34, 2.5, skillDmg(f, S.ribbonP || 50) * 0.12, '#a7ffeb', 'slow'); if (z && S.ribbonSk) z.sk = S.ribbonSk; } } }
     if (S.lagT > 0) { if ((S.lagK -= h) <= 0) { S.lagK = 0.5; const p = S.lagP; burst26(f.x, f.y, '#00e676', 6, 160); f.x = inArenaX(p.x, f.r); f.y = inArenaY(p.y, f.r); if (!FX.off) FX.text(f.x, f.y - f.r - 20, 'LAG', '#00e676', 12, { life: 0.4 }); } else if (S.lagK > 0.45) S.lagP = { x: f.x, y: f.y }; }
     if (S.vortT > 0 && S.vortBy) { S.vortA += 5 * h; f.x = inArenaX(S.vortX + dcos(S.vortA) * 50, f.r); f.y = inArenaY(S.vortY + dsin(S.vortA) * 50, f.r); f.vx = -dsin(S.vortA) * 250; f.vy = dcos(S.vortA) * 250; if (twReady(f, 'vort', 0.5)) _dealDamage26(S.vortBy.alive ? S.vortBy : null, f, S.vortD || 2, { kind: 'skill', noCrit: true }); }
   }
@@ -2454,6 +2465,7 @@ const Training26 = {
       for (const s of me.skills) { if (s.disabled) continue; const d = Math.round(me.skDmg[s.uid] || 0); total += d; const tm = this.timing[s.uid];
         tbl.append(h('tr', { class: s.locked ? 'locked' : '' }, h('td', {}, (s.locked ? '🔒 ' : '') + s.name), h('td', {}, String(me.skUse[s.uid] || 0)), h('td', {}, String(d)),
           h('td', {}, s.locked ? '—' : s.passive26 ? 'passive' : s.auto26 ? 'auto' : s.cdLeft > 0 ? fmtCd(s.cdLeft) : '✔'), h('td', { style: { color: tm ? tm.col : '' } }, tm ? `${tm.grade} (${tm.perfect}× perfect)` : '—'))); }
+      const mine26 = new Set(me.skills.map(s => s.uid).concat(me.ult ? [me.ult.uid] : [])), fx = Math.round(Object.entries(me.skDmg).reduce((a, [k, v]) => a + (mine26.has(k) ? 0 : v), 0)); if (fx) { total += fx; tbl.append(h('tr', {}, h('td', {}, '✦ Effects & passives'), h('td', {}, '—'), h('td', {}, String(fx)), h('td', {}, '—'), h('td', {}, '—'))); }
       const ud = Math.round(me.skDmg[me.ult && me.ult.uid] || 0); total += ud;
       tbl.append(h('tr', {}, h('td', {}, '★ ' + (me.ult ? me.ult.name : 'Ultimate')), h('td', {}, String(me.skUse[me.ult && me.ult.uid] || 0)), h('td', {}, String(ud)), h('td', {}, Math.round(me.ultMeter) + '%'), h('td', {}, '—')));
       const combos = Object.entries(me.comboLog || {}).map(([k, v]) => (COMBOS.find(c => c.id === k) || { name: k }).name + ' ×' + v);
@@ -2463,8 +2475,8 @@ const Training26 = {
     setTimeout(() => this.tick(), 300);
   },
   end(silent) { const B = this.B; this.B = null; $('#train26')?.remove(); if (B) { B.over = true; if (BATTLE === B) BATTLE = null; } $('#battleHud').classList.add('hidden'); if (!silent) { UI.show('menu'); } },
-  exit() { const id = this.ball, B = this.B; const me = B && B.player; const sum = me ? Object.entries(me.skDmg || {}).sort((a, b) => b[1] - a[1]).slice(0, 5) : []; this.end(false);
-    if (sum.length) UI.modal(h('div', {}, h('h3', {}, '🎯 Training summary'), ...sum.map(([u, d]) => h('div', {}, `${(getBall(id).skills.find(s => s.uid === u) || (getBall(id).ult && getBall(id).ult.uid === u && getBall(id).ult) || { name: u }).name}: ${fmtNum(Math.round(d))} damage`)), h('p', { class: 'muted small' }, 'Training never gives coins, EXP, mastery or rank points.'))); },
+  exit() { const id = this.ball, B = this.B; const me = B && B.player; const sum = []; if (me) { const own = new Set(me.skills.map(s => s.uid).concat(me.ult ? [me.ult.uid] : [])), acc = {}; for (const [k, v] of Object.entries(me.skDmg || {})) { const kk = own.has(k) ? k : '_fx'; acc[kk] = (acc[kk] || 0) + v; } sum.push(...Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, 5)); } this.end(false);
+    if (sum.length) UI.modal(h('div', {}, h('h3', {}, '🎯 Training summary'), ...sum.map(([u, d]) => h('div', {}, `${(getBall(id).skills.find(s => s.uid === u) || (getBall(id).ult && getBall(id).ult.uid === u && getBall(id).ult) || { name: u === '_fx' ? 'Effects & passives' : u }).name}: ${fmtNum(Math.round(d))} damage`)), h('p', { class: 'muted small' }, 'Training never gives coins, EXP, mastery or rank points.'))); },
 };
 /* cooldown timing practice (training only): how quickly an ability was used once it was ready */
 SUP.worldHooks.push(B => { if (!B.training26 || !B.player) return; for (const s of B.player.skills) { if (s.cdLeft <= 0 && s.ready26 == null && !s.locked) s.ready26 = B.time; } });

@@ -22,7 +22,7 @@ All checks were run on the game's own simulation (the same code the server uses 
   numbers stay valid afterwards.
 - Automated test: every classic ability (with its signature) and every ultimate of every ball runs without errors.
 - Stress test: every ball fights 2v2 and 1v1 battles with every ability unlocked — 291 battles, 0 errors; all 187 new
-  abilities were used.
+  abilities were used. Re-run after the balance fixes: 194 battles, 0 errors.
 - Browser test: every ball (97) fought with all abilities and its ultimate on screen — 0 page errors.
 - Transformations / God balls: the 2.1–2.5 test suites (forms, God Clash, Infinite Void, God of Absolute free will and
   trips outside the arena) all pass.
@@ -50,5 +50,36 @@ All checks were run on the game's own simulation (the same code the server uses 
 
 ## Balance
 
-See `SKILLS-2.6.0.md` → Balance rules. Measured win rates at Lv 50 against a 12-ball pool of mixed rarities
-(36 battles per ball): see the table below.
+See `SKILLS-2.6.0.md` → Balance rules. Measured win rates at Lv 50 (1v1, hard AI on both sides) against a fixed
+12-ball pool of mixed rarities, 33 battles per ball, all 69 collectible battle balls, before and after 2.6.0:
+
+| Rarity | Balls | Before 2.6.0 | After 2.6.0 |
+|---|---|---|---|
+| Common | 4 | 15% | 16% |
+| Uncommon | 4 | 13% | 13% |
+| Rare | 6 | 16% | 13% |
+| Epic | 5 | 25% | 26% |
+| Legendary | 9 | 41% | 40% |
+| Mythical | 13 | 58% | 54% |
+| Ancient | 3 | 80% | 73% |
+| Secret | 7 | 89% | 80% |
+| Limited | 6 | 79% | 73% |
+| God Tier | 12 | 90% | 83% |
+
+- Rarity still means more potential, but the gap is smaller (spread of win rates 32 → 29 points); no rarity moved
+  by more than 9 points. The pool itself got the new skills too, so every number is measured against stronger opponents.
+- Biggest gains: Vampire 28 → 58, Time 50 → 69, Universe 25 → 36, Star 36 → 45. Biggest drops: Anti Ball 89 → 69,
+  Mecha Commander 92 → 72, Celestial 53 → 33, Mirror 64 → 48, God Portal 97 → 83.
+- Fixes made from this measurement:
+  - **Bigger kits** only count abilities that deal damage (guards, dashes, buffs and passives no longer make a
+    ball's attacks lighter).
+  - **Underdog Spirit** starts at a two-rarity gap and is smaller per step (+4% / −2%, max +32% / −16%): with the
+    first version, mid-rarity balls beat the Secret, God Tier and Premium balls too often.
+  - Frost Crown, Solar Flare and Aurora: their new damage abilities hit harder (Avalanche, Ice Wall shards,
+    Icicle Guard, Freeze Command, Coronal Loop, Helios Beam, Mini Sun, Ribbon Dance). Coronal Loop now bends after the
+    target (it used to miss almost every time).
+  - Mirror Maze panels now send bounced shots back as the Mirror's own shots (before, a bounced enemy shot could
+    still hit the Mirror).
+  - Skill Training shows damage from walls, summons, arena effects and bounced shots ("Effects & passives").
+  - Together these moved the Limited balls from 61% (first measurement) to 73%.
+- Numbers vary by about ±8 points per ball between runs (33 battles each); the per-rarity averages are stable.
