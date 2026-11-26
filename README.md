@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.3.1**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.4.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -48,7 +48,13 @@ Version **2.3.1**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
     - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
     - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
-  - **NEW 2.3.0 — 2 Premium God Balls, PHP 99 each (PHP 198 for both)** ([docs/PREMIUM-GOD-SHOP.md](docs/PREMIUM-GOD-SHOP.md)):
+  - **NEW 2.4.0 — GOD OF ABSOLUTE • THE UNRIVALED ONE — LIMITED EDITION, PHP 499** ([docs/GOD-OF-ABSOLUTE.md](docs/GOD-OF-ABSOLUTE.md), QA: [docs/QA-2.4.0.md](docs/QA-2.4.0.md)):
+    - limited exclusive Supreme God Ball: 100 verified owners at first, numbered editions (#001…), real stock shown in the shop, reserved slots while paying, never oversold
+    - starts at **Lv 50** after a verified purchase and levels to **Lv 100** (Celestial Sovereign at Lv 70, The Unrivaled One at Lv 100)
+    - 5 skills × 3 versions, ultimate **Absolute Zero – End of All Dimensions**, final-form ultimate **Omniversal Absolute Dominion**, passive **Absolute Authority**
+    - owner rewards: THE ABSOLUTE OWNER title & nameplate, edition emblem, lobby showcase, aura, trail, golden cosmic elimination, MVP victory
+    - owner-only management panel (supply, pause, announcements, new editions, owners, payments, restores, permanent ledger)
+  - **2.3.0 — 2 Premium God Balls, PHP 99 each (PHP 198 for both)** ([docs/PREMIUM-GOD-SHOP.md](docs/PREMIUM-GOD-SHOP.md)):
     - **God of Guns** (weapon master: floating arsenal, railguns, bullet storms, orbital cannon) and **God Portal** (portals, summons, dimensional traps)
     - God Portal's ultimate takes its opponent into the **Infinite Void**, a real second battle space with platforms, gravity, zones, hazards and a portal network
     - **Premium God Shop**: pay by **QR** to the owner's Maya / MariBank (any bank app or GCash can scan it; the owner approves each payment), or automatic PayMongo checkout. Permanent ownership, restore and history

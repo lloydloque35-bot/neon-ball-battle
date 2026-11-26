@@ -646,8 +646,16 @@ async function paymongoBuy(product) {
   try { const r = await shopApi('POST', '/api/godshop/checkout', { product }); toast('Opening the secure PayMongo checkout…'); location.assign(r.url); }
   catch (e) { toast('⚠ ' + esc(e.message), 'bad'); }
 }
+/** a live countdown of a reserved limited-edition slot */
+function holdTimer(until) {
+  const el = h('div', { class: 'gshop-note gshop-wait', style: { textAlign: 'center', fontWeight: 800 } });
+  const tick = () => { if (!el.isConnected && el._started) return; el._started = true; const ms = until - Date.now();
+    el.textContent = ms > 0 ? `👑 Your edition slot is reserved for ${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')} — pay and send the reference before it ends.` : '⌛ Your reservation ended. If you already paid, still send the reference number now; otherwise press Buy again.';
+    if (ms > 0) setTimeout(tick, 1000); };
+  setTimeout(tick, 0); return el;
+}
 /* QR payment: the player pays the owner's QR, then sends the reference number. The OWNER approves it — the page unlocks nothing. */
-function manualPay(product, shop) {
+function manualPay(product, shop, extra = {}) {
   const P = shop.products.find(p => p.id === product) || (shop.premium && shop.premium.id === product ? shop.premium : null), accs = shop.manual.accounts; if (!P || !accs.length) return;
   const isPrem = product === 'premium_year';
   let acc = null;
@@ -668,7 +676,8 @@ function manualPay(product, shop) {
     if (!ref.value.trim()) { ref.focus(); return toast('Type the reference number from your receipt', 'bad'); }
     send.disabled = true;
     try {
-      const r = await API.post('/api/godshop/manual/submit', { product, account: acc.id, reference: ref.value, note: note.value });
+      const r = await API.post('/api/godshop/manual/submit', { product, account: acc.id, reference: ref.value, note: note.value, purchaseId: extra.purchaseId });
+      if (r.soldOut) { UI.closeModal(); return UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '⚠ The last slots were taken'), h('p', {}, `Your reservation had ended and the edition sold out while you were paying. The owner has your reference number (${r.purchase.reference}) and will refund you.`), h('button', { class: 'btn', onclick: () => UI.closeModal() }, 'OK'))); }
       UI.closeModal(); Sound.play('click');
       UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '✔ Sent!'),
         h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then ${isPrem ? 'turn on ULTIMATE PREMIUM for 1 year' : 'unlock ' + r.purchase.name}.`),
@@ -680,6 +689,7 @@ function manualPay(product, shop) {
   UI.modal(h('div', { class: 'gshop-pay' },
     h('h2', {}, `${isPrem ? '★' : '💎'} ${P.name} — PHP ${P.price}`),
     isPrem ? h('p', { class: 'muted', style: { margin: '0 0 6px', fontSize: '13px' } }, 'Premium paid by QR lasts 365 days and does not renew by itself. Pay again any time to add another year.') : null,
+    extra.holdUntil ? holdTimer(extra.holdUntil) : null,
     h('ol', { class: 'gshop-steps' },
       h('li', {}, 'Pick where to pay. Scan the QR with Maya, MariBank, GCash or any bank app (QR Ph / InstaPay).'),
       h('li', {}, h('b', {}, `Send exactly PHP ${P.price}.00.`)),
@@ -727,7 +737,7 @@ UI.render_godshop = async function () {
 };
 async function godHistory() {
   let r; try { r = await shopApi('GET', '/api/godshop/purchases'); } catch (e) { return toast('⚠ ' + esc(e.message), 'bad'); }
-  const lbl = { paid: '✔ Paid', pending: '⏳ Waiting for payment', expired: 'Expired (not paid)', failed: 'Not started', review: '⚠ Under review', awaiting: '⏳ Waiting for owner check', rejected: '✖ Not approved' };
+  const lbl = { paid: '✔ Paid', pending: '⏳ Waiting for payment', expired: 'Expired (not paid)', failed: 'Not started', review: '⚠ Under review', awaiting: '⏳ Waiting for owner check', rejected: '✖ Not approved', reserved: '⏳ Slot reserved (not paid yet)', released: 'Reservation ended (not paid)', creating: 'Not started' };
   const t = h('table', { class: 'gshop-tbl' }, h('tr', {}, h('th', {}, 'Date'), h('th', {}, 'Item'), h('th', {}, 'Amount'), h('th', {}, 'Status'), h('th', {}, 'Method'), h('th', {}, 'Reference')));
   for (const p of r.purchases) t.append(h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.name), h('td', {}, `PHP ${p.amount}`),
     h('td', {}, lbl[p.status] || p.status, p.status === 'rejected' && p.note ? h('div', { class: 'muted', style: { fontSize: '12px' } }, p.note) : null), h('td', {}, p.methodName || p.method || '—'), h('td', {}, p.reference || '—')));
@@ -758,7 +768,7 @@ async function godShopNotify() {
     const fresh = r.purchases.filter(p => p.provider === 'manual' && (p.status === 'paid' || p.status === 'rejected') && !seen.includes(p.id + ':' + p.status));
     if (fresh.length) {
       if (fresh.some(p => p.status === 'paid')) { await Online.refresh(); Sound.play('evolve'); if (UI.current === 'godshop') UI.render_godshop(); if (UI.current === 'membership') UI.render_membership(); }
-      for (const p of fresh) toast(p.status === 'paid' ? (p.product === 'premium_year' ? '★ Payment approved — ULTIMATE PREMIUM is active! Enjoy every ball.' : `✔ Payment approved — ${esc(p.name)} is yours forever!`) : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
+      for (const p of fresh) toast(p.status === 'paid' ? (p.product === 'godofabsolute' ? '👑 Payment approved — GOD OF ABSOLUTE is yours forever, at Lv 50!' : p.product === 'premium_year' ? '★ Payment approved — ULTIMATE PREMIUM is active! Enjoy every ball.' : `✔ Payment approved — ${esc(p.name)} is yours forever!`) : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
       try { localStorage.setItem('nbb_gshop_seen', JSON.stringify([...seen, ...fresh.map(p => p.id + ':' + p.status)].slice(-200))); } catch { /* private mode */ }
     }
     if (Online.isOwner() && !godShopNotify.ownerTold) { const s = await API.get('/api/godshop'); if (s.awaitingCount) { godShopNotify.ownerTold = true; toast(`💳 ${s.awaitingCount} QR payment(s) waiting for your check — Admin Dashboard → 💳 God Shop`, 'gold'); } }

@@ -8,7 +8,7 @@
    reached in battle at 60% / 30% HP or with the 1st / 2nd ultimate), its own art, idle / bounce / victory / defeat
    effects and its own sound profile. Admin-only access is enforced by the server (adminOnly balls → owner only).
    ===================================================================== */
-const GAME_VERSION = '2.3.1';
+const GAME_VERSION = '2.4.0';
 const FORM_MUL = [1, 1.18, 1.38];                 // stats & skill power per form
 const FORM_MUL_GOD = [1, 1.08, 1.16];
 const GOD_SKILL_K = [1.1, 0.88, 0.62];            // free God Balls: their forms change the abilities themselves, so the stat boost is smaller
@@ -44,9 +44,11 @@ function supBlast(f, x, y, r, dmg, o = {}) {
   return n;
 }
 /* visual-only layer: big cinematic shapes (giant skull, gates, moons, wings, clocks…) */
-function vfx(draw, life, o = {}) { if (FX.off || !BATTLE) return; (BATTLE.vfx || (BATTLE.vfx = [])).push({ draw, life, t: 0, ...o }); }
+/** 2.4.0 "Cinematic effects" setting: full | reduced | minimal (minimal keeps only gameplay warnings: vfx(..., { keep: true })) */
+const cineLevel = () => (typeof SAVE !== 'undefined' && SAVE && SAVE.settings && SAVE.settings.cinematic) || 'full';
+function vfx(draw, life, o = {}) { if (FX.off || !BATTLE) return; if (!o.keep && cineLevel() === 'minimal') return; (BATTLE.vfx || (BATTLE.vfx = [])).push({ draw, life, t: 0, ...o }); }
 function camPunch(x, y, k = 0.14, dur = 0.7) { if (FX.off || !BATTLE) return; BATTLE.cam = { x, y, k, t: 0, dur }; }
-function darkArena(t, col = '#000000', a = 0.6) { if (!FX.off && BATTLE) BATTLE.darkFx = { t, max: t, col, a }; }
+function darkArena(t, col = '#000000', a = 0.6) { const c = cineLevel(); if (!FX.off && BATTLE && c !== 'minimal') BATTLE.darkFx = { t, max: t, col, a: c === 'reduced' ? a * 0.6 : a }; }
 function supSay(f, txt, col, size = 16) { if (!FX.off) FX.text(f.x, f.y - f.r - 30, txt, col, size, { life: 1.1 }); }
 
 /* ---------------- forms ---------------- */
@@ -66,7 +68,9 @@ function supremeInit(f, o) {
     f.skills.forEach((s, i) => { s.cd = Math.max(0.5, (s.cd || 6) * mul); if (off.includes(i)) { s.locked = true; s.disabled = true; } });
   }
   // free God Balls unlock their forms with the ball's level; owner / practice test battles can use every form
-  f.formCap = f.def.godBall && !f.def.paid && !(BATTLE && BATTLE.cfg && (BATTLE.cfg.godTest || BATTLE.cfg.adminTest)) ? godFormCap(f.level) : 2;   // bought Premium God Balls: every form at once
+  const testB = !!(BATTLE && BATTLE.cfg && (BATTLE.cfg.godTest || BATTLE.cfg.adminTest)), fl = f.def.formLevels;
+  f.formCap = testB ? 2 : fl ? (f.level >= fl[1] ? 2 : f.level >= fl[0] ? 1 : 0)      // 2.4.0 God of Absolute: forms unlock with its own level (Lv 70 / Lv 100)
+    : f.def.godBall && !f.def.paid ? godFormCap(f.level) : 2;                           // free God Balls: Lv 10 / 20; bought Premium God Balls: every form at once
   if (f.def.godBall) f.ultCharge *= f.def.ultChargeMul || 0.7;            // free God Balls: ultimates charge a little slower (they also transform with them)
   const pv = SUP.passives[f.def.id]; if (pv && !f.isClone) { f.sx.passive = pv.tick; if (pv.init) pv.init(f); }
   if (o.startForm && !f.isClone) applyForm(f, clamp(o.startForm | 0, 0, f.formCap), true);

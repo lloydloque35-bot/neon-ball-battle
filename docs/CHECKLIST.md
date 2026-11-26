@@ -1,4 +1,14 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0)
+
+## 2.4.0 — GOD OF ABSOLUTE, limited edition ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md), QA report: [QA-2.4.0.md](QA-2.4.0.md))
+- ✅ The ball: 5 skills × 3 versions, 2 ultimates (full cinematic order, arena restored), passive, 3 forms by its own level (Lv 70 / 100)
+- ✅ Lv 50 → 100 progression for this ball only (verified battles, owner EXP scale); Lv 60 / 80 / 90 features
+- ✅ Limited edition: real stock, reservations, last-slot safety, numbered owners, permanent ledger, sold out, new editions
+- ✅ Verified purchase → Lv 50, all skills, owner rewards; restore; PayMongo path with sell-out protection
+- ✅ Owner-only management panel; "Cinematic effects" quality setting
+- ✅ Database backup before every migration
+- ✅ 122 tests pass (20 new); browser QA with screenshots
+- 🟡 Owner: real PHP 499 payment test on the live site; check on a real phone
 
 ## 2.3.0 — God of Guns + God Portal, Premium God Shop ([PREMIUM-GOD-SHOP.md](PREMIUM-GOD-SHOP.md))
 - ✅ God of Guns and God Portal: 5 skills × 3 versions, regular + final-form ultimates, 3 forms, passives, art, effects, sounds

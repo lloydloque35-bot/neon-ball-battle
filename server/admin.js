@@ -102,12 +102,13 @@ function register(app, S) {
     const isOwnerAcc = u.role === 'owner';
     const owned = new Set(db.all('SELECT ball_id FROM user_balls WHERE user_id = ? AND owned = 1', u.id).map(r => r.ball_id));
     const list = which === '*all*'
-      ? core.allBalls().filter(d => !d.draft && !d.summonOnly && (owned.has(d.id) || d.free || (isOwnerAcc && !d.fusion)))
+      ? core.allBalls().filter(d => !d.draft && !d.summonOnly && !d.maxLevel && (owned.has(d.id) || d.free || (isOwnerAcc && !d.fusion)))
       : [core.getBall(which)].filter(Boolean);
     if (!list.length) throw bad('Choose a ball to upgrade');
     const tree = Object.fromEntries(core.TREE.map(n => [n.id, 1])), up = { ...core.UPGRADE_CAPS }, evo = core.EVO.length - 1;
     for (const d of list) {
       if (d.draft || d.summonOnly) throw bad('That ball cannot be upgraded');
+      if (d.maxLevel) throw bad(`${d.name} levels up only through verified battles (Lv 50–${d.maxLevel})`);
       if (!owned.has(d.id) && !d.free && !(isOwnerAcc && !d.fusion)) throw bad(`${u.username} does not own ${d.name}`);
       S.ensureBallRow(u.id, d.id);
       db.run('UPDATE user_balls SET level = ?, exp = 0, evo = ?, up = ?, tree = ? WHERE user_id = ? AND ball_id = ?', core.MAX_LVL, evo, JSON.stringify(up), JSON.stringify(tree), u.id, d.id);
@@ -120,9 +121,9 @@ function register(app, S) {
     const b = ctx.body, done = {};
     db.tx(() => S.withCatalog(u, () => {
       if (b.coins) { const n = num(b.coins, 1, 1000000, 0); S.addCoins(id, n); done.coins = n; }
-      if (b.ball) { const d = core.getBall(String(b.ball)); if (!d || d.adminOnly || d.fusion) throw bad('That ball cannot be granted'); S.unlockBall(id, d.id, 'grant', 'Granted by the owner'); done.ball = d.id; }
+      if (b.ball) { const d = core.getBall(String(b.ball)); if (!d || d.adminOnly || d.fusion) throw bad('That ball cannot be granted'); if (d.edition) throw bad(`${d.name} is a limited edition: it can only be obtained by a verified purchase`); S.unlockBall(id, d.id, 'grant', 'Granted by the owner'); done.ball = d.id; }
       if (b.premiumDays) { const n = num(b.premiumDays, 1, 3650, 0); S.grantPremium(id, n, me.id); done.premiumDays = n; }
-      if (b.cosmetic) { const c = core.COSMETICS.find(x => x.id === b.cosmetic); if (!c) throw bad('Unknown cosmetic'); db.run("INSERT OR IGNORE INTO cosmetics_owned (user_id, cosmetic_id, acquired_at, source) VALUES (?, ?, ?, 'grant')", id, c.id, now()); done.cosmetic = c.id; }
+      if (b.cosmetic) { const c = core.COSMETICS.find(x => x.id === b.cosmetic); if (!c) throw bad('Unknown cosmetic'); if (c.exclusive) throw bad('God of Absolute rewards come only with a verified purchase'); db.run("INSERT OR IGNORE INTO cosmetics_owned (user_id, cosmetic_id, acquired_at, source) VALUES (?, ?, ?, 'grant')", id, c.id, now()); done.cosmetic = c.id; }
       if (b.maxBall) done.maxed = maxOut(u, String(b.maxBall));
     }));
     if (!Object.keys(done).length) throw bad('Nothing to grant');

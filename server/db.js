@@ -35,6 +35,13 @@ class DB {
     const done = new Set(this.all('SELECT version FROM schema_migrations').map(r => r.version));
     const files = fs.readdirSync(dir).filter(f => /^\d+_.+\.sql$/.test(f)).sort();
     const applied = [];
+    // 2.4.0: back up existing player data before changing the database (only when there is data and a migration is waiting)
+    const pending = files.filter(f => !done.has(parseInt(f, 10)));
+    this.lastBackup = null;
+    if (pending.length && done.size && this.file && this.file !== ':memory:') {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      this.lastBackup = this.backup(path.join(path.dirname(this.file), 'backups', `${path.basename(this.file)}.before-${pending[0].replace(/\.sql$/, '')}.${stamp}.db`));
+    }
     for (const f of files) {
       const v = parseInt(f, 10);
       if (done.has(v)) continue;

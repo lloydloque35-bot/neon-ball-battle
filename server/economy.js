@@ -152,6 +152,7 @@ function register(app, S, H) {
   action('/api/cosmetics/buy', (u, b) => {
     const c = core.COSMETICS.find(x => x.id === b.id); if (!c) throw bad('Unknown item');
     if (c.premium) throw bad('Premium cosmetics are included with Ultimate Premium');
+    if (c.exclusive) throw bad('This item comes only with a verified God of Absolute purchase');
     if (db.get('SELECT 1 FROM cosmetics_owned WHERE user_id = ? AND cosmetic_id = ?', u.id, c.id)) throw bad('Already owned');
     spendCoins(u.id, c.price);
     db.run("INSERT INTO cosmetics_owned (user_id, cosmetic_id, acquired_at, source) VALUES (?, ?, ?, 'purchase')", u.id, c.id, now());

@@ -54,6 +54,7 @@ const Online = {
   },
   applySave(s) {
     this.save = s;
+    if (s && s.xpHigh && window.NBB_CORE && NBB_CORE.setXpTune) NBB_CORE.setXpTune(s.xpHigh);   // 2.4.0: EXP scale above Lv 50 comes from the server
     if (s.monthlyCoins && s.monthlyCoins.available && !this._mcHint) { this._mcHint = true; setTimeout(() => toast(`🎁 Your ${fmtNum(s.monthlyCoins.amount)} monthly Premium coins are ready! Open ★ Premium to claim them.`, 'gold'), 1200); }
     if (s.season && s.season.pending && s.season.pending.length && !this._seasonHint) { this._seasonHint = true; setTimeout(() => toast('🏆 Last season is over: your season rewards are waiting in 🌐 Online &amp; Ranked.', 'gold'), 2400); }
     const base = defaultSave();
@@ -139,14 +140,20 @@ const Online = {
     const kind = this.active && this.save && this.save.loadout && this.save.loadout.victory; if (!kind) return;
     const c = h('canvas', { class: 'victory-fx', width: 720, height: 260, 'aria-hidden': 'true' }); container.prepend(c);
     const ctx = c.getContext('2d'), parts = [], t0 = performance.now();
-    const cols = kind === 'win_supernova' ? ['#fff59d', '#ffd54f', '#ffffff'] : ['#ff1744', '#ffea00', '#00e676', '#00b0ff', '#d500f9', '#ffffff'];
+    const cols = kind === 'win_absolute' ? ['#ffd54f', '#fffde7', '#b388ff'] : kind === 'win_supernova' ? ['#fff59d', '#ffd54f', '#ffffff'] : ['#ff1744', '#ffea00', '#00e676', '#00b0ff', '#d500f9', '#ffffff'];
     const burst = (x, y, n, sp) => { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = sp * (0.4 + Math.random()); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1.4, c: cols[i % cols.length] }); } };
-    if (kind === 'win_supernova') burst(360, 130, 160, 260);
+    if (kind === 'win_supernova' || kind === 'win_absolute') burst(360, 130, 160, 260);
     const step = () => {
       const t = (performance.now() - t0) / 1000; if (t > 4 || !c.isConnected) return;
       if (kind === 'win_fireworks' && Math.random() < 0.08) burst(80 + Math.random() * 560, 40 + Math.random() * 120, 50, 160);
       if (kind === 'win_confetti' && t < 2.5) for (let i = 0; i < 4; i++) parts.push({ x: Math.random() * 720, y: -10, vx: (Math.random() - 0.5) * 40, vy: 80 + Math.random() * 80, life: 3, c: cols[(Math.random() * cols.length) | 0], sq: true });
       ctx.clearRect(0, 0, 720, 260); ctx.globalCompositeOperation = 'lighter';
+      if (kind === 'win_absolute') {      // 2.4.0 Absolute Ascension: celestial rings rise and the MVP plate appears (owners of GOD OF ABSOLUTE)
+        for (let i = 0; i < 4; i++) { ctx.save(); ctx.translate(360, 150 - t * 18); ctx.rotate(t * (i % 2 ? -0.6 : 0.5) + i); ctx.scale(1, 0.32 + i * 0.05); ctx.strokeStyle = i % 2 ? 'rgba(255,253,231,.8)' : 'rgba(255,213,79,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 90 + i * 26 + t * 20, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+        if (t > 0.4 && Math.random() < 0.1) burst(360 + (Math.random() - 0.5) * 300, 130, 30, 140);
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(1, t * 2); ctx.font = '900 26px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillRect(220, 214, 280, 36); ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 2; ctx.strokeRect(220, 214, 280, 36);
+        ctx.fillStyle = '#ffd54f'; ctx.fillText('👑 MVP • THE ABSOLUTE OWNER', 360, 241); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'lighter';
+      }
       for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.life -= 1 / 60; if (p.life <= 0) { parts.splice(i, 1); continue; } p.x += p.vx / 60; p.y += p.vy / 60; p.vy += (p.sq ? 10 : 60) / 60; ctx.globalAlpha = Math.min(1, p.life); ctx.fillStyle = p.c; if (p.sq) ctx.fillRect(p.x, p.y, 6, 9); else { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); } }
       requestAnimationFrame(step);
     };
@@ -298,9 +305,10 @@ Object.assign(UI, {
       row.append(h('button', { class: 'opt' + (!lo[slot] ? ' active' : ''), onclick: () => act(() => Online.post('/api/cosmetics/equip', { slot, id: null }), () => this.render_profile()) }, 'Default'));
       for (const c of COSMETICS.filter(x => x.slot === slot)) {
         const have = c.premium ? prem : owned.has(c.id), on = lo[slot] === c.id;
-        const sw = c.color && c.color !== 'rainbow' ? h('i', { class: 'swatch', style: { background: c.color } }) : c.tint ? h('i', { class: 'swatch', style: { background: c.tint } }) : null;
+        const sw = c.color === 'celestial' ? h('i', { class: 'swatch', style: { background: 'linear-gradient(90deg,#ffd54f,#fffde7,#b388ff)' } }) : c.color && c.color !== 'rainbow' ? h('i', { class: 'swatch', style: { background: c.color } }) : c.tint ? h('i', { class: 'swatch', style: { background: c.tint } }) : null;
         row.append(have
-          ? h('button', { class: 'opt' + (on ? ' active' : ''), onclick: () => act(() => Online.post('/api/cosmetics/equip', { slot, id: c.id }), () => this.render_profile()) }, sw, (c.premium ? '★ ' : '') + c.name)
+          ? h('button', { class: 'opt' + (on ? ' active' : ''), onclick: () => act(() => Online.post('/api/cosmetics/equip', { slot, id: c.id }), () => this.render_profile()) }, sw, (c.exclusive ? '👑 ' : c.premium ? '★ ' : '') + c.name)
+          : c.exclusive ? h('button', { class: 'opt locked', onclick: () => this.show('godshop') }, sw, '👑 ' + c.name + ' (God of Absolute owners)')
           : c.premium ? h('button', { class: 'opt locked', onclick: () => this.show('membership') }, sw, '★ ' + c.name + ' (Premium)')
             : h('button', { class: 'opt', onclick: () => act(() => Online.post('/api/cosmetics/buy', { id: c.id }), () => this.render_profile()) }, sw, `${c.name} — 🪙 ${fmtNum(c.price)}`));
       }
@@ -398,7 +406,7 @@ Object.assign(UI, {
     for (const p of r.list) {
       const b = getBall(p.avatar) || getBall('fire');
       tbl.append(h('tr', { class: (Online.active && p.username === Online.me.user.username) ? 'me' : '', onclick: () => this.publicProfile(p.username), style: { cursor: 'pointer' } },
-        h('td', {}, p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank), h('td', {}, ballCanvas(b, 32, { small: true })), h('td', {}, p.username, p.premium ? h('span', { class: 'badge-premium sm' }, '★') : ''),
+        h('td', {}, p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank), h('td', {}, ballCanvas(b, 32, { small: true })), h('td', {}, p.username, p.premium ? h('span', { class: 'badge-premium sm' }, '★') : '', p.editions && p.editions.godofabsolute ? h('span', { class: 'abs-badge', title: 'GOD OF ABSOLUTE owner' }, '👑 #' + String(p.editions.godofabsolute).padStart(3, '0')) : ''),
         h('td', {}, p.level), h('td', {}, fmtNum(p.rp)), h('td', {}, p.wins), h('td', {}, p.losses), h('td', {}, p.tourneyWins)));
     }
     body.append(r.list.length ? h('div', { style: { overflowX: 'auto' } }, tbl) : h('p', { class: 'muted' }, 'No ranked players yet. Win a verified battle to appear here!'), h('p', { class: 'muted small' }, r.note));
@@ -409,7 +417,8 @@ Object.assign(UI, {
     try {
       const p = await API.get('/api/players/' + encodeURIComponent(name)), b = getBall(p.avatar) || getBall('fire'), cv = ballCanvas(b, 140, { big: true });
       this.live.push({ canvas: cv, def: b, opts: { size: 140, big: true }, rot: 0, modal: true });
-      this.modal(h('div', { style: { textAlign: 'center' } }, cv, h('h2', {}, p.username, ' ', p.premium ? h('span', { class: 'badge-premium' }, '★ PREMIUM') : null),
+      const absN = p.editions && p.editions.godofabsolute;
+      this.modal(h('div', { style: { textAlign: 'center' } }, cv, absN && p.title === 'title_absolute' ? h('div', {}, h('span', { class: 'abs-plate' }, '👑 THE ABSOLUTE OWNER')) : null, h('h2', {}, p.username, ' ', p.premium ? h('span', { class: 'badge-premium' }, '★ PREMIUM') : null, absN ? h('span', { class: 'abs-badge', title: 'GOD OF ABSOLUTE owner' }, '👑 GOD OF ABSOLUTE #' + String(absN).padStart(3, '0')) : null),
         h('p', { class: 'muted' }, `Level ${p.level} • ${fmtNum(p.rp)} rank points • favorite: ${getBall(p.favorite)?.name || '—'} • since ${dateStr(p.since)}`),
         h('div', { class: 'results-stats', html: Object.entries({ Battles: p.record.battles, Wins: p.record.wins, Losses: p.record.losses, KOs: p.record.kills, Tournaments: p.record.tourneyWins, 'Best wave': p.record.survivalBest }).map(([k, v]) => `<div><b>${v}</b>${k}</div>`).join('') })));
     } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); }
@@ -460,7 +469,7 @@ Object.assign(UI, {
   adTab: 'overview',
   render_admin() {
     const tabs = $('#adminTabs'); tabs.innerHTML = '';
-    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls'], ['shopph', '💳 God Shop (PHP)']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
+    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls'], ['shopph', '💳 God Shop (PHP)'], ['absolute', '👑 God of Absolute']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
       tabs.append(h('button', { class: 'tab admin-tab' + (this.adTab === k ? ' active' : ''), onclick: () => { this.adTab = k; this.render_admin(); } }, l));
     tabs.append(h('button', { class: 'btn admin small', style: { marginLeft: 'auto' }, onclick: () => this.openCreator(null) }, '＋ Create New Ball'));
     const body = $('#adminBody'); body.innerHTML = '<p class="muted">Loading…</p>';

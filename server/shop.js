@@ -29,7 +29,11 @@ const PRODUCTS = {
   godofguns: { id: 'godofguns', name: 'God of Guns Ball', amount: 9900, balls: ['godofguns'] },
   godportal: { id: 'godportal', name: 'God Portal Ball', amount: 9900, balls: ['godportal'] },
   god_bundle: { id: 'god_bundle', name: 'God of Guns + God Portal', amount: 19800, balls: ['godofguns', 'godportal'] },
+  // 2.4.0 LIMITED EDITION: a slot is reserved while paying; ownership + Lv 50 come from server/edition.js on a verified payment
+  godofabsolute: { id: 'godofabsolute', name: 'GOD OF ABSOLUTE – LIMITED EDITION', amount: 49900, balls: ['godofabsolute'], edition: true },
 };
+/** two products conflict when they would grant the same ball */
+const overlap = (x, y) => { const A = PRODUCTS[x], B = PRODUCTS[y]; return !!(A && B && A.balls.some(b => B.balls.includes(b))); };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };
 const PAID_EVENTS = ['checkout_session.payment.paid'];
 /** ULTIMATE PREMIUM can also be paid by QR: 365 days, no automatic renewal, price set by the owner (default PHP 499) */
@@ -110,7 +114,7 @@ function register(app, S) {
   const owns = (uid, ball) => !!db.get('SELECT 1 FROM user_balls WHERE user_id = ? AND ball_id = ? AND owned = 1', uid, ball);
   const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || (p.product === PREMIUM.id ? PREMIUM : {})).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status,
     provider: p.provider, method: p.method || null, methodName: p.provider === 'manual' ? `${MANUAL_KINDS[p.method] || p.method} (QR)` : (METHODS[p.method] || p.method || null),
-    reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
+    reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, holdUntil: p.hold_until || null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
 
   function grantBalls(uid, balls, purchaseId) {
     for (const ball of balls) db.run(`INSERT INTO user_balls (user_id, ball_id, owned, source, unlocked_at) VALUES (?, ?, 1, 'purchase', ?)
@@ -140,7 +144,17 @@ function register(app, S) {
     db.tx(() => {
       const cur2 = db.get('SELECT status FROM shop_purchases WHERE id = ?', p.id); if (cur2.status === 'paid') return;
       if (db.get('SELECT 1 FROM shop_purchases WHERE payment_ref = ? AND id != ?', ref, p.id)) { S.secEvent(p.user_id, 'shop_payment_reused', 3, { purchase: p.id, ref }); db.run("UPDATE shop_purchases SET status = 'review', note = 'payment already used by another purchase', updated_at = ? WHERE id = ?", now(), p.id); return; }
-      const balls = JSON.parse(p.balls), already = balls.every(b => owns(p.user_id, b));
+      const balls = JSON.parse(p.balls);
+      if (PRODUCTS[p.product] && PRODUCTS[p.product].edition) {        // limited edition: the grant itself re-checks the supply
+        const g = S.edition.grant(p.user_id, p.id, p.product, { source: 'paymongo:' + source });
+        if (g.full) { db.run("UPDATE shop_purchases SET status = 'review', payment_ref = ?, method = ?, livemode = ?, note = ?, updated_at = ? WHERE id = ?", ref, method, A.livemode ? 1 : 0, 'Paid after the edition sold out — refund this payment from the PayMongo dashboard', now(), p.id);
+          S.secEvent(p.user_id, 'shop_edition_oversold', 2, { purchase: p.id }); return; }
+        db.run("UPDATE shop_purchases SET status = 'paid', payment_ref = ?, method = ?, livemode = ?, paid_at = ?, updated_at = ?, hold_until = NULL, note = ? WHERE id = ?", ref, method, A.livemode ? 1 : 0, now(), now(),
+          g.already ? 'The player already owns this edition — refund this payment from the PayMongo dashboard' : null, p.id);
+        S.audit(p.user_id, 'shop.purchase_paid', p.id, null, { product: p.product, amount: p.amount, method, source, serial: g.serial || g.already });
+        return;
+      }
+      const already = balls.every(b => owns(p.user_id, b));
       db.run("UPDATE shop_purchases SET status = 'paid', payment_ref = ?, method = ?, livemode = ?, paid_at = ?, updated_at = ?, note = ? WHERE id = ?", ref, method, A.livemode ? 1 : 0, now(), now(),
         already ? 'Paid twice for a ball already owned — refund this payment from the PayMongo dashboard' : null, p.id);
       grantBalls(p.user_id, balls, p.id);
@@ -155,6 +169,7 @@ function register(app, S) {
     const s = status(), u = ctx.user;
     return { enabled: s.enabled, mode: s.mode, currency: 'PHP', paymongo: s.paymongo, methods: s.paymongo ? methods().map(id => ({ id, name: METHODS[id] })) : [],
       manual: { enabled: s.manual, accounts: u && s.manual ? manualAccounts().map(accountView) : [] }, premium: premiumView(),
+      edition: Object.fromEntries(Object.values(PRODUCTS).filter(p => p.edition).map(p => [p.id, S.edition.status(p.id, u && u.id)])),
       awaitingCount: u && u.role === 'owner' ? db.get("SELECT COUNT(*) AS n FROM shop_purchases WHERE provider = 'manual' AND status = 'awaiting'").n : undefined,
       products: Object.values(PRODUCTS).map(p => ({ id: p.id, name: p.name, price: p.amount / 100, balls: p.balls, owned: u ? p.balls.every(b => owns(u.id, b) || u.role === 'owner') : false })) };
   });
@@ -167,9 +182,13 @@ function register(app, S) {
     if (have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
     if (have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
     const open = db.get("SELECT * FROM shop_purchases WHERE user_id = ? AND product = ? AND status = 'pending' AND checkout_url IS NOT NULL AND created_at > ? ORDER BY created_at DESC", u.id, P.id, now() - 20 * 60e3);
-    if (open) return { url: open.checkout_url, purchaseId: open.id, reused: true };
+    if (open && (!P.edition || open.hold_until > now())) return { url: open.checkout_url, purchaseId: open.id, reused: true };
     const id = S_.randomId('pur_'), ms = methods();
-    db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'paymongo', 'creating', ?, ?)", id, u.id, P.id, JSON.stringify(P.balls), P.amount, now(), now());
+    db.tx(() => {      // limited edition: hold a slot for the checkout (the last slot can only be held once)
+      if (P.edition) { S.edition.assertSlot(P.id, u.id); if (db.get("SELECT 1 FROM shop_purchases WHERE product = ? AND user_id = ? AND status = 'awaiting'", P.id, u.id)) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING'); }
+      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, hold_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'paymongo', 'creating', ?, ?, ?)", id, u.id, P.id, JSON.stringify(P.balls), P.amount, P.edition ? now() + S.edition.HOLD_CHECKOUT_MS : null, now(), now());
+      if (P.edition) S.edition.ledger(P.id, 'reserve', { user: u.id, purchase: id, details: { via: 'paymongo' } });
+    });
     let sess;
     try {
       sess = await paymongo('POST', 'checkout_sessions', { data: { attributes: {
@@ -202,9 +221,10 @@ function register(app, S) {
     const list = db.all('SELECT * FROM shop_purchases WHERE user_id = ? ORDER BY created_at', u.id);
     let restored = 0;
     for (const p of list) {
-      if (p.status === 'paid') { const balls = JSON.parse(p.balls); if (!balls.every(b => owns(u.id, b))) { db.tx(() => grantBalls(u.id, balls, p.id)); restored++; } }
+      if (p.status === 'paid' && !(PRODUCTS[p.product] || {}).edition) { const balls = JSON.parse(p.balls); if (!balls.every(b => owns(u.id, b))) { db.tx(() => grantBalls(u.id, balls, p.id)); restored++; } }
       else if (p.provider === 'paymongo' && (p.status === 'pending' || p.status === 'expired') && p.created_at > now() - 7 * 86400e3 && pmStatus().enabled) { const q = await confirmPurchase(p, 'restore'); if (q.status === 'paid') restored++; }
     }
+    restored += S.edition.restore(u.id, ctx.ip);       // limited edition: ball, Lv 50 and owner rewards
     S.audit(u.id, 'shop.restore', null, ctx.ip, { restored });
     return { restored, owned: Object.values(PRODUCTS).flatMap(p => p.balls).filter((b, i, a) => a.indexOf(b) === i && owns(u.id, b)) };
   });
@@ -230,12 +250,29 @@ function register(app, S) {
     const ref = normRef(ctx.body.reference);
     if (!/^[A-Z0-9]{6,32}$/.test(ref)) throw bad('Type the reference number from your payment receipt (6 to 32 letters or numbers)');
     const waiting = db.all("SELECT product FROM shop_purchases WHERE user_id = ? AND provider = 'manual' AND status = 'awaiting'", u.id);
-    const wBalls = waiting.filter(w => w.product !== PREMIUM.id);
-    if (isPrem ? waiting.some(w => w.product === PREMIUM.id) : wBalls.some(w => w.product === P.id || w.product === 'god_bundle' || P.id === 'god_bundle')) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
+    if (isPrem ? waiting.some(w => w.product === PREMIUM.id) : waiting.some(w => overlap(w.product, P.id))) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
     if (waiting.length >= MAX_AWAITING) throw new HttpError(429, 'Please wait for the owner to check the payments you already sent.', 'AWAITING');
     if (db.get('SELECT 1 FROM shop_purchases WHERE payment_ref = ?', 'manual:' + ref)) {
       S.secEvent(u.id, 'shop_manual_ref_reused', 2, { ref }, ctx.ip);
       throw new HttpError(409, 'This reference number was already used. Check the number on your receipt.', 'REF_USED');
+    }
+    if (P.edition) {      // limited edition: the payment must belong to this player's reservation
+      const rid = String(ctx.body.purchaseId || ''); let st = 'awaiting';
+      try {
+        db.tx(() => {
+          const r = db.get("SELECT * FROM shop_purchases WHERE id = ? AND user_id = ? AND product = ? AND provider = 'manual'", rid, u.id, P.id);
+          if (!r || !['reserved', 'released'].includes(r.status)) throw bad('Reserve your slot first: press Buy again before paying.');
+          let note = null;
+          if (!(r.status === 'reserved' && r.hold_until > now())) {      // the reservation ran out: take a slot again if one is free
+            try { S.edition.assertSlot(P.id, u.id, r.id); S.edition.ledger(P.id, 'rehold', { user: u.id, purchase: r.id }); }
+            catch (e) { if (e.code === 'ALREADY_OWNED') throw e; st = 'review'; note = 'The edition sold out while this player was paying — please refund this payment'; }
+          }
+          db.run('UPDATE shop_purchases SET status = ?, payment_ref = ?, method = ?, payer_note = ?, note = ?, hold_until = NULL, updated_at = ? WHERE id = ?', st, 'manual:' + ref, a.kind, clean(ctx.body.note, 60) || null, note, now(), r.id);
+          if (st === 'review') { S.edition.ledger(P.id, 'sold_out_refund', { user: u.id, purchase: r.id, details: { source: 'qr' } }); S.secEvent(u.id, 'shop_edition_oversold', 2, { purchase: r.id }); }
+        });
+      } catch (e) { if (/UNIQUE/.test(e.message)) throw new HttpError(409, 'This reference number was already used. Check the number on your receipt.', 'REF_USED'); throw e; }
+      S.audit(u.id, 'shop.manual_submitted', rid, ctx.ip, { product: P.id, amount: P.amount, method: a.kind, soldOut: st === 'review' });
+      return { purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', rid)), soldOut: st === 'review' };
     }
     const id = S_.randomId('pur_');
     try {
@@ -350,7 +387,15 @@ function register(app, S) {
     db.tx(() => {
       const p = db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id);
       if (p.status === 'paid') throw new HttpError(409, 'This payment was already approved');
-      if (p.status !== 'awaiting' && p.status !== 'rejected') throw bad('This payment cannot be approved');
+      if (p.status !== 'awaiting' && p.status !== 'rejected' && !(p.status === 'review' && PRODUCTS[p.product] && PRODUCTS[p.product].edition && p.provider === 'manual')) throw bad('This payment cannot be approved');
+      if (PRODUCTS[p.product] && PRODUCTS[p.product].edition) {     // limited edition: serial number, Lv 50 and owner rewards — only if a slot is left
+        const g = S.edition.grant(p.user_id, p.id, p.product, { actor: me.id, source: 'qr' });
+        if (g.full) throw new HttpError(409, 'The edition is full, so this payment cannot get a slot. Refund it, or release a new edition first.', 'SOLD_OUT');
+        db.run("UPDATE shop_purchases SET status = 'paid', paid_at = ?, updated_at = ?, reviewed_by = ?, reviewed_at = ?, hold_until = NULL, note = ? WHERE id = ?", now(), now(), me.id, now(),
+          g.already ? 'The player already owns this edition — please refund this payment' : null, p.id);
+        S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, serial: g.serial || g.already });
+        return;
+      }
       const prem = p.product === PREMIUM.id, balls = JSON.parse(p.balls), already = !prem && balls.every(b => owns(p.user_id, b));
       db.run("UPDATE shop_purchases SET status = 'paid', paid_at = ?, updated_at = ?, reviewed_by = ?, reviewed_at = ?, note = ? WHERE id = ?", now(), now(), me.id, now(),
         already ? 'The player already owned this — please refund this payment' : null, p.id);
@@ -366,6 +411,7 @@ function register(app, S) {
     const reason = clean(ctx.body.reason, 120) || 'The payment was not found';
     db.run("UPDATE shop_purchases SET status = 'rejected', note = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ? AND status = 'awaiting'", reason, me.id, now(), now(), p.id);
     S.audit(me.id, 'shop.manual_rejected', p.id, ctx.ip, { user: p.user_id, product: p.product, ref: p.payment_ref, reason });
+    if (PRODUCTS[p.product] && PRODUCTS[p.product].edition) S.edition.ledger(p.product, 'release', { user: p.user_id, purchase: p.id, actor: me.id, details: { why: 'payment rejected', reason } });
     S.secEvent(p.user_id, 'shop_manual_rejected', 1, { purchase: p.id });
     return { ok: true, purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', p.id)) };
   });

@@ -271,7 +271,7 @@ function register(app, S) {
     try {
       core.setCatalog(catalog);
       const avg = k => humans.reduce((n, p) => n + (p.spec[k] || 0), 0) / humans.length;
-      const lv = Math.max(1, Math.round(avg('level'))), evo = Math.min(2, Math.round(avg('evo')));
+      const lv = Math.min(core.MAX_LVL, Math.max(1, Math.round(avg('level')))), evo = Math.min(2, Math.round(avg('evo')));
       const pool = core.opponentPool(false).filter(b => !b.godMode && !b.fusion && !b.draft && !b.summonOnly).map(b => b.id);
       let ai = 0;
       list = seats.map(s => s.p ? { ...s.p.spec, team: s.team }

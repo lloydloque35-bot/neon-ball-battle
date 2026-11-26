@@ -9,12 +9,13 @@ const { RateLimiter } = require('./security');
 const { createLogger, createServices } = require('./services');
 const { loadCore } = require('./core');
 
-const VERSION = '2.3.1';
+const VERSION = '2.4.0';
 
 function createGameServer(cfg, opts = {}) {
   const log = opts.log || createLogger(cfg.logLevel);
   const db = new DB(cfg.dbFile);
   const applied = db.migrate();
+  if (db.lastBackup) log.info('[db] backed up the database before migrating:', db.lastBackup);
   if (applied.length) log.info('[db] applied migrations:', applied.join(', '));
   const S = createServices({ cfg, db, log });
   S.limiter = new RateLimiter();
@@ -22,7 +23,7 @@ function createGameServer(cfg, opts = {}) {
   S.version = VERSION;
   const app = new App({ root: cfg.root, secure: cfg.cookieSecure, trustProxy: cfg.trustProxy, log });
   // order matters: billing defines premium helpers used by auth/game; auth installs the session middleware
-  for (const mod of ['billing', 'auth', 'game', 'admin', 'season', 'pvp', 'shop']) {
+  for (const mod of ['billing', 'auth', 'game', 'admin', 'season', 'pvp', 'edition', 'shop']) {
     const file = path.join(__dirname, mod + '.js');
     if (fs.existsSync(file)) require(file).register(app, S);
   }

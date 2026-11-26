@@ -140,12 +140,12 @@ Tested setup. The free plan asks for a card to verify the account, but the Free 
 
    alwaysdata requires listening on IPv6 `::` (hence `HOST=::`). It provides `PORT` itself.
 6. In the site's **SSL** tab, turn on forcing HTTPS. Sign-in cookies are `Secure`, so the game must be opened with `https://`.
-7. **Updating later:** run `cd neon-ball-battle && git pull` over SSH, then restart the site. `data/` (the database) is not in git, so updates never touch it.
+7. **Updating later:** run `cd neon-ball-battle && git pull` over SSH, then restart the site. `data/` (the database) is not in git, so updates never touch it. When an update brings a database change, the server first saves a copy of the database in `data/backups/` (the file name says which change it was made before).
 8. **Premium God Shop (PHP):** open Admin Dashboard → 💳 God Shop (PHP), upload your Maya / MariBank QR, tick **Turn QR payments ON**, press **Save**. (Optional, needs a registered business: PayMongo automatic checkout — add `PAYMONGO_SECRET_KEY=sk_test_...` to the Environment line, restart, press **Register webhook automatically**.) Full steps: [PREMIUM-GOD-SHOP.md](PREMIUM-GOD-SHOP.md).
 
 ## 4. Database migrations
 
-Migrations are numbered SQL files in `server/migrations/`, and each is applied once. They run automatically on start, or manually with `npm run migrate`. To change the schema, add a new file such as `002_something.sql`. Never edit a migration that has already shipped.
+Before applying any new migration to an existing database, the server writes a full backup copy to `data/backups/` (2.4.0). Migrations are numbered SQL files in `server/migrations/`, and each is applied once. They run automatically on start, or manually with `npm run migrate`. To change the schema, add a new file such as `002_something.sql`. Never edit a migration that has already shipped.
 
 ## 5. Backups
 

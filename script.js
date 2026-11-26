@@ -148,7 +148,7 @@ function toast(msg, cls = '') {
 const SAVE_KEY = 'neonBallBattle_ultimateGods_v1';
 const DEFAULT_SETTINGS = {
   sfx: 0.6, music: 0.35, musicOn: true, shake: true, particles: 'high', dmgNumbers: true,
-  labels: true, speed: 1, difficulty: 'normal', control: 'auto', fps: false, flashes: true,
+  labels: true, speed: 1, difficulty: 'normal', control: 'auto', fps: false, flashes: true, cinematic: 'full',
 };
 const STARTERS = ['fire', 'ice', 'thunder', 'water', 'earth', 'wind'];
 let SAVE = null;
@@ -1188,7 +1188,7 @@ function resolveCos(lo) {
   for (const [slot, id] of Object.entries(lo || {})) { const c = (typeof COSMETICS !== 'undefined' ? COSMETICS : []).find(x => x.id === id && x.slot === slot); if (c) out[slot] = c; }
   return Object.keys(out).length ? out : null;
 }
-const cosColor = (c, t) => c === 'rainbow' ? `hsl(${(t * 220) % 360},100%,62%)` : c;
+const cosColor = (c, t) => c === 'rainbow' ? `hsl(${(t * 220) % 360},100%,62%)` : c === 'celestial' ? ['#ffd54f', '#fffde7', '#b388ff'][Math.floor(t * 9) % 3] : c;
 /* draws a static/animated preview into a small canvas */
 function drawPreview(canvas, def, opts = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -1339,7 +1339,8 @@ class Fighter {
     this.isPlayer = !!o.isPlayer; this.isClone = !!o.clone; this.owner = o.owner || null; this.boss = !!o.boss;
     this.level = o.level || 1; this.evo = o.evo || 0; this.tree = o.tree || {};
     const up = o.up || {};
-    const lv = 1 + 0.022 * (this.level - 1), ev = [1, 1.08, 1.18, 1.3][this.evo] || 1, m = o.statMul || 1, mast = this.tree.master ? 1.05 : 1;
+    const lvS = this.level > MAX_LVL ? MAX_LVL + (this.level - MAX_LVL) * 0.05 : this.level;      // 2.4.0: Lv 51–100 add very little raw power (they unlock features)
+    const lv = 1 + 0.022 * (lvS - 1), ev = [1, 1.08, 1.18, 1.3][this.evo] || 1, m = o.statMul || 1, mast = this.tree.master ? 1.05 : 1;
     this.maxHp = Math.max(1, Math.round((def.hp + (up.hp || 0) * 4) * lv * ev * mast * m * (this.boss ? 3.2 : 1) * (o.hpMul || 1)));
     this.hp = this.maxHp;
     this.atk = (def.atk + (up.atk || 0) * 1.5) * lv * ev * mast * m;
@@ -1490,6 +1491,7 @@ function killFighter(f, killer) {
   const res = !f.resUsed && !f.isClone && f.skills.find(s => s.type === 'resurrect' && !s.locked);
   if (res) { f.hp = 0; resurrect(f, clamp((res.power || 50) / 100, 0.2, 0.8)); return; }
   f.alive = false; f.hp = 0; f.deathT = 0;
+  if (typeof SUP !== 'undefined' && SUP.deathHooks) for (const fn of SUP.deathHooks) fn(f, killer);   // 2.4.0 (visual-only elimination effects)
   const d = f.def.design;
   if (f.isClone) { if (f.minionDeath) { const md = f.minionDeath; f.minionDeath = null; md(f); } if (f.unit) unitGone(f, true); else FX.burst(f.x, f.y, d.c3, 18, 260, 5, 0.6); return; }
   if (f.baseDef && typeof supremeDefeat === 'function') supremeDefeat(f);
@@ -3334,6 +3336,11 @@ Battle.prototype.drawFighter = function (ctx, f) {
     const deco = f.def.design.deco || [], top = deco.some(d => ['halo', 'crown', 'horns'].includes(d)) ? r * 1.62 : r * 1.12;
     ctx.font = '700 13px "Segoe UI", sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)';
     const lbl = (f.isPlayer || (f.holo && f.owner?.isPlayer) || (f.slot != null && f === this.player) ? '★ ' : '') + (f.tag ? f.tag + ' • ' : '') + f.name + (f.boss ? ' [BOSS]' : '');
+    if (f.cos && f.cos.title && f.cos.title.id === 'title_absolute' && !f.isClone) {      // 2.4.0: THE ABSOLUTE OWNER — black & gold celestial nameplate
+      ctx.save(); ctx.font = '900 10px "Segoe UI", sans-serif'; const tw = ctx.measureText('👑 THE ABSOLUTE OWNER').width + 14, ty = f.y - top - 34;
+      ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.rect(f.x - tw / 2, ty - 9, tw, 15); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffd54f'; ctx.fillText('👑 THE ABSOLUTE OWNER', f.x, ty + 2); ctx.restore();
+    }
     ctx.strokeText(lbl, f.x, f.y - top - 8); const myTeam = this.player ? this.player.team : 0; ctx.fillStyle = f.team === myTeam ? '#bfefff' : (this.cfg.teams.length > 2 ? TEAM_COLS[f.team % 6] : '#ffc2cc'); ctx.fillText(lbl, f.x, f.y - top - 8);
   }
   ctx.restore();
@@ -3557,7 +3564,11 @@ function hudRows(ctx, list, right) {
    11. PROGRESSION — levels, evolution, skill tree, achievements, events
    ===================================================================== */
 const MAX_LVL = 50;
-const expNeed = lv => 80 + lv * 35;
+/* 2.4.0: a few balls (God of Absolute) keep levelling from Lv 50 to their own maxLevel (100). Levels above 50 unlock
+   features and forms, and only add a little raw power (see Fighter). XP_TUNE.high is set by the game server (owner setting). */
+const XP_TUNE = { high: 1 };
+const expNeed = lv => lv < MAX_LVL ? 80 + lv * 35 : Math.round((300 + (lv - MAX_LVL) * 12) * XP_TUNE.high);
+const maxLvlOf = def => Math.max(MAX_LVL, (def && def.maxLevel) | 0);
 const EVO = [{ name: 'Base' }, { name: 'Evolved', lvl: 10, cost: 500 }, { name: 'Awakened', lvl: 25, cost: 1500 }, { name: 'Ascended', lvl: 40, cost: 4000 }];
 const TREE = [
   { id: 'power1', name: 'Power Core I', desc: '+10% ability & ultimate power', cost: 1, lvl: 1 },
@@ -3585,11 +3596,11 @@ function unlockBall(id, silent) {
   checkAchievements(); return true;
 }
 function giveExp(id, amount) {
-  const p = prog(id); let ups = 0;
-  if (p.level >= MAX_LVL) return 0;
+  const p = prog(id), cap = maxLvlOf(getBall(id)); let ups = 0;
+  if (p.level >= cap) return 0;
   p.exp += Math.round(amount);
-  while (p.level < MAX_LVL && p.exp >= expNeed(p.level)) { p.exp -= expNeed(p.level); p.level++; p.sp++; ups++; }
-  if (p.level >= MAX_LVL) p.exp = 0;
+  while (p.level < cap && p.exp >= expNeed(p.level)) { p.exp -= expNeed(p.level); p.level++; p.sp++; ups++; }
+  if (p.level >= cap) p.exp = 0;
   return ups;
 }
 function canEvolve(id) { const p = prog(id), nx = EVO[p.evo + 1]; return nx && p.level >= nx.lvl && SAVE.coins >= nx.cost; }
@@ -3864,8 +3875,14 @@ const COSMETICS = [
   { id: 'win_confetti', slot: 'victory', name: 'Confetti Victory', price: 700 },
   { id: 'win_fireworks', slot: 'victory', name: 'Fireworks Victory', price: 1000 },
   { id: 'win_supernova', slot: 'victory', name: 'Supernova Premium Victory', premium: true },
+  // 2.4.0: GOD OF ABSOLUTE owner rewards — granted only by a verified purchase, never sold for coins
+  { id: 'aura_absolute', slot: 'aura', name: 'Absolute Celestial Aura', color: '#ffe082', exclusive: 'godofabsolute' },
+  { id: 'trail_absolute', slot: 'trail', name: 'Absolute Golden Trail', color: 'celestial', exclusive: 'godofabsolute' },
+  { id: 'hit_absolute', slot: 'hit', name: 'Golden Cosmic Elimination', color: '#ffd54f', exclusive: 'godofabsolute' },
+  { id: 'win_absolute', slot: 'victory', name: 'Absolute Ascension Victory', exclusive: 'godofabsolute' },
+  { id: 'title_absolute', slot: 'title', name: 'THE ABSOLUTE OWNER', color: '#ffd54f', exclusive: 'godofabsolute' },
 ];
-const COSMETIC_SLOTS = { aura: 'Aura colour', skin: 'Ball skin', trail: 'Trail', hit: 'Collision effect', victory: 'Victory effect' };
+const COSMETIC_SLOTS = { aura: 'Aura colour', skin: 'Ball skin', trail: 'Trail', hit: 'Collision effect', victory: 'Victory effect', title: 'Title & nameplate' };
 /* ---------- 7-day daily login rewards (premium: +50% coins) ---------- */
 const DAILY_REWARDS = [{ coins: 100 }, { coins: 150 }, { exp: 150 }, { coins: 250 }, { cosmetic: 'trail_stardust', coins: 200 }, { coins: 400 }, { coins: 600, exp: 300 }];
 /* ---------- ball fusion: two eligible balls → a brand-new spherical form (originals are kept) ---------- */
@@ -4188,7 +4205,7 @@ const UI = {
     // right column
     const f = new Fighter(b, { level: p.level, evo: p.evo, up: p.up, tree: p.tree });
     let html = '';
-    if (owned && !b.adminOnly) html += `<div class="row" style="justify-content:space-between"><b>Level ${p.level}${p.level >= MAX_LVL ? ' (MAX)' : ''}</b><span class="muted">${p.exp} / ${expNeed(p.level)} EXP • ${p.sp} skill points • ${p.wins}W / ${p.losses}L</span></div><div class="bar exp"><i style="width:${p.exp / expNeed(p.level) * 100}%"></i></div>`;
+    if (owned && !b.adminOnly) html += `<div class="row" style="justify-content:space-between"><b>Level ${p.level}${p.level >= maxLvlOf(b) ? ' (MAX)' : ''}${maxLvlOf(b) > MAX_LVL ? ' / ' + maxLvlOf(b) : ''}</b><span class="muted">${p.exp} / ${expNeed(p.level)} EXP • ${p.sp} skill points • ${p.wins}W / ${p.losses}L</span></div><div class="bar exp"><i style="width:${p.exp / expNeed(p.level) * 100}%"></i></div>`;
     html += `<h3 style="margin-top:12px">Stats</h3>${statBar('HP', f.maxHp, 260)}${statBar('ATK', f.atk, 160)}${statBar('DEF', f.dfn, 160)}${statBar('SPD', f.spd, 140)}${statBar('CRIT', f.crit, 100, '%')}`;
     html += `<h3 style="margin-top:12px">Abilities</h3>`;
     (b.skills || []).forEach((s, i) => {
@@ -4374,6 +4391,7 @@ Object.assign(UI, {
     const sel = (label, key, opts, num) => h('label', { class: 'field' }, h('span', {}, label), h('select', { onchange: e => { S[key] = num ? +e.target.value : e.target.value; save(); } }, opts.map(([v, l]) => h('option', { value: v, selected: S[key] == v }, l))));
     const audio = h('div', { class: 'card' }, h('h3', {}, '🔊 Audio'), range('Sound effects', 'sfx', 0, 1, 0.05), range('Music', 'music', 0, 1, 0.05), chk('Music on', 'musicOn', () => { if (S.musicOn) { Sound.init(); Sound.startMusic(); } else Sound.stopMusic(); }));
     const gfx = h('div', { class: 'card' }, h('h3', {}, '✨ Graphics'), sel('Particle quality', 'particles', [['low', 'Low (best for older phones)'], ['medium', 'Medium'], ['high', 'High']]),
+      sel('Cinematic effects (God Balls)', 'cinematic', [['full', 'Full'], ['reduced', 'Reduced'], ['minimal', 'Minimal (older phones — warnings stay on)']]),
       h('div', { style: { marginTop: '8px' } }, chk('Screen shake', 'shake'), chk('Impact flashes', 'flashes'), chk('Damage numbers', 'dmgNumbers'), chk('Ball name labels', 'labels'), chk('FPS counter', 'fps')));
     const gp = h('div', { class: 'card' }, h('h3', {}, '⚔ Gameplay'), sel('Default AI difficulty', 'difficulty', Object.keys(DIFF).map(k => [k, DIFF[k].label])), sel('Default battle speed', 'speed', [[1, '1x'], [1.5, '1.5x'], [2, '2x'], [3, '3x']], true), sel('Your ball control', 'control', [['auto', 'Auto battle (AI controls your ball)'], ['manual', 'Manual skills & steering']]));
     const fileIn = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' }, onchange: e => { const f = e.target.files[0]; if (!f) return; f.text().then(t => this.doImport(t)); } });
@@ -4569,7 +4587,7 @@ Object.assign(UI, {
       h('div', { class: 'card' }, h('h3', {}, '🪙 Coins'), h('div', { class: 'row' }, coins, h('button', { class: 'btn admin', onclick: () => { SAVE.coins = Math.max(0, Math.round(+coins.value || 0)); persist(); refreshCoins(); toast('Coins set'); } }, 'Set'), h('button', { class: 'btn', onclick: () => { addCoins(10000); coins.value = SAVE.coins; } }, '+10,000'))),
       h('div', { class: 'card' }, h('h3', {}, '◉ Collection'), h('div', { class: 'row' },
         h('button', { class: 'btn admin', onclick: () => { allBalls().forEach(b => !b.adminOnly && unlockBall(b.id, true)); toast('All balls unlocked'); } }, 'Unlock all balls'),
-        h('button', { class: 'btn', onclick: () => { allBalls().forEach(b => { const p = prog(b.id); if (p.owned || b.adminOnly) { p.level = MAX_LVL; p.exp = 0; p.sp = Math.max(p.sp, 30); } }); persist(); toast('Owned balls set to max level'); } }, 'Max level owned balls'),
+        h('button', { class: 'btn', onclick: () => { allBalls().forEach(b => { const p = prog(b.id); if (p.owned || b.adminOnly) { p.level = maxLvlOf(b); p.exp = 0; p.sp = Math.max(p.sp, 30); } }); persist(); toast('Owned balls set to max level'); } }, 'Max level owned balls'),
         h('button', { class: 'btn danger', onclick: () => this.confirm('Reset level, evolution, upgrades and skill trees of every ball?', () => { for (const id in SAVE.balls) { const o = SAVE.balls[id].owned; delete SAVE.balls[id]; prog(id).owned = o; if (o) prog(id).sp = 1; } persist(); toast('Progress reset'); }, 'Reset') }, 'Reset ball progress'))),
       h('div', { class: 'card' }, h('h3', {}, '🔐 Security'), pin, h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn admin', onclick: () => { SAVE.admin.pin = pin.value; persist(); toast(pin.value ? 'PIN changed' : 'PIN removed'); } }, 'Save PIN'), h('button', { class: 'btn', onclick: () => { SAVE.admin.loggedIn = false; persist(); invalidateRegistry(); this.show('menu'); } }, 'Log out of Admin'))),
       h('div', { class: 'card' }, h('h3', {}, '💾 Backup'), h('p', { class: 'muted', style: { fontSize: '13px' } }, 'Custom balls, events and all progress are included in save backups.'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => downloadText('neon-ball-battle-backup.json', exportSave()) }, '⬇ Export backup'), h('button', { class: 'btn', onclick: () => this.show('settings') }, 'Restore in Settings')))));
@@ -4775,7 +4793,7 @@ window.NBB = { Game, UI, get save() { return SAVE; }, get battle() { return BATT
 window.NBB_CORE = {
   createTicket, buildBattleConfig, simulateTicket, computeRewards, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, PVP_MODES, RANK_TIERS, rankTier, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
   Battle, Fighter, setCatalog, getBall, useSkill, useUltimate, unitsOf, dealDamage, spawnProj, allBalls, opponentPool, normDiff, enemySpec, playerSpecFrom, defaultSave, mulberry32, prog,
-  DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
+  DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, maxLvlOf, setXpTune: v => { XP_TUNE.high = clamp(+v || 1, 0.25, 4); }, xpTune: () => XP_TUNE.high, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
   COSMETICS, COSMETIC_SLOTS, DAILY_REWARDS, FUSION_COST, FUSION_MIN_LEVEL, FUSION_MAX, fusionEligible, makeFusionDef, mixColor, hashStr, sfxOf,
   rngCount: () => _rngN, setRngHook: fn => { _rngHook = fn; }, BUILTIN_BALLS, LIMITED_BALLS, ADMIN_BALLS, PREMIUM_BALLS, UPDATE_BALLS, SUMMON_BALLS, ALL_BUILTIN, UNIT, ANTI, HEAT, PORTAL, SUMMON_POOL, SKILL_TYPES, ULT_TYPES, EFFECTS, PATTERNS, DECOS, AI_TYPES, EVENT_INFO, builtinEvents, RAGE_HP, STEP,
 };
