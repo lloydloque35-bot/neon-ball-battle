@@ -74,7 +74,7 @@ test('owner: Control Panel settings are validated, audit-logged and reach the ba
   assert.equal((await owner.post('/api/admin/supreme/fire', { cdMul: 1 })).status, 400, 'only Supreme balls');
   assert.equal((await owner.post('/api/admin/supreme/skullking', { off: [0, 1, 2, 3, 4] })).status, 400, 'at least one ability stays on');
   const ok = await owner.post('/api/admin/supreme/skullking', { cdMul: 9, off: [1, 1, 7, -1], fx: 0.5, aura: false });
-  assert.equal(ok.status, 200); assert.deepEqual(ok.data.tuning, { cdMul: 3, off: [1], fx: 0.5, aura: false });
+  assert.equal(ok.status, 200); assert.deepEqual(ok.data.tuning, { cdMul: 3, off: [1], fx: 0.5, aura: false, startForm: 0 });
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.supreme_tuning' AND target = 'skullking'"));
   const cat = (await owner.get('/api/catalog')).data;
   assert.deepEqual(cat.tuning.skullking.off, [1]);
@@ -86,6 +86,29 @@ test('owner: Control Panel settings are validated, audit-logged and reach the ba
   assert.ok(me.skills[1].locked);
   core.setCatalog(null);
   assert.equal((await owner.post('/api/admin/supreme/skullking', { reset: true })).status, 200);
+});
+
+test('2.4.2 owner setting: Supreme admin balls can start their battles Awakened or in Final God Form (one ball, or all at once)', async () => {
+  const formOf = (cat, setup) => { core.setCatalog(cat); const T = core.createTicket({ mode: '1v1', enemy: 'fire', difficulty: 'normal', ...setup }, MAXP, () => 0.5);
+    const B = new core.Battle(core.buildBattleConfig(T, { headless: true })); const f = B.player.form; core.setCatalog(null); return f; };
+  assert.ok([401, 403].includes((await player.post('/api/admin/supreme-start-form', { startForm: 2 })).status), 'players cannot');
+  assert.equal((await owner.post('/api/admin/supreme-start-form', {})).status, 400);
+  // one ball
+  assert.equal((await owner.post('/api/admin/supreme/skullking', { startForm: 1 })).data.tuning.startForm, 1);
+  let cat = (await owner.get('/api/catalog')).data;
+  assert.equal(formOf(cat, { ball: 'skullking' }), 1, 'starts Awakened'); assert.equal(formOf(cat, { ball: 'omega' }), 0, 'others unchanged');
+  // all fifteen, other settings kept
+  await owner.post('/api/admin/supreme/omega', { cdMul: 2 });
+  const all = await owner.post('/api/admin/supreme-start-form', { startForm: 2 }); assert.equal(all.status, 200); assert.equal(all.data.balls, 15);
+  cat = (await owner.get('/api/catalog')).data;
+  for (const id of IDS) assert.equal(formOf(cat, { ball: id }), 2, id + ' starts in Final God Form');
+  assert.equal(cat.tuning.omega.cdMul, 2, 'other settings kept');
+  assert.equal(formOf(cat, { ball: 'skullking', mode: 'practice', adminTest: true, startForm: 0 }), 0, 'Spawn & Test can still choose Base');
+  assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.supreme_start_form_all'"));
+  // a real server battle starts in that form, and the server's replay agrees
+  const st = await owner.post('/api/battle/start', { mode: '1v1', ball: 'omega', difficulty: 'easy' }); assert.equal(st.status, 200);
+  core.setCatalog(st.data.catalog || cat); const B = new core.Battle(core.buildBattleConfig(st.data.ticket, { headless: true })); assert.equal(B.player.form, 2); core.setCatalog(null);
+  await owner.post('/api/admin/supreme-start-form', { startForm: 0 });
 });
 
 test('owner: Spawn & Test battles start in the chosen form; admin commands are audit-logged', async () => {
@@ -225,4 +248,5 @@ test('ADMIN DELETE console: delete, restore, transform, properties, arena and se
   assert.equal(core.cleanPvpActions([[0, 'x', 1, 2, 0, 0]]).length, 1);
   assert.equal(core.cleanPvpActions([[0, 'x', 1, 2, 0]]), null);
 });
+
 

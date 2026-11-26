@@ -70,6 +70,7 @@ Find it in **Admin Dashboard → 👑 Supreme Balls**. It is owner only and need
 - **Cooldowns:** a multiplier from 0.2× to 3×.
 - **Effects:** idle effect intensity from 0.2× to 1.5×, and the aura glow on or off.
 - **💾 Save:** stores the settings on the server and writes them to the audit log. Every battle uses them.
+- **Start form (2.4.2):** choose whether a ball starts every battle in its Base form, Awakened form or Final God Form. **⚡ Apply to all** sets the same start form for all 15 balls at once (their other settings are kept). In battle they still go further on their own: Awakened → Final God Form at 30% HP or with the 2nd ultimate.
 - **⚔ Spawn & Test:** starts a Practice battle, so there are no rewards.
   - Choose the starting form, the opponent (training dummy, random AI or any ball) and the difficulty.
   - A test bar at the top lets you:

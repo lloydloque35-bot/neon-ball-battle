@@ -181,10 +181,19 @@ function register(app, S) {
     const nSkills = (core.ALL_BUILTIN.find(x => x.id === id) || { skills: [] }).skills.length;
     const off = Array.isArray(b.off) ? [...new Set(b.off.filter(i => Number.isInteger(i) && i >= 0 && i < nSkills))].sort() : [];
     if (off.length >= nSkills) throw bad('Keep at least one ability switched on');
-    const t = { cdMul: Math.round(num(b.cdMul, 0.2, 3, 1) * 10) / 10, off, fx: Math.round(num(b.fx, 0.2, 1.5, 1) * 10) / 10, aura: b.aura !== false };
+    const t = { cdMul: Math.round(num(b.cdMul, 0.2, 3, 1) * 10) / 10, off, fx: Math.round(num(b.fx, 0.2, 1.5, 1) * 10) / 10, aura: b.aura !== false, startForm: Math.round(num(b.startForm, 0, 2, 0)) };
     db.run('INSERT INTO admin_ball_tuning (ball_id, settings, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(ball_id) DO UPDATE SET settings = excluded.settings, updated_by = excluded.updated_by, updated_at = excluded.updated_at', id, JSON.stringify(t), me.id, now());
     S.audit(me.id, 'admin.supreme_tuning', id, ctx.ip, t);
     return { ok: true, tuning: t };
+  });
+  /** 2.4.2: one click — every Supreme admin ball starts its battles in the same form (other settings are kept) */
+  A('post', '/api/admin/supreme-start-form', (ctx, me) => {
+    const startForm = Math.round(num(ctx.body.startForm, 0, 2, -1)); if (startForm < 0) throw bad('Choose Base, Awakened or Final God Form');
+    const rows = Object.fromEntries(db.all('SELECT ball_id, settings FROM admin_ball_tuning').map(r => [r.ball_id, json(r.settings, {})]));
+    db.tx(() => { for (const id of supremeIds()) { const t = { cdMul: 1, off: [], fx: 1, aura: true, ...(rows[id] || {}), startForm };
+      db.run('INSERT INTO admin_ball_tuning (ball_id, settings, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(ball_id) DO UPDATE SET settings = excluded.settings, updated_by = excluded.updated_by, updated_at = excluded.updated_at', id, JSON.stringify(t), me.id, now()); } });
+    S.audit(me.id, 'admin.supreme_start_form_all', null, ctx.ip, { startForm, balls: supremeIds().length });
+    return { ok: true, startForm, balls: supremeIds().length };
   });
   A('post', '/api/admin/balls/:id/flags', (ctx, me) => {
     const id = str(ctx.params.id, 64), dis = !!ctx.body.disabled;

@@ -3686,7 +3686,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
   const S = setup, diff = normDiff(S.difficulty), D = DIFF[diff], me = getBall(S.ball);
   if (!me) throw new Error('Unknown ball');
   const pl = playerSpecFrom(me, prog0), plv = pl.level, elv = plv + D.lvl;
-  if (((S.adminTest && me.adminOnly) || (S.godTest && me.godBall)) && me.supreme && S.startForm) pl.startForm = clamp(S.startForm | 0, 0, 2);   // test battles: start in a chosen form
+  if (((S.adminTest && me.adminOnly) || (S.godTest && me.godBall)) && me.supreme) pl.startForm = clamp(S.startForm | 0, 0, 2);   // test battles: start in the chosen form (Base included)
   const pool = opponentPool(false).filter(b => !b.adminOnly && !b.fusion).map(b => b.id);
   const choose = excl => { const c = pool.filter(id => !excl.includes(id)); return pickWith(c.length ? c : pool, rnd); };
   const chosen = S.enemy && S.enemy !== 'random' && getBall(S.enemy) ? S.enemy : null;

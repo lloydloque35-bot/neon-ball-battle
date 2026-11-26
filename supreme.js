@@ -8,7 +8,7 @@
    reached in battle at 60% / 30% HP or with the 1st / 2nd ultimate), its own art, idle / bounce / victory / defeat
    effects and its own sound profile. Admin-only access is enforced by the server (adminOnly balls → owner only).
    ===================================================================== */
-const GAME_VERSION = '2.4.1';
+const GAME_VERSION = '2.4.2';
 const FORM_MUL = [1, 1.18, 1.38];                 // stats & skill power per form
 const FORM_MUL_GOD = [1, 1.08, 1.16];
 const GOD_SKILL_K = [1.1, 0.88, 0.62];            // free God Balls: their forms change the abilities themselves, so the stat boost is smaller
@@ -73,7 +73,9 @@ function supremeInit(f, o) {
     : f.def.godBall && !f.def.paid ? godFormCap(f.level) : 2;                           // free God Balls: Lv 10 / 20; bought Premium God Balls: every form at once
   if (f.def.godBall) f.ultCharge *= f.def.ultChargeMul || 0.7;            // free God Balls: ultimates charge a little slower (they also transform with them)
   const pv = SUP.passives[f.def.id]; if (pv && !f.isClone) { f.sx.passive = pv.tick; if (pv.init) pv.init(f); }
-  if (o.startForm && !f.isClone) applyForm(f, clamp(o.startForm | 0, 0, f.formCap), true);
+  // start form: a test battle's choice, else the owner's setting for Supreme admin balls (Admin Ball Control Panel, 2.4.2)
+  const sf = o.startForm != null ? o.startForm | 0 : (f.def.adminOnly ? (+tn.startForm | 0) : 0);
+  if (sf > 0 && !f.isClone) applyForm(f, clamp(sf, 0, f.formCap), true);
 }
 function applyForm(f, k, silent) {
   f.form = k; f.fm = (f.baseDef.formMul || (f.baseDef.godBall ? FORM_MUL_GOD : FORM_MUL))[k]; f.def = formDef(f.baseDef, k, f.sx && f.sx.variant);
@@ -1777,7 +1779,14 @@ UI.admin_supreme = async function (body) {
   const grid = supEl('div', { class: 'ball-grid' });
   for (const id of ids) grid.append(this.ballCard(getBall(id), { onclick: () => { this.supSel = id; this.admin_supreme(body); } }));
   body.append(supEl('div', { class: 'card' }, supEl('h3', {}, '👑 Supreme Admin Balls — Control Panel'), supEl('p', { class: 'muted' }, 'Owner only. Settings are saved on the server (audit-logged) and apply to every battle that uses these balls. Nobody else can buy, unlock, copy or equip them.'), grid));
-  const id = this.supSel, def = getBall(id), t = { cdMul: 1, off: [], fx: 1, aura: true, ...(tun[id] || {}) };
+  // 2.4.2: one setting for all of them — the form every Supreme admin ball starts its battles in
+  const FORM_NAMES = ['Base form', 'Awakened form', 'Final God Form'];
+  const allSel = supEl('select', {}, ...FORM_NAMES.map((l, k) => supEl('option', { value: k }, l)));
+  body.append(supEl('div', { class: 'card' }, supEl('h4', { style: { margin: '0 0 6px' } }, '⚡ Start form for ALL Supreme admin balls'),
+    supEl('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', alignItems: 'center' } }, 'Every battle starts in', allSel,
+      supEl('button', { class: 'btn gold', onclick: () => this.confirm(`All ${ids.length} Supreme admin balls will start every battle in ${FORM_NAMES[+allSel.value]}. Their other settings stay the same.`, () => adminDo(() => API.post('/api/admin/supreme-start-form', { startForm: +allSel.value }), () => Online.refresh().then(() => this.render_admin())), 'Apply to all') }, `Apply to all ${ids.length}`)),
+    supEl('p', { class: 'muted', style: { margin: '6px 0 0' } }, 'They still go further during battle: Awakened → Final God Form at 30% HP or with the 2nd ultimate. You can also pick a start form for one ball below.')));
+  const id = this.supSel, def = getBall(id), t = { cdMul: 1, off: [], fx: 1, aura: true, startForm: 0, ...(tun[id] || {}) };
   const panel = supEl('div', { class: 'card sup-panel' });
   panel.append(supEl('h3', {}, def.name, ' ', supEl('span', { class: 'rar ' + rarClass(def.rarity) }, 'SUPREME ADMIN')), supEl('p', { class: 'muted' }, def.desc || ''));
   // live preview of the three forms
@@ -1798,7 +1807,8 @@ UI.admin_supreme = async function (body) {
     supEl('label', {}, 'Cooldown multiplier', supEl('input', { type: 'range', min: 0.2, max: 3, step: 0.1, value: t.cdMul, oninput: e => { t.cdMul = +e.target.value; cdV.textContent = t.cdMul.toFixed(1) + '×'; } }), cdV),
     supEl('label', {}, 'Effects intensity', supEl('input', { type: 'range', min: 0.2, max: 1.5, step: 0.1, value: t.fx, oninput: e => { t.fx = +e.target.value; fxV.textContent = t.fx.toFixed(1) + '×'; } }), fxV),
     supEl('label', {}, supEl('input', { type: 'checkbox', checked: t.aura !== false, onchange: e => { t.aura = e.target.checked; } }), 'Show aura glow'),
-    supEl('div', { class: 'row' }, supEl('button', { class: 'btn gold', onclick: () => adminDo(() => API.post('/api/admin/supreme/' + id, { cdMul: t.cdMul, off: t.off, fx: t.fx, aura: t.aura !== false }), () => Online.refresh().then(() => this.render_admin())) }, '💾 Save settings'),
+    supEl('label', {}, 'Start every battle in ', supEl('select', { onchange: e => { t.startForm = +e.target.value; } }, ...FORM_NAMES.map((l, k) => supEl('option', { value: k, selected: (t.startForm | 0) === k }, l)))),
+    supEl('div', { class: 'row' }, supEl('button', { class: 'btn gold', onclick: () => adminDo(() => API.post('/api/admin/supreme/' + id, { cdMul: t.cdMul, off: t.off, fx: t.fx, aura: t.aura !== false, startForm: t.startForm | 0 }), () => Online.refresh().then(() => this.render_admin())) }, '💾 Save settings'),
       supEl('button', { class: 'btn', onclick: () => this.confirm(`Reset ${esc(def.name)} to default settings?`, () => adminDo(() => API.post('/api/admin/supreme/' + id, { reset: true }), () => Online.refresh().then(() => this.render_admin()))) }, 'Reset to default'))));
   // spawn & test
   const formSel = supEl('select', {}, ...['Base form', 'Awakened form', 'Final God form'].map((l, k) => supEl('option', { value: k }, l)));
