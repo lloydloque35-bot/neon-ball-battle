@@ -650,8 +650,8 @@ UI.admin_absolute = async function (body) {
   body.append(h('div', { class: 'card' }, h('h3', {}, '🧠 Autonomous will — it makes its own decisions'),
     h('p', { class: 'muted small' }, 'Players can never steer or command God of Absolute. These owner settings shape how it thinks. They apply to every battle and are checked on the server.'),
     h('div', { class: 'row', style: { gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('label', {}, 'Intelligence ', intel), h('label', {}, 'Aggression ', agg, ' ', aggV)),
-    h('div', { class: 'row', style: { gap: '10px', flexWrap: 'wrap', marginTop: '6px' } }, chk('transcend', 'May leave the arena (Outer Realm)'), chk('hunt', 'Hunts enemies hiding outside the arena'), chk('retreat', 'Recovers in the Outer Realm when badly hurt'), chk('explore', 'Explores the Outer Realm'), chk('step', 'Divine Step teleport'), chk('speech', 'Speaks / reacts')),
-    h('div', { class: 'row', style: { gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '6px' } }, h('label', {}, 'Longest hunt (s) ', realmT), h('label', {}, 'Outer Realm cooldown (s) ', realmCd), h('label', {}, 'Ability cooldown × ', cdm)),
+    h('div', { class: 'row', style: { gap: '10px', flexWrap: 'wrap', marginTop: '6px' } }, chk('transcend', 'May break out of the arena'), chk('hunt', 'Hunts enemies hiding outside the arena'), chk('retreat', 'Recovers outside the arena when badly hurt'), chk('explore', 'Ambushes from beyond the walls'), chk('step', 'Divine Step teleport'), chk('speech', 'Speaks / reacts')),
+    h('div', { class: 'row', style: { gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '6px' } }, h('label', {}, 'Longest fight outside (s) ', realmT), h('label', {}, 'Cooldown between trips (s) ', realmCd), h('label', {}, 'Ability cooldown × ', cdm)),
     h('div', { style: { marginTop: '6px' } }, h('b', {}, 'Abilities it may use: '), abil),
     h('button', { class: 'btn gold', style: { marginTop: '8px' }, onclick: () => adminDo(() => API.post('/api/admin/edition/tuning', { will: W, off: [...off], cdMul: +cdm.value }), () => UI.render_admin()) }, '💾 Save its will')));
   body.append(h('div', { class: 'card' }, h('h3', {}, `⏳ Pending (${d.pending.length})`), h('p', { class: 'muted small' }, 'QR payments are approved in the 💳 God Shop (PHP) tab — the approval gives the serial number, Lv 50 and the rewards.'),
@@ -741,6 +741,7 @@ function chooseStrategy(f, W) {
   const ult = useUltimate;
   useUltimate = function (f) {
     if (isWill(f) && f.will) {
+      if (f.beyondS) return false;                // it does not unleash its ultimate while travelling outside the arena
       const t = f.target && f.target.alive ? f.target : nearestEnemy(f);
       const bad = !t || t.st.invuln > 0.3 || t.st.outside > 0 || len(t.x - f.x, t.y - f.y) > 560;
       if (bad && f.hpRatio > 0.25) return false;
@@ -803,90 +804,161 @@ function divineStep(f, W) {
   if (!FX.off) { absPortalFx(x0, y0, f.r * 1.6, 0.4); absPortalFx(f.x, f.y, f.r * 1.6, 0.5); FX.text(f.x, f.y - f.r - 26, 'DIVINE STEP', ABS.WHITE, 12, { life: 0.6 }); absSound('replica', 2); }
 }
 
-/* ---------- 3. the OUTER REALM: its own dimension beyond the arena ---------- */
-const REALM_RETREAT = 2.5, REALM_EXPLORE = 2.5, REALM_GATE = 0.5;
-const absRealmOf = (B, f) => (B.absRealms || []).find(R => R.owner === f);
+/* ---------- 3. TRANSCENDENCE: it breaks through the arena wall and moves in the space OUTSIDE the arena ----------
+   breach (smashes a hole in the wall) → outside (flies around the arena beyond the walls, firing Beyond Lances through them)
+   → descent (crashes back in with a judgment impact). Hunts drag an enemy hiding outside the arena out with it for a duel.
+   Everyone sees it: the camera zooms out to show the space around the arena. Hard limits: 8 s outside, a cooldown, always returns. */
+const BEYOND = { D: 105, PAD: { x: 240, top: 135, bottom: 160 }, V_OUT: 560, V_DASH: 900, MAX: 8, MIN_OUT: 2.0, LANCE: 0.75 };
+const OUTER = { x: ARENA.x - BEYOND.PAD.x, y: ARENA.y - BEYOND.PAD.top, r: ARENA.r + BEYOND.PAD.x, b: ARENA.b + BEYOND.PAD.bottom };
+const RING = { x0: ARENA.x - BEYOND.D, y0: ARENA.y - 70, x1: ARENA.r + BEYOND.D, y1: ARENA.b + 80 };      // keeps at least 60 px from the edge of the outside space
+RING.w = RING.x1 - RING.x0; RING.h = RING.y1 - RING.y0; RING.P = 2 * (RING.w + RING.h);
+/** a point on the flight path around the arena (s = distance along it, clockwise from the top-left corner) */
+function ringPt(s) { s = ((s % RING.P) + RING.P) % RING.P; const { x0, y0, x1, y1, w, h } = RING;
+  if (s < w) return { x: x0 + s, y: y0 }; s -= w; if (s < h) return { x: x1, y: y0 + s }; s -= h; if (s < w) return { x: x1 - s, y: y1 }; s -= w; return { x: x0, y: y1 - s }; }
+function ringS(x, y) { const { x0, y0, x1, y1, w, h } = RING, px = clamp(x, x0, x1), py = clamp(y, y0, y1);
+  const d = [Math.abs(py - y0), Math.abs(x1 - px), Math.abs(y1 - py), Math.abs(px - x0)], m = d.indexOf(Math.min(...d));
+  return m === 0 ? px - x0 : m === 1 ? w + (py - y0) : m === 2 ? w + h + (x1 - px) : 2 * w + h + (y1 - py); }
+const outsideBox = f => f.x < ARENA.x || f.x > ARENA.r || f.y < ARENA.y || f.y > ARENA.b;
+const isBeyond = f => !!(f && f.beyond && outsideBox(f));
 /** an enemy hiding outside the arena (a portal escape, a dimensional trap…) that it may hunt */
-const huntable = (f, e) => e.alive && e.team !== f.team && !e.isClone && !e.unit && !e.minion && !e.summonOnly && e.st.outside > 0.15 && (e.dim || 0) === 0 && !(BATTLE.voidDim && BATTLE.voidDim.foes && BATTLE.voidDim.foes.includes(e));
+const huntable = (f, e) => e.alive && e.team !== f.team && !e.isClone && !e.unit && !e.minion && !e.summonOnly && e.st.outside > 0.15 && (e.dim || 0) === 0 && !e.beyond && !(BATTLE.voidDim && BATTLE.voidDim.foes && BATTLE.voidDim.foes.includes(e));
 function realmDecide(B, f, W) {
   const C = W.cfg;
-  if (!C.transcend || W.realmCd > 0 || absRealmOf(B, f) || (f.dim || 0) !== 0 || f.casting > 0 || B.cinematic || B.clash || f.st.outside > 0 || f.sx.absUltT > 0) return;
-  // a) HUNT: an enemy is hiding outside the arena → it follows it into the Outer Realm
-  if (C.hunt) { const prey = B.fighters.filter(e => huntable(f, e)); if (prey.length) return openRealm(B, f, 'hunt', prey.reduce((a, b) => threatOf(b) > threatOf(a) ? b : a)); }
-  const es = willFoes(f).filter(e => (e.dim || 0) === 0), near = es.filter(e => len(e.x - f.x, e.y - f.y) < 300);
-  // b) RECOVER: badly hurt and pressed → it steps out of the arena to recover for a moment
-  if (C.retreat && f.hpRatio < 0.3 && near.length && rand() < 0.45) return openRealm(B, f, 'retreat');
-  // c) EXPLORE: nothing worth its attention nearby → it explores the Outer Realm and gathers cosmic energy
-  if (C.explore && f.hpRatio > 0.6 && es.length && !es.some(e => len(e.x - f.x, e.y - f.y) < 420) && rand() < 0.025) return openRealm(B, f, 'explore');
+  if (!C.transcend || W.realmCd > 0 || f.beyondS || (f.dim || 0) !== 0 || f.casting > 0 || B.cinematic || B.clash || f.st.outside > 0 || f.sx.absUltT > 0 || f.st.stun > 0) return;
+  // a) HUNT: an enemy hides outside the arena → it breaks out after it and drags it into the open
+  if (C.hunt) { const prey = B.fighters.filter(e => huntable(f, e)); if (prey.length) return breachOut(B, f, 'hunt', prey.reduce((a, b) => threatOf(b) > threatOf(a) ? b : a)); }
+  const es = willFoes(f).filter(e => (e.dim || 0) === 0 && !isBeyond(e)), near = es.filter(e => len(e.x - f.x, e.y - f.y) < 300);
+  // b) RECOVER: badly hurt and pressed → it escapes through the wall, recovers outside, returns far away
+  if (C.retreat && f.hpRatio < 0.3 && near.length && rand() < 0.45) return breachOut(B, f, 'recover');
+  // c) AMBUSH: not engaged → it leaves the arena, circles outside, and strikes from beyond before crashing in on its target
+  if (C.explore && f.hpRatio > 0.45 && es.length && !near.length && rand() < 0.035) return breachOut(B, f, 'ambush');
 }
-function openRealm(B, f, kind, prey) {
-  const R = { id: (B.dimN = (B.dimN || 0) + 1), owner: f, kind, prey: prey || null, phase: 'gate', t: 0, dur: kind === 'hunt' ? f.will.cfg.maxRealm : kind === 'retreat' ? REALM_RETREAT : REALM_EXPLORE,
-    gx: f.x, gy: f.y, saved: new Map(), pre: null, ambush: kind === 'explore' && rand() < 0.5 };
-  (B.absRealms || (B.absRealms = [])).push(R); (B.absRealmIds || (B.absRealmIds = new Set())).add(R.id);
-  f.will.realmCd = f.will.cfg.realmCd;
-  if (!FX.off) {
-    vfx((ctx, q) => absGateway(ctx, R.gx, R.gy, 30 + 120 * Math.min(1, q * 2), Math.min(1, q * 4), q * 4), REALM_GATE + 0.3, { keep: true });
-    FX.text(f.x, f.y - f.r - 40, kind === 'hunt' ? 'NONE ESCAPE THE ABSOLUTE.' : kind === 'retreat' ? 'TRANSCEND.' : 'BEYOND THE ARENA…', ABS.GOLD, 15, { life: 1.3, pop: 1.5 });
-    if (prey) vfx((ctx, q) => absGateway(ctx, prey.x, prey.y, prey.r * (1.2 + q), Math.min(1, q * 3), q * 6), REALM_GATE + 0.2, { keep: true });
-    absSound('reality', 2);
+function breachOut(B, f, kind, prey) {
+  const W = f.will, s0 = ringS(f.x, f.y), p0 = ringPt(s0);
+  f.beyond = true; f.beyondS = { kind, phase: 'breach', t: 0, total: 0, prey: prey || null, s: s0, from: { x: f.x, y: f.y }, exit: p0, lanceT: 0.5, wall: wallPoint(f.x, f.y) };
+  W.realmCd = W.cfg.realmCd; if (prey) W.focus = prey;
+  (B.absBreaches || (B.absBreaches = [])).push({ x: f.beyondS.wall.x, y: f.beyondS.wall.y, side: f.beyondS.wall.side, t: 0 });
+  if (!FX.off) { FX.text(f.x, f.y - f.r - 40, kind === 'hunt' ? 'NONE ESCAPE THE ABSOLUTE.' : kind === 'recover' ? 'THESE WALLS CANNOT HOLD ME.' : 'BEYOND THE ARENA…', ABS.GOLD, 15, { life: 1.4, pop: 1.5 }); FX.addShake(6); absSound('reality', 2); }
+}
+/** where a straight line from inside meets the arena wall */
+function wallPoint(x, y) { const d = [['l', x - ARENA.x], ['r', ARENA.r - x], ['t', y - ARENA.y], ['b', ARENA.b - y]].sort((a, b) => a[1] - b[1])[0][0];
+  return { side: d, x: d === 'l' ? ARENA.x : d === 'r' ? ARENA.r : clamp(x, ARENA.x + 30, ARENA.r - 30), y: d === 't' ? ARENA.y : d === 'b' ? ARENA.b : clamp(y, ARENA.y + 30, ARENA.b - 30) }; }
+function moveTo(f, x, y, v, h) { const dx = x - f.x, dy = y - f.y, d = len(dx, dy); if (d < 6) { f.vx = f.vy = 0; return true; } const st = Math.min(d, v * h); f.x += dx / d * st; f.y += dy / d * st; f.vx = dx / d * v * 0.4; f.vy = dy / d * v * 0.4; return st >= d - 0.01; }
+/** the whole journey, every step (deterministic) */
+function beyondStep(B, h) {
+  for (const f of B.fighters) {
+    const S = f.beyondS; if (!S) { if (f.beyond && !f.beyondBy) f.beyond = false; continue; }
+    S.t += h; S.total += h;
+    const prey = S.prey;
+    if (!f.alive) { endBeyond(B, f, true); continue; }
+    if (S.total > BEYOND.MAX + 0.5) { endBeyond(B, f, true); continue; }                    // hard safety limit: it always comes back
+    if (S.kind === 'recover') healFighter(f, f.maxHp * 0.015 * h, true);
+    if (S.phase === 'breach') { if (moveTo(f, S.exit.x, S.exit.y, BEYOND.V_DASH, h)) { S.phase = 'outside'; S.t = 0; S.s = ringS(f.x, f.y); S.target = beyondTarget(B, f, S); } continue; }
+    if (S.phase === 'outside') {
+      const goal = S.target, diff = (((goal - S.s) % RING.P) + RING.P * 1.5) % RING.P - RING.P / 2;        // shortest way round
+      const v = S.kind === 'hunt' && S.prey ? BEYOND.V_DASH : BEYOND.V_OUT;        // a hunt races round to its prey
+      S.s += clamp(diff, -v * h, v * h); const p = ringPt(S.s); f.x = p.x; f.y = p.y + Math.sin(S.t * 3) * 6; f.vx = Math.sign(diff) * 200; f.vy = 0;
+      // BEYOND LANCES through the wall at its target
+      const t = f.target && f.target.alive && !isBeyond(f.target) ? f.target : nearestInside(f);
+      if (t && S.kind !== 'recover' && (S.lanceT -= h) <= 0) { S.lanceT = BEYOND.LANCE; const q = predictPos(f, t, 0.4); addLaser(f, [f.x, f.y, q.x, q.y], { charge: 0.35, dur: 0.22, w: 16, dmg: SD(f, 80) * 0.11, col: ABS.GOLD }); lastLaser().beyond = true; }
+      if (S.kind === 'hunt' && prey && Math.abs(diff) < 30 && S.t > 0.6) { ripPrey(B, f, S); continue; }
+      if (Math.abs(diff) < 30 && S.t >= BEYOND.MIN_OUT) beginDescent(B, f, S);
+      else if (S.t > (S.kind === 'hunt' ? 3.0 : 4.5)) beginDescent(B, f, S);
+      continue;
+    }
+    if (S.phase === 'duel') {        // both outside the arena, fighting in the open space beyond the walls
+      const duelMax = Math.min(f.will.cfg.maxRealm, BEYOND.MAX - 1 - (S.total - S.t));        // the whole trip always fits in 8 s
+      if (!prey || !prey.alive || S.t >= duelMax || (S.endT != null && S.t >= S.endT)) { returnPrey(B, f, S); beginDescent(B, f, S); continue; }
+      if (prey && !prey.alive && S.endT == null) S.endT = S.t + 0.6;
+      continue;
+    }
+    if (S.phase === 'descent') {
+      const into = S.dest, reached = moveTo(f, into.x, into.y, BEYOND.V_DASH, h), inside = !outsideBox(f);
+      if (reached || (inside && (len(into.x - f.x, into.y - f.y) < f.r + 60 || S.t > 0.9)) || S.t > 1.6) landImpact(B, f, S);
+    }
   }
 }
-function enterRealm(B, R) {
-  const f = R.owner;
-  if (!f.alive || (f.dim || 0) !== 0) return closeRealm(B, R, true);
-  const members = [f, ...absCopies(f)];
-  if (R.kind === 'hunt') {
-    const e = R.prey;
-    if (!e || !e.alive || (e.dim || 0) !== 0 || e.isClone) return closeRealm(B, R, true);
-    if (e.st.outside > 0) { e.st.outside = 0; e.portalExit = null; }       // pulled out of its hiding place
-    members.push(e);
-  }
-  R.pre = { zones: new Set(B.zones), lasers: new Set(B.lasers), waves: new Set(B.waves), strikes: new Set(B.strikes) };
-  members.forEach((m, i) => {
-    R.saved.set(m.sid, { x: m.x, y: m.y });
-    m.dim = R.id; m.target = null;
-    const enemy = R.prey && m === R.prey;
-    m.x = inArenaX(ARENA.cx + (enemy ? 230 : -230) + (i > 0 && !enemy ? rand(-60, 60) : 0), m.r); m.y = inArenaY(ARENA.cy + (i > 0 && !enemy ? rand(-80, 80) : 0), m.r);
-    m.vx = m.vy = 0; m.st.invuln = Math.max(m.st.invuln, 0.4);
-  });
-  R.phase = 'inside'; R.t = 0;
-  if (!FX.off) { FX.addFlash(0.25, '#1a0a33'); absSound('transform'); }
+const nearestInside = f => { let best = null, bd = Infinity; for (const e of willFoes(f)) if (!isBeyond(e)) { const d = dist2(e.x, e.y, f.x, f.y); if (d < bd) { bd = d; best = e; } } return best; };
+/** where to go outside: right by its prey / its target (ambush), or the far side from every enemy (recover) */
+function beyondTarget(B, f, S) {
+  if (S.kind === 'hunt' && S.prey) return ringS(S.prey.x, S.prey.y);
+  if (S.kind === 'recover') { let best = 0, bs = -1; for (let i = 0; i < 16; i++) { const s = i / 16 * RING.P, p = ringPt(s); let md = Infinity; for (const e of willFoes(f)) md = Math.min(md, len(e.x - p.x, e.y - p.y)); if (md > bs) { bs = md; best = s; } } return best; }
+  const t = nearestInside(f); return t ? ringS(t.x, t.y) : S.s + RING.P / 3;
 }
-/** always brings everyone back to the arena, and removes everything that was created inside */
-function closeRealm(B, R, aborted) {
-  const f = R.owner, members = B.fighters.filter(m => m.dim === R.id);
-  for (const m of members) {
-    let s = R.saved.get(m.sid) || { x: R.gx, y: R.gy };
-    if (m === f && R.kind === 'explore' && f.alive && R.ambush) { const t = nearestEnemy(f); if (t) s = behind(t, f, 80); }        // it chooses where to come back: sometimes right behind its enemy
-    if (m === f && R.kind === 'retreat' && f.alive) s = safeSpot(f);
-    m.dim = 0; m.x = inArenaX(s.x, m.r); m.y = inArenaY(s.y, m.r);
-    if (m.alive) { m.st.invuln = Math.max(m.st.invuln, 0.5); m.vx = m.vy = 0; }
-  }
-  if (R.phase === 'inside') {
-    B.projs = B.projs.filter(p => (p.dim ?? ((p.owner && p.owner.dim) || 0)) !== R.id && !(p.owner && members.includes(p.owner) && p.dim === R.id));
-    for (const key of ['zones', 'lasers', 'waves', 'strikes']) B[key] = B[key].filter(x => R.pre[key].has(x) || !(x.owner && members.includes(x.owner)));
-  }
-  B.absRealms = B.absRealms.filter(x => x !== R);
-  if (!FX.off && !aborted) { absPortalFx(f.x, f.y, f.r * 2.4, 0.7); FX.text(f.x, f.y - f.r - 40, R.kind === 'hunt' ? 'JUDGMENT IS COMPLETE.' : 'I HAVE RETURNED.', ABS.GOLD, 14, { life: 1.2 }); }
+function ripPrey(B, f, S) {
+  const e = S.prey;
+  if (!e.alive || (e.dim || 0) !== 0) return beginDescent(B, f, S);
+  if (e.st.outside > 0) { e.st.outside = 0; e.portalExit = null; }          // torn out of its hiding place…
+  e.beyond = true; e.beyondBy = f;                                            // …and thrown into the open space outside the arena
+  const p = ringPt(S.s + 90); e.x = p.x; e.y = p.y; e.vx = e.vy = 0; e.st.invuln = Math.max(e.st.invuln, 0.3); e.target = f;
+  S.phase = 'duel'; S.t = 0; f.target = e;
+  if (!FX.off) { FX.text(e.x, e.y - e.r - 30, 'DRAGGED BEYOND THE ARENA', ABS.PURPLE, 15, { life: 1.3, pop: 1.6 }); FX.addShake(10); absSound('erase'); }
 }
-function realmStep(B, h) {
-  for (const R of (B.absRealms || []).slice()) {
-    R.t += h; const f = R.owner;
-    if (R.phase === 'gate') { if (!f.alive) { closeRealm(B, R, true); continue; } f.vx *= 0.85; f.vy *= 0.85; if (R.t >= REALM_GATE) enterRealm(B, R); continue; }
-    // inside: the owner recovers (retreat) or gathers cosmic energy (explore); a hunt lasts until the prey falls or time runs out
-    if (R.kind === 'retreat' && f.alive) healFighter(f, f.maxHp * 0.015 * h, true);
-    if ((R.kind === 'explore' || R.kind === 'retreat') && f.alive && f.sx && f.sx.ae != null) f.sx.ae = Math.min(100, f.sx.ae + 7 * h);
-    const preyGone = R.kind === 'hunt' && (!R.prey || !R.prey.alive || R.prey.dim !== R.id);
-    if (!f.alive || R.t >= Math.min(8, R.dur) || (preyGone && (R.endT ??= R.t + 0.6) <= R.t)) closeRealm(B, R, false);
-  }
-  // safety net: nobody can ever be left in a closed realm
-  if (B.absRealmIds && B.absRealmIds.size) { const open = new Set((B.absRealms || []).map(R => R.id)); for (const m of B.fighters) if (m.dim && B.absRealmIds.has(m.dim) && !open.has(m.dim)) { m.dim = 0; m.st.invuln = Math.max(m.st.invuln, 0.5); } }
+function returnPrey(B, f, S) {
+  const e = S.prey; if (!e || !e.beyond) return;
+  e.beyond = false; e.beyondBy = null;
+  if (e.alive && outsideBox(e)) { const w = wallPoint(clamp(e.x, ARENA.x, ARENA.r), clamp(e.y, ARENA.y, ARENA.b)); e.x = inArenaX(w.x, e.r + 60); e.y = inArenaY(w.y, e.r + 60); e.vx = e.vy = 0; e.st.invuln = Math.max(e.st.invuln, 0.6);
+    if (!FX.off) absPortalFx(e.x, e.y, e.r * 1.8, 0.5); }
 }
-/* the Outer Realm on screen: the world for whoever is inside it, a small window for everyone else */
-SUP.dimViews.push(B => (B.absRealms || []).filter(R => R.phase === 'inside').map(R => ({ id: R.id, world: (ctx, dt) => drawOuterRealm(ctx, B, R, dt), inset: (ctx, slot) => drawRealmInset(ctx, B, R, slot), spectate: !B.player })));
+function beginDescent(B, f, S) {
+  const t = S.kind === 'recover' ? null : nearestInside(f);
+  const w = wallPoint(clamp(f.x, ARENA.x, ARENA.r), clamp(f.y, ARENA.y, ARENA.b));
+  S.dest = t && S.kind !== 'recover' ? { x: inArenaX(t.x, f.r + 10), y: inArenaY(t.y, f.r + 10) } : { x: inArenaX(w.x, f.r + 140), y: inArenaY(w.y, f.r + 140) };
+  S.entryWall = w; S.phase = 'descent'; S.t = 0;
+  (B.absBreaches || (B.absBreaches = [])).push({ x: w.x, y: w.y, side: w.side, t: 0 });
+}
+function landImpact(B, f, S) {
+  const k = S.kind === 'recover' ? 0.12 : 0.3;
+  supWave(f, f.x, f.y, 240, SD(f, 80) * k, ABS.GOLD, { speed: 820, w: 22, force: 600, power: 80, style: 'judgment' });
+  if (!FX.off) { FX.text(f.x, f.y - f.r - 40, S.kind === 'hunt' ? 'JUDGMENT IS COMPLETE.' : 'I HAVE RETURNED.', ABS.GOLD, 15, { life: 1.2 }); FX.addShake(14); FX.addFlash(0.15, ABS.GOLD); absTransformFx(f); }
+  endBeyond(B, f, false);
+}
+/** always brings it (and any prey) back inside the arena */
+function endBeyond(B, f, forced) {
+  const S = f.beyondS; if (S) returnPrey(B, f, S);
+  f.beyond = false; f.beyondS = null;
+  if (outsideBox(f)) { const w = wallPoint(clamp(f.x, ARENA.x, ARENA.r), clamp(f.y, ARENA.y, ARENA.b)); f.x = inArenaX(w.x, f.r + 40); f.y = inArenaY(w.y, f.r + 40); }
+  if (f.alive) f.st.invuln = Math.max(f.st.invuln, forced ? 0.5 : 0.25);
+  for (const e of B.fighters) if (e.beyondBy === f) { e.beyond = false; e.beyondBy = null; if (outsideBox(e)) { e.x = inArenaX(e.x, e.r + 40); e.y = inArenaY(e.y, e.r + 40); } }
+}
+function realmStep(B, h) { beyondStep(B, h); for (const e of B.fighters) if (e.beyondBy && (!e.beyondBy.alive || !e.beyondBy.beyondS)) { e.beyond = false; e.beyondBy = null; if (outsideBox(e)) { e.x = inArenaX(e.x, e.r + 40); e.y = inArenaY(e.y, e.r + 40); } } }
+/* walls: an outside traveller is held only by the edge of the space around the arena */
+{
+  const walls = Battle.prototype.walls;
+  Battle.prototype.walls = function (f) {
+    if (!f.beyond) return walls.call(this, f);
+    if (f.x - f.r < OUTER.x) { f.x = OUTER.x + f.r; if (f.vx < 0) f.vx = -f.vx; } else if (f.x + f.r > OUTER.r) { f.x = OUTER.r - f.r; if (f.vx > 0) f.vx = -f.vx; }
+    if (f.y - f.r < OUTER.y) { f.y = OUTER.y + f.r; if (f.vy < 0) f.vy = -f.vy; } else if (f.y + f.r > OUTER.b) { f.y = OUTER.b - f.r; if (f.vy > 0) f.vy = -f.vy; }
+    // a duel beyond the walls stays outside: seen from outside, the arena wall is a wall too
+    if ((f.beyondBy || (f.beyondS && f.beyondS.phase === 'duel')) && f.x > ARENA.x - f.r && f.x < ARENA.r + f.r && f.y > ARENA.y - f.r && f.y < ARENA.b + f.r) {
+      const d = [f.x - (ARENA.x - f.r), (ARENA.r + f.r) - f.x, f.y - (ARENA.y - f.r), (ARENA.b + f.r) - f.y], m = d.indexOf(Math.min(...d));
+      if (m === 0) { f.x = ARENA.x - f.r; if (f.vx > 0) f.vx = -f.vx; } else if (m === 1) { f.x = ARENA.r + f.r; if (f.vx < 0) f.vx = -f.vx; }
+      else if (m === 2) { f.y = ARENA.y - f.r; if (f.vy > 0) f.vy = -f.vy; } else { f.y = ARENA.b + f.r; if (f.vy < 0) f.vy = -f.vy; }
+    }
+  };
+  const collide = Battle.prototype.collide;
+  Battle.prototype.collide = function (a, b) { if (isBeyond(a) !== isBeyond(b)) return; return collide.call(this, a, b); };   // the wall still separates inside from outside
+  const pick = AIController.prototype.pickTarget;
+  AIController.prototype.pickTarget = function () {        // balls inside the arena cannot reach something beyond its walls
+    const t = pick.call(this), f = this.f;
+    if (t && isBeyond(t) && !isBeyond(f)) { const alt = f.enemies().filter(e => !(e.st.outside > 0) && !isBeyond(e)); return alt.length ? alt.reduce((a, b) => dist2(b.x, b.y, f.x, f.y) < dist2(a.x, a.y, f.x, f.y) ? b : a) : null; }
+    return t;
+  };
+}
+/* skills aiming at "the nearest enemy" from inside the arena cannot pick something beyond its walls either */
+{
+  const ne = nearestEnemy;
+  nearestEnemy = function (f) { const t = ne(f); if (!t || !isBeyond(t) || isBeyond(f)) return t; let best = null, bd = Infinity; for (const e of f.enemies()) { if (e.st.outside > 0 || isBeyond(e)) continue; const d = dist2(f.x, f.y, e.x, e.y); if (d < bd) { bd = d; best = e; } } return best; };
+}
+/* …and whoever was aiming at it when it left loses sight of it */
+SUP.worldHooks.push(B => { if (!B.fighters.some(isBeyond)) return; for (const f of B.fighters) if (f.target && isBeyond(f.target) && !isBeyond(f)) f.target = null; });
+/* while it travels on its own path it is not steered by its fighting brain */
+SUP.steerHooks.push(f => { const S = f.beyondS; if (S && S.phase !== 'duel') { f.steerPow = 0; } });
+SUP.chipHooks.push((f, chips) => { if (f.beyond) chips.push(['BEYOND THE ARENA', '#ffd54f']); });
 /* =====================================================================
    2.5.0 FREE WILL — visuals and screens (visual only): golden-purple cosmic aura, dimensional portals,
-   the Outer Realm world, the window into it, its transformation burst, and the "OWN WILL" battle controls.
+   (2.5.1) the cosmos around the arena with the camera pulled back while it is outside, the cracks it smashes in the wall,
+   its transformation burst, and the "OWN WILL" battle controls.
    ===================================================================== */
 Object.assign(SUP.deco, {
   absaura(ctx, r, d, t, front) {        // a living golden and purple cosmic aura that breathes behind the ball
@@ -923,35 +995,60 @@ function absTransformFx(f) {
   vfx((ctx, q) => { vCelestialRings(ctx, f.x, f.y, f.r * (1.5 + q * 6), 1 - q, q * 8, 6, ABS.GOLD); absGateway(ctx, f.x, f.y, f.r * (1.2 + q * 2.5), (1 - q) * 0.7, q * 5); }, 1.4);
   FX.burst(f.x, f.y, ABS.PURPLE, Math.round(60 * absQ()), 640, 7, 1); FX.burst(f.x, f.y, ABS.GOLD, Math.round(60 * absQ()), 520, 6, 1, 'shard'); absSound('transform');
 }
-/** the OUTER REALM: the space beyond the arena — a golden-purple cosmos, the arena floating far away, drifting fragments and a timer */
-function drawOuterRealm(ctx, B, R, dt) {
-  const t = B.time, g = ctx.createRadialGradient(ARENA.cx, ARENA.cy, 30, ARENA.cx, ARENA.cy, W * 0.8);
-  g.addColorStop(0, '#2a1650'); g.addColorStop(0.5, '#0e0620'); g.addColorStop(1, '#020007'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const rng = mulberry32(777 + R.id), q = absQ();
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < Math.round(170 * q); i++) { const x = rng() * W, y = rng() * H, s = rng() * 2 + 0.4, tw = 0.5 + 0.5 * Math.sin(t * (1 + rng() * 3) + i); ctx.fillStyle = i % 5 ? `rgba(255,255,255,${0.2 + 0.6 * tw})` : `rgba(255,213,79,${0.3 + 0.6 * tw})`; ctx.fillRect((x + t * 6 * s) % W, y, s, s); }
-  for (let i = 0; i < 3; i++) { const nx = [W * 0.18, W * 0.82, W * 0.5][i], ny = [H * 0.25, H * 0.72, H * 0.12][i], ng = ctx.createRadialGradient(nx, ny, 10, nx, ny, 260); ng.addColorStop(0, i === 1 ? 'rgba(255,213,79,.18)' : 'rgba(156,107,255,.22)'); ng.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = ng; ctx.fillRect(nx - 260, ny - 260, 520, 520); }
-  // the arena it left behind, floating far away
-  ctx.save(); ctx.translate(ARENA.cx, ARENA.cy); ctx.scale(0.22, 0.22); ctx.rotate(Math.sin(t * 0.3) * 0.05); ctx.strokeStyle = 'rgba(64,196,255,.55)'; ctx.lineWidth = 14; ctx.strokeRect(-ARENA.w / 2, -ARENA.h / 2, ARENA.w, ARENA.h); ctx.restore();
-  // drifting golden fragments and constellation lines
-  for (let i = 0; i < Math.round(14 * q); i++) { const a = t * (0.1 + (i % 4) * 0.03) + i * 1.7, rr = 220 + (i * 53) % 330; vFragment(ctx, ARENA.cx + Math.cos(a) * rr * 1.4, ARENA.cy + Math.sin(a) * rr * 0.75, 7 + (i % 3) * 3, a * 2, i % 3 ? ABS.GOLD : '#fff8e1'); }
-  ctx.strokeStyle = 'rgba(255,213,79,.18)'; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = i / 7 * TAU + t * 0.05; ctx.lineTo(ARENA.cx + Math.cos(a) * 520, ARENA.cy + Math.sin(a) * 300); } ctx.closePath(); ctx.stroke();
+/* ---------- TRANSCENDENCE on screen: the camera pulls back to show the space around the arena ---------- */
+/** the space outside the arena (screen space, behind everything) */
+function drawBeyondSpace(ctx, B, z) {
+  const t = B.time, q = absQ(), g = ctx.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, W * 0.75);
+  g.addColorStop(0, '#1b0d36'); g.addColorStop(0.6, '#0a0518'); g.addColorStop(1, '#020007'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; const rng = mulberry32(4711);
+  for (let i = 0; i < Math.round(190 * q); i++) { const x = rng() * W, y = rng() * H, sz = rng() * 2 + 0.5, tw = 0.5 + 0.5 * Math.sin(t * (1 + rng() * 3) + i); ctx.fillStyle = i % 6 ? `rgba(255,255,255,${0.2 + 0.6 * tw})` : `rgba(255,213,79,${0.3 + 0.6 * tw})`; ctx.fillRect((x + t * 4 * sz) % W, y, sz, sz); }
+  for (let i = 0; i < 4; i++) { const nx = [W * 0.08, W * 0.92, W * 0.5, W * 0.3][i], ny = [H * 0.5, H * 0.45, H * 0.97, H * 0.05][i], ng = ctx.createRadialGradient(nx, ny, 10, nx, ny, 300); ng.addColorStop(0, i % 2 ? 'rgba(255,213,79,.16)' : 'rgba(156,107,255,.24)'); ng.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = ng; ctx.fillRect(nx - 300, ny - 300, 600, 600); }
   ctx.restore();
-  // the realm's limits are soft golden walls (it is still a bounded, safe space)
-  ctx.save(); ctx.strokeStyle = 'rgba(255,213,79,.25)'; ctx.setLineDash([18, 14]); ctx.lineDashOffset = -t * 20; ctx.lineWidth = 2; ctx.strokeRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); ctx.restore();
-  const left = Math.max(0, Math.ceil(Math.min(8, R.dur) - R.t));
-  ctx.save(); ctx.font = '900 15px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = ABS.GOLD;
-  ctx.fillText(`✦ OUTER REALM — ${R.kind === 'hunt' ? 'THE HUNT' : R.kind === 'retreat' ? 'TRANSCENDENCE' : 'EXPLORATION'} — ${left}s ✦`, ARENA.cx, ARENA.y + 22); ctx.restore();
 }
-/** a small window into the Outer Realm for everyone still in the arena */
-function drawRealmInset(ctx, B, R, slot) {
-  const w = 260, hh = 146, x0 = 18, y0 = 96 + slot * (hh + 14), s = w / ARENA.w;
-  ctx.save(); ctx.fillStyle = '#0b0618'; ctx.strokeStyle = ABS.GOLD; ctx.lineWidth = 2; ctx.fillRect(x0, y0, w, hh); ctx.strokeRect(x0, y0, w, hh);
-  ctx.beginPath(); ctx.rect(x0, y0, w, hh); ctx.clip(); ctx.translate(x0, y0 + (hh - ARENA.h * s) / 2); ctx.scale(s, s); ctx.translate(-ARENA.x, -ARENA.y);
-  ctx.fillStyle = 'rgba(156,107,255,.12)'; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
-  for (const f of B.fighters) if (f.alive && f.dim === R.id) drawBall(ctx, f.def, f.x, f.y, f.r, { t: f.t, rot: f.rot, noAura: true, small: true, noSupDeco: true });
+/** golden cracks where the wall was broken (world space) */
+function drawBreaches(ctx, B) {
+  const L = B.absBreaches || []; for (let i = L.length - 1; i >= 0; i--) { const c = L[i]; c.t += 1 / 60; if (c.t > 3) { L.splice(i, 1); continue; } }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const c of L) { const a = c.t < 0.2 ? c.t / 0.2 : 1 - (c.t - 0.2) / 2.8, rng = mulberry32((c.x * 7 + c.y * 13) | 0), horiz = c.side === 't' || c.side === 'b';
+    ctx.globalAlpha = clamp(a, 0, 1); ctx.strokeStyle = ABS.GOLD; ctx.lineWidth = 2.5;
+    for (let k = 0; k < 7; k++) { let x = c.x, y = c.y, an = rng() * TAU; ctx.beginPath(); ctx.moveTo(x, y); for (let j = 0; j < 4; j++) { an += (rng() - 0.5) * 1.2; x += Math.cos(an) * 22; y += Math.sin(an) * 22; ctx.lineTo(x, y); } ctx.stroke(); }
+    const gg = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, 70); gg.addColorStop(0, 'rgba(255,253,231,.9)'); gg.addColorStop(1, 'rgba(156,107,255,0)'); ctx.fillStyle = gg; ctx.fillRect(c.x - 70, c.y - 70, 140, 140);
+    ctx.fillStyle = '#05010c'; ctx.beginPath(); if (horiz) ctx.ellipse(c.x, c.y, 34, 10, 0, 0, TAU); else ctx.ellipse(c.x, c.y, 10, 34, 0, 0, TAU); ctx.fill(); }
   ctx.restore();
-  ctx.save(); ctx.font = '800 12px "Segoe UI", sans-serif'; ctx.fillStyle = ABS.GOLD; ctx.fillText('✦ OUTER REALM — ' + Math.max(0, Math.ceil(Math.min(8, R.dur) - R.t)) + 's', x0 + 8, y0 + 16); ctx.restore();
+}
+/** what lies outside the walls: travellers, their beams, their light — drawn without the arena clip */
+function drawBeyondLayer(ctx, B) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const L of B.lasers) if (L.beyond && L.owner && L.owner.alive) { const charging = L.t < L.charge, a = charging ? 0.35 + 0.4 * (L.t / L.charge) : 1;
+    ctx.strokeStyle = rgba(L.col, a * 0.5); ctx.lineWidth = charging ? 3 : L.w * 1.8; ctx.setLineDash(charging ? [12, 8] : []); ctx.beginPath(); ctx.moveTo(L.x0, L.y0); ctx.lineTo(L.x1, L.y1); ctx.stroke();
+    if (!charging) { ctx.strokeStyle = '#fffde7'; ctx.lineWidth = L.w * 0.5; ctx.beginPath(); ctx.moveTo(L.x0, L.y0); ctx.lineTo(L.x1, L.y1); ctx.stroke(); } ctx.setLineDash([]); }
+  ctx.restore();
+  for (const f of B.fighters) if (f.alive && isBeyond(f)) {
+    if (f.beyondS && !FX.off) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 1; i <= 6; i++) { const a = 0.18 * (1 - i / 7); ctx.globalAlpha = a; ctx.drawImage(glowSprite(i % 2 ? ABS.GOLD : ABS.PURPLE), f.x - f.vx * 0.02 * i - f.r * 1.5, f.y - f.vy * 0.02 * i - f.r * 1.5, f.r * 3, f.r * 3); } ctx.restore(); }
+    B.drawFighter(ctx, f);
+  }
+  const any = B.fighters.some(f => f.beyondS);
+  if (any) { ctx.save(); ctx.strokeStyle = 'rgba(255,213,79,.22)'; ctx.setLineDash([16, 12]); ctx.lineDashOffset = -B.time * 30; ctx.lineWidth = 2; ctx.strokeRect(RING.x0, RING.y0, RING.w, RING.h); ctx.restore(); }
+}
+if (typeof Battle !== 'undefined') {
+  const baseDraw = Battle.prototype.draw, noHud = () => {};
+  Battle.prototype.draw = function (ctx, dt) {
+    const want = this.fighters.some(f => f.beyond) ? 0.7 : 1;
+    this._absZ = this._absZ == null ? 1 : this._absZ + (want - this._absZ) * Math.min(1, (dt || 0.016) * 3.5);
+    const z = this._absZ;
+    if (z > 0.995 && want === 1 && !(this.absBreaches && this.absBreaches.length)) return baseDraw.call(this, ctx, dt);
+    ctx.save(); drawBeyondSpace(ctx, this, z);
+    const k = (1 - z) / 0.3; ctx.translate(ARENA.cx, ARENA.cy + 26 * k); ctx.scale(z, z); ctx.translate(-ARENA.cx, -ARENA.cy);      // pulled back and a little lower, so the top path stays clear of the HUD
+    this._absZoomed = z < 0.995; this.drawHud = noHud;
+    try { baseDraw.call(this, ctx, dt); drawBreaches(ctx, this); drawBeyondLayer(ctx, this); }
+    finally { delete this.drawHud; this._absZoomed = false; ctx.restore(); }
+    this.drawHud(ctx);
+  };
+  const baseArena = Arena.draw;
+  Arena.draw = function (ctx, dt) {            // zoomed out: only the arena itself is drawn, the space around it stays visible
+    const B = BATTLE; if (!B || !B._absZoomed) return baseArena.call(this, ctx, dt);
+    ctx.save(); chamferPath(ctx, ARENA.x - WALL - 6, ARENA.y - WALL - 6, ARENA.w + WALL * 2 + 12, ARENA.h + WALL * 2 + 12, 24); ctx.clip(); baseArena.call(this, ctx, dt); ctx.restore();
+  };
 }
 
 /* battle controls: God of Absolute cannot be steered or commanded — the AUTO button shows its own will */

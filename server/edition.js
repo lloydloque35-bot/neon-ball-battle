@@ -193,12 +193,12 @@ function register(app, S) {
   app.post('/api/admin/edition/tuning', ctx => {
     const me = owner(ctx), b = ctx.body, out = {};
     if (b.xpMul != null) { const v = Number(b.xpMul); if (!(v >= 0.25 && v <= 4)) throw bad('EXP scale must be from 0.25 to 4'); setSetting('absolute_xp_mul', String(v)); core.setXpTune(v); out.xpMul = v; }
-    // 2.5.0 AUTONOMOUS WILL: intelligence, personality, Outer Realm behaviour, abilities — owner only, validated here
+    // 2.5.0 AUTONOMOUS WILL: intelligence, personality, trips outside the arena, abilities — owner only, validated here
     const will = b.will != null && typeof b.will === 'object' ? (() => { const w = b.will, o = {};
       if (w.intelligence != null) { const v = Number(w.intelligence); if (![1, 2, 3].includes(v)) throw bad('Intelligence must be 1, 2 or 3'); o.intelligence = v; }
       if (w.aggression != null) { const v = Number(w.aggression); if (!(v >= 0 && v <= 100)) throw bad('Aggression must be from 0 to 100'); o.aggression = Math.round(v); }
-      if (w.maxRealm != null) { const v = Number(w.maxRealm); if (!(v >= 3 && v <= 8)) throw bad('Outer Realm time must be from 3 to 8 seconds'); o.maxRealm = Math.round(v * 10) / 10; }
-      if (w.realmCd != null) { const v = Number(w.realmCd); if (!(v >= 12 && v <= 40)) throw bad('Outer Realm cooldown must be from 12 to 40 seconds'); o.realmCd = Math.round(v); }
+      if (w.maxRealm != null) { const v = Number(w.maxRealm); if (!(v >= 3 && v <= 8)) throw bad('The longest fight outside the arena must be from 3 to 8 seconds'); o.maxRealm = Math.round(v * 10) / 10; }
+      if (w.realmCd != null) { const v = Number(w.realmCd); if (!(v >= 12 && v <= 40)) throw bad('The cooldown between trips must be from 12 to 40 seconds'); o.realmCd = Math.round(v); }
       for (const k of ['transcend', 'hunt', 'retreat', 'explore', 'step', 'speech']) if (w[k] != null) o[k] = !!w[k];
       return o; })() : null;
     const nSkills = (core.getBall(BALL) || { skills: [] }).skills.length;

@@ -131,35 +131,50 @@ God of Absolute is **never controlled by a player**: not steering, not abilities
   - It reacts with lines such as "INTERESTING…", "I AM ABSOLUTE.", "WITNESS." and "JUDGMENT IS COMPLETE."
   - It has its own transformation burst and a golden-purple cosmic aura.
 
-**The Outer Realm** — its own dimension beyond the arena. It opens a golden-purple portal and goes there by itself for three reasons:
-- **Hunt:** an enemy hiding outside the arena (a portal escape, a dimensional trap…) is pulled into the realm and fought there.
-- **Recover:** badly hurt and pressed, it steps out for 2.5 s and recovers a little.
-- **Explore:** with nobody near, it explores for 2.5 s, gathers cosmic energy, and sometimes comes back right behind its enemy.
+### 2.5.1 — It really leaves the arena
 
-How the Outer Realm stays fair and safe:
-- **Who sees what:** players still in the arena see a small window into the realm.
-- **Time limit:** never more than 8 s (a hunt lasts 6 s by default).
-- **Cooldown:** 18 s by default.
-- **Everyone returns:** always — and at once if God of Absolute falls inside.
-- **Nothing stays behind:** anything created inside is removed when the realm closes.
-- **Who it can hunt:** only real enemy balls; never allies, copies, summons, turrets or anything in God Portal's void.
-- **Other matches:** each match's realm exists only inside that match.
+It does not go to a hidden place anymore. It smashes through the arena wall and flies in the open space **outside** the walls, where every player can see it.
+
+**What everyone sees**
+- **The camera pulls back** while it is outside, so the space around the arena (stars and cosmos) comes into view. It eases back in when it returns.
+- **Breach:** it dashes into the wall and leaves golden cracks where it broke through.
+- **Outside:** it flies around the arena beyond the walls with a golden trail.
+- **Beyond Lances:** from outside it fires golden beams straight through the wall at its target. Every beam has a short warning before it hits, so it can be dodged.
+- **Return:** it crashes back in through the wall with a judgment shockwave and says "I HAVE RETURNED." (or "JUDGMENT IS COMPLETE." after a hunt).
+
+**Why it leaves** (its own choice):
+
+| Reason | What happens |
+|---|---|
+| **Hunt** | An enemy hides outside the arena (a portal escape, a dimensional trap…). It breaks out, races round the arena to it, **drags it out into the open** ("DRAGGED BEYOND THE ARENA") and fights it there, outside the walls. Then both come back in. |
+| **Recover** | Badly hurt and pressed, it escapes through the wall to the side farthest from its enemies, heals a little, and comes back in somewhere else. |
+| **Ambush** | With nobody near it, it leaves the arena, circles outside firing Beyond Lances, then crashes in on its target. |
+
+**How it stays fair and safe**
+- **Time limit:** a trip never lasts more than 8 s. A fight outside lasts 6 s by default.
+- **Cooldown:** 18 s between trips by default.
+- **Always returns:** it, and any enemy it dragged out, always come back inside. If it falls outside, the enemy is returned at once.
+- **Can't be targeted from inside:** while it is outside, balls in the arena can't target it or bump into it, and it can't bump into them. Only an enemy it dragged out fights it out there.
+- **Nobody else leaves:** no other ball ever goes outside the walls unless it was dragged out.
+- **Who it can hunt:** only real enemy balls. Never allies, copies, summons, turrets or anything in God Portal's void.
+- **Other matches:** everything happens inside its own match only.
+- **Same on every screen:** the whole trip is part of the battle simulation. Online matches stay in sync and the server replays it the same way.
 
 **Owner settings — Admin Dashboard → 👑 God of Absolute → 🧠 Autonomous will** (server-checked, audit-logged):
 - intelligence: Calm / Strategic / Supreme
 - aggression: 0–100
-- leave the arena on/off, hunt on/off, recover on/off, explore on/off
-- Divine Step on/off, speech on/off
-- longest hunt (3–8 s), Outer Realm cooldown (12–40 s)
+- on/off: May break out of the arena, Hunts enemies hiding outside the arena, Recovers outside the arena when badly hurt, Ambushes from beyond the walls
+- on/off: Divine Step, speech
+- Longest fight outside (3–8 s), Cooldown between trips (12–40 s)
 - which abilities it may use, and an ability cooldown multiplier
 
-Balance with free will (same method as below):
+Balance with free will and the trips outside (same method as below):
 
 | | vs top-12 balls | vs God Balls (average) |
 |---|---|---|
-| Lv 50 | 67% | 55% |
-| Lv 70 | 81% | — |
-| Lv 100 | 100% | 81% (God of War still wins half) |
+| Lv 50 | 81% | 52% |
+| Lv 70 | 92% | — |
+| Lv 100 | 100% | 79% (God of War still wins most fights) |
 
 ## The limited edition
 

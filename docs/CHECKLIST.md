@@ -1,9 +1,16 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1)
+
+## 2.5.1 — God of Absolute really leaves the arena ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md))
+- ✅ Breaks through the wall (golden cracks) and flies in the open space outside the walls; the camera pulls back so everyone sees it
+- ✅ Beyond Lances through the wall (with warning), hunt drags hiding enemies out for a fight outside, crash-back judgment impact
+- ✅ Safety: max 8 s per trip, cooldown, always returns (also when it falls outside), can't be targeted or bumped from inside, nobody else leaves
+- ✅ Deterministic (online and server replay); 40 / 40 test hunts catch the hiding enemy; browser screenshots
+- ✅ Admin labels renamed (break out / recover outside / ambush / longest fight outside / cooldown between trips)
 
 ## 2.5.0 — God of Absolute: autonomous free will ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md))
 - ✅ No player control (engine-level, online too); OWN WILL button
 - ✅ Strategies, danger sense, own targets, Divine Step, ultimate timing, reactions, idle behaviour
-- ✅ Outer Realm: hunt / recover / explore, max 8 s, cooldown, guaranteed return, cleanup, window for bystanders
+- ✅ Trips out of the arena: hunt / recover / explore, max 8 s, cooldown, guaranteed return (replaced in 2.5.1 by the real break-out)
 - ✅ Owner-only AI settings (validated, audit-logged)
 - ✅ 132 tests pass (8 new); browser screenshots; God Portal's void re-checked
 

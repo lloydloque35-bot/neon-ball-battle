@@ -418,7 +418,7 @@ SUP.chipHooks.push((f, chips) => {
   const s = f.sx;
   if (s.wm > 0) chips.push(['WEAPON ' + Math.round(s.wm) + '%', GUN_GOLD]); if (s.overdriveT > 0) chips.push(['OVERDRIVE', '#ff6d00']); if (s.arsenal) chips.push(['ARSENAL', GUN_BLUE]);
   if (s.dm > 0) chips.push(['DIMENSION ×' + s.dm, PT_PURPLE]); if (s.reflectT > 0) chips.push(['PORTAL REFLECT', PT_PURPLE]);
-  if (f.dim) chips.push(BATTLE && BATTLE.absRealmIds && BATTLE.absRealmIds.has(f.dim) ? ['IN THE OUTER REALM', '#ffd54f'] : ['IN THE INFINITE VOID', '#ea80fc']);
+  if (f.dim) chips.push(['IN THE INFINITE VOID', '#ea80fc']);
 });
 
 /* =====================================================================
@@ -560,7 +560,7 @@ function drawVoidInset(ctx, B, d, slot = 0) {
   ctx.restore();
   ctx.save(); ctx.font = '800 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#ea80fc'; ctx.fillText('◈ INFINITE VOID — ' + Math.max(0, Math.ceil(d.dur - d.t)) + 's', x0 + 8, y0 + 16); ctx.restore();
 }
-/* separate dimensions inside one match (God Portal's Infinite Void, and from 2.5.0 God of Absolute's Outer Realm):
+/* separate dimensions inside one match (God Portal's Infinite Void, or any later one):
    each provider lists its open dimensions; the viewer sees the one their own ball is in, and small windows into the others */
 SUP.dimViews = SUP.dimViews || [];
 SUP.dimViews.push(B => { const d = B.voidDim; return d && d.phase !== 'gate' ? [{ id: d.id, world: (ctx, dt) => drawVoidWorld(ctx, B, d, dt), inset: (ctx, slot) => drawVoidInset(ctx, B, d, slot), spectate: true }] : []; });
@@ -576,8 +576,9 @@ if (typeof Battle !== 'undefined') {
     this.fighters = keep.fighters.filter(f => dimOf(f) === vd);
     this.projs = keep.projs.filter(p => (p.dim ?? dimOf(p.owner)) === vd);
     for (const k of ['zones', 'lasers', 'waves', 'strikes', 'beams', 'orbs']) this[k] = keep[k].filter(x => dimOf(x.owner) === vd);
+    const ownHud = Object.prototype.hasOwnProperty.call(this, 'drawHud') ? this.drawHud : null;      // an outer layer may already be holding the HUD back
     this._vd = vd; this._world = view ? view.world : null; this.drawHud = noHud;
-    try { baseDraw.call(this, ctx, dt); } finally { Object.assign(this, keep); this._vd = 0; this._world = null; delete this.drawHud; }
+    try { baseDraw.call(this, ctx, dt); } finally { Object.assign(this, keep); this._vd = 0; this._world = null; if (ownHud) this.drawHud = ownHud; else delete this.drawHud; }
     if (vd === 0) dims.forEach((d, i) => { try { d.inset && d.inset(ctx, i); } catch (e) { /* visual only */ } });
     this.drawHud(ctx);
   };
