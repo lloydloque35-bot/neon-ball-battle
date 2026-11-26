@@ -8,7 +8,7 @@
    reached in battle at 60% / 30% HP or with the 1st / 2nd ultimate), its own art, idle / bounce / victory / defeat
    effects and its own sound profile. Admin-only access is enforced by the server (adminOnly balls → owner only).
    ===================================================================== */
-const GAME_VERSION = '2.4.0';
+const GAME_VERSION = '2.4.1';
 const FORM_MUL = [1, 1.18, 1.38];                 // stats & skill power per form
 const FORM_MUL_GOD = [1, 1.08, 1.16];
 const GOD_SKILL_K = [1.1, 0.88, 0.62];            // free God Balls: their forms change the abilities themselves, so the stat boost is smaller

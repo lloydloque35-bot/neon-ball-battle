@@ -85,12 +85,12 @@ test('ranked quick match: both screens get the same battle, the server decides t
   assert.equal(ra.win, sim.winner === A.slot);
   assert.equal(rb.win, sim.winner === B.slot);
   const [w, l] = ra.win ? [ra, rb] : [rb, ra];
-  assert.equal(w.rpDelta, 20); assert.equal(l.rpDelta, 0);   // season points: +16 Elo +4 win bonus; never below 0 (both start at 0)
-  assert.equal(w.coins, 80); assert.equal(l.coins, 20);
-  assert.equal(w.rpAfter, w.rpBefore + 20);
+  assert.equal(w.rpDelta, 4); assert.equal(l.rpDelta, 2);    // 2.4.1 owner rule: victory +4, defeat +2
+  assert.equal(w.coins, 1000); assert.equal(l.coins, 300);   // 2.4.1 owner rule: big online coins
+  assert.equal(w.rpAfter, w.rpBefore + 4);
   assert.equal(w.tier, 'Bronze');
   const season = (await (ra.win ? A : B).c.get('/api/season')).data;
-  assert.equal(season.points, 20); assert.equal(season.wins, 1); assert.equal(season.board[0].points, 20);
+  assert.equal(season.points, 4); assert.equal(season.wins, 1); assert.equal(season.board[0].points, 4);
   assert.ok(ra.save && typeof ra.save.coins === 'number');
   const hist = await A.c.get('/api/pvp/history');
   assert.equal(hist.data.matches.length, 1);

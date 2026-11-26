@@ -41,8 +41,7 @@
 | 🔮 Master | 1,250+ | 3,500 |
 | 👑 Legend | 1,600+ | 5,000 |
 
-- **1 VS 1 and 2 VS 2 points:** Elo with K = 32 against the other side's average, plus a **+4 win bonus**.
-- **5-player arena points:** each pair of players is compared by placement (Elo, K = 32 split over the opponents). 1st place gets **+6** and 2nd gets **+2**.
+- **Points (owner rule since 2.4.1, the same in every battle):** a victory gives **+4**, a defeat **+2**, a draw **+3**. In the 5-player arena, 1st place gets **+4** and everyone else **+2**.
 - **Limits:** points never go below 0.
 - **New season:** the next season starts from **half of your last season's points**, at most 600 (Platinum's start).
 - **Season rewards:**
@@ -52,16 +51,16 @@
 - **Battle points:** the old "rank points" from single-player battles are now called **battle points**. They still drive the global Rankings screen. Online matches change season points only.
 
 ## Rewards per ranked match
-- **1 VS 1 / 2 VS 2:** a win gives 80 coins + 60 EXP, a loss 20 + 20 and a draw 40 + 40.
+- **1 VS 1 / 2 VS 2:** a win gives **1,000 coins** + 60 EXP, a loss **300** + 20 and a draw **600** + 40 (owner setting since 2.4.1).
 - **5-player arena:**
 
 | Place | Coins + EXP |
 |---|---|
-| 1st | 100 + 70 |
-| 2nd | 60 + 45 |
-| 3rd | 40 + 30 |
-| 4th | 25 + 20 |
-| 5th | 20 + 15 |
+| 1st | 1,000 + 70 |
+| 2nd | 600 + 45 |
+| 3rd | 400 + 30 |
+| 4th | 300 + 20 |
+| 5th | 300 + 15 |
 
 - **Premium:** members get +25%.
 - **Friend rooms and co-op:** these are friendly, with no points or rewards.

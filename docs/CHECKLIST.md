@@ -116,7 +116,7 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Guest mode, a premium trial, and account recovery (recovery codes plus optional email)
 
 ## Phase 11 — Online multiplayer
-- ✅ Real-time 1 VS 1 PvP over WebSocket: ranked Quick Match (Elo rank points, rewards) and private rooms with a code (see MULTIPLAYER.md)
+- ✅ Real-time 1 VS 1 PvP over WebSocket: ranked Quick Match (rank points: +4 victory / +2 defeat since 2.4.1, rewards) and private rooms with a code (see MULTIPLAYER.md)
 - ✅ Deterministic lockstep; the server relays validated inputs and re-simulates every match, so its result decides the winner
 - ✅ Leavers, disconnects and stalls are replaced by the AI; protocol abuse is dropped and logged; daily anti-farming limits
 - ⛔ Reconnecting mid-match, online 2v2 / FFA / player tournaments, spectating and chat are **not implemented**
@@ -151,6 +151,6 @@ Legend: ✅ done and tested · 🟡 done, needs the owner's setup · ⛔ not imp
 - ✅ Online 2 VS 2 (solo queue or duo from a room), 5-player arena and co-op vs AI; 1 VS 1 kept
 - ✅ AI balls fill empty seats after 20 s; a lone player gets an unranked match vs AI after 45 s
 - ✅ Friend rooms for every mode (up to 5 players, team picking, host start)
-- ✅ Monthly seasons: Bronze → Legend tiers, Elo/placement points, soft reset, tier rewards, season ranking
+- ✅ Monthly seasons: Bronze → Legend tiers, fixed points (+4 / +2), soft reset, tier rewards, season ranking
 - ✅ Premium monthly coins (2,000 per month, server-checked)
 - ✅ Tests: every mode played through the real WebSocket server; five-browser end-to-end run

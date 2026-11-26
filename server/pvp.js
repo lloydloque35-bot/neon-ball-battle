@@ -26,9 +26,8 @@ const dayStart = (t = now()) => { const d = new Date(t); d.setUTCHours(0, 0, 0, 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const LIMITS = { dropAfterMs: 15000, maxMatchMs: 30 * 60e3, roomTtlMs: 10 * 60e3, idleCloseMs: 60000, rewardedPerDay: 20, samePairPerDay: 3, msgsPerSec: 300, maxInputs: 60000,
   fillAfterMs: 20000, soloAfterMs: 45000 };
-const REWARDS = { win: { coins: 80, exp: 60 }, loss: { coins: 20, exp: 20 }, draw: { coins: 40, exp: 40 } };
-const PLACE_REWARDS = [{ coins: 100, exp: 70 }, { coins: 60, exp: 45 }, { coins: 40, exp: 30 }, { coins: 25, exp: 20 }, { coins: 20, exp: 15 }];
-const ELO_K = 32, WIN_BONUS = 4, FFA_BONUS = [6, 2, 0, 0, 0];
+const REWARDS = { win: { coins: 1000, exp: 60 }, loss: { coins: 300, exp: 20 }, draw: { coins: 600, exp: 40 } };          // 2.4.1 owner setting: big online coins
+const PLACE_REWARDS = [{ coins: 1000, exp: 70 }, { coins: 600, exp: 45 }, { coins: 400, exp: 30 }, { coins: 300, exp: 20 }, { coins: 300, exp: 15 }];
 const AI_NAMES = ['AI Nova', 'AI Blitz', 'AI Orbit', 'AI Vortex', 'AI Spark'];
 
 function register(app, S) {
@@ -393,19 +392,8 @@ function register(app, S) {
         if (pair >= LIMITS.samePairPerDay) { counted = false; notes = notes.map(() => 'You already played this opponent several times today: no rank points or rewards.'); }
       }
       if (counted) {
-        if (M.mode === 'ffa') {         // every pair of players, by placement
-          for (let i = 0; i < n; i++) {
-            let d = 0;
-            for (let j = 0; j < n; j++) if (j !== i) { const e = 1 / (1 + 10 ** ((pts[j] - pts[i]) / 400)), pi = places[teams[i]], pj = places[teams[j]]; d += ELO_K / (n - 1) * ((pi < pj ? 1 : pi === pj ? 0.5 : 0) - e); }
-            delta[i] = Math.round(d) + (FFA_BONUS[places[teams[i]] - 1] || 0);
-          }
-        } else {                        // 1 VS 1 and 2 VS 2: team rating = average of its players (AI seats do not count)
-          const avg = t => { const xs = pts.filter((_, i) => teams[i] === t); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
-          for (let i = 0; i < n; i++) {
-            const mine = avg(teams[i]), other = avg(1 - teams[i]) ?? mine, e = 1 / (1 + 10 ** ((other - mine) / 400));
-            delta[i] = Math.round(ELO_K * ((res[i] === 'win' ? 1 : res[i] === 'draw' ? 0.5 : 0) - e)) + (res[i] === 'win' ? WIN_BONUS : 0);
-          }
-        }
+        // 2.4.1 owner rule (same for every battle): victory +4, draw +3, defeat +2. FFA: 1st place +4, everyone else +2.
+        for (let i = 0; i < n; i++) delta[i] = M.mode === 'ffa' ? (places[teams[i]] === 1 ? core.RANK_POINTS.win : core.RANK_POINTS.loss) : (core.RANK_POINTS[res[i]] ?? core.RANK_POINTS.loss);
         rewarded = ids.map((uid, s) => {
           const c = db.get(`SELECT COUNT(*) AS n FROM pvp_match_players mp JOIN pvp_matches m ON m.id = mp.match_id WHERE mp.user_id = ? AND m.ranked = 1 AND m.status = 'done' AND m.finished_at >= ?`, uid, since).n;
           if (c >= LIMITS.rewardedPerDay) { notes[s] = 'Daily online reward limit reached: rank points only.'; return false; }

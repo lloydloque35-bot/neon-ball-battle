@@ -3811,6 +3811,7 @@ function simulateTicket(T, inputs = [], maxSteps = 240 * 60 * 30) {
   return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places } : { ok: false, reason: 'timeout', step: B.stepN };
 }
 /** rewards are computed from a (verified) result — identical on client (guest) and server */
+const RANK_POINTS = { win: 4, draw: 3, loss: 2 };   // rank points per battle (single-player and online)
 function computeRewards(T, r, opt = {}) {
   if (T.mode === 'practice') return { coins: 0, exp: 0, rp: 0 };
   const D = DIFF[T.difficulty]; let coins = 0, exp = 0, rp = 0;
@@ -3823,7 +3824,7 @@ function computeRewards(T, r, opt = {}) {
     case 'endless': coins = 22 * (r.kills || 0) + 10; exp = 26 * (r.kills || 0) + 10; rp = (r.kills || 0) * Math.round(D.rp / 3); break;
     case 'tournament': coins = r.win ? 90 : 20; exp = r.win ? 70 : 25; break;
   }
-  if (!['survival', 'endless'].includes(T.mode)) rp = r.win ? D.rp * (T.mode === 'boss' ? 2 : 1) : -4;
+  rp = r.win ? RANK_POINTS.win : RANK_POINTS.loss;      // 2.4.1 owner rule for every battle: victory +4, defeat +2
   const bonus = opt.premium ? 1.25 : 1;
   return { coins: Math.round(coins * D.reward * bonus), exp: Math.round(exp * D.reward * bonus), rp };
 }
@@ -4791,7 +4792,7 @@ function boot() {
 window.NBB = { Game, UI, get save() { return SAVE; }, get battle() { return BATTLE; }, registry: () => allBalls(), Fighter, Battle };
 /* shared game core — the Node game server loads this file headlessly to verify battles */
 window.NBB_CORE = {
-  createTicket, buildBattleConfig, simulateTicket, computeRewards, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, PVP_MODES, RANK_TIERS, rankTier, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
+  createTicket, buildBattleConfig, simulateTicket, computeRewards, RANK_POINTS, createPvpTicket, mergePvpBlock, cleanPvpActions, PVP, PVP_MODES, RANK_TIERS, rankTier, createTournament, tournamentOpponent, advanceTournament, TOUR_NAMES,
   Battle, Fighter, setCatalog, getBall, useSkill, useUltimate, unitsOf, dealDamage, spawnProj, allBalls, opponentPool, normDiff, enemySpec, playerSpecFrom, defaultSave, mulberry32, prog,
   DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, maxLvlOf, setXpTune: v => { XP_TUNE.high = clamp(+v || 1, 0.25, 4); }, xpTune: () => XP_TUNE.high, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
   COSMETICS, COSMETIC_SLOTS, DAILY_REWARDS, FUSION_COST, FUSION_MIN_LEVEL, FUSION_MAX, fusionEligible, makeFusionDef, mixColor, hashStr, sfxOf,

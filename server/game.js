@@ -131,6 +131,7 @@ function register(app, S) {
     const uid = user.id, p = profileRow(uid);
     const balls = {};
     for (const r of db.all('SELECT * FROM user_balls WHERE user_id = ?', uid)) balls[r.ball_id] = { owned: !!r.owned, level: r.level, exp: r.exp, evo: r.evo, up: json(r.up, {}), tree: json(r.tree, {}), sp: r.sp, wins: r.wins, losses: r.losses };
+    if (isOwner(user)) for (const d of core.allBalls().filter(b => b.maxLevel)) balls[d.id] = { wins: 0, losses: 0, ...(balls[d.id] || {}), owned: true, ...MAXED(d), maxed: true };   // the owner's God of Absolute: Lv 100
     for (const d of withCatalog(user, () => core.allBalls().filter(b => b.premium && !b.fusion && !b.adminOnly))) if (premiumMaxed(uid, d.id)) balls[d.id] = { owned: false, wins: 0, losses: 0, ...(balls[d.id] || {}), ...MAXED(d), maxed: true };
     const achievements = {}; for (const a of db.all('SELECT * FROM achievements WHERE user_id = ?', uid)) achievements[a.ach_id] = { done: true, claimed: !!a.claimed_at };
     const limited = {}; for (const l of db.all('SELECT * FROM limited_records WHERE user_id = ?', uid)) limited[l.ball_id] = { at: l.obtained_at, event: l.event_name };

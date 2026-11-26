@@ -313,3 +313,14 @@ test('determinism: the same God of Absolute battle replays identically (server v
     assert.equal(go(), go());
   }
 });
+
+test('2.4.1 owner rules: the owner\'s God of Absolute shows Lv 100; every battle gives +4 for a victory and +2 for a defeat', async () => {
+  const save = (await owner.get('/api/save')).data;
+  assert.equal(save.balls[ABS].level, 100); assert.equal(save.balls[ABS].owned, true);
+  const T = { mode: '1v1', difficulty: 'hard' };
+  for (const mode of ['1v1', '2v2', 'ffa', 'boss', 'tournament', 'survival', 'endless']) {
+    assert.equal(core.computeRewards({ ...T, mode }, { win: true }).rp, 4, mode + ' victory');
+    assert.equal(core.computeRewards({ ...T, mode }, { win: false }).rp, 2, mode + ' defeat');
+  }
+  assert.equal(core.computeRewards({ ...T, mode: 'practice' }, { win: true }).rp, 0, 'practice gives nothing');
+});
