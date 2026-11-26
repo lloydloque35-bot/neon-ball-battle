@@ -1,5 +1,12 @@
 # Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0)
 
+## 2.5.0 — God of Absolute: autonomous free will ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md))
+- ✅ No player control (engine-level, online too); OWN WILL button
+- ✅ Strategies, danger sense, own targets, Divine Step, ultimate timing, reactions, idle behaviour
+- ✅ Outer Realm: hunt / recover / explore, max 8 s, cooldown, guaranteed return, cleanup, window for bystanders
+- ✅ Owner-only AI settings (validated, audit-logged)
+- ✅ 132 tests pass (8 new); browser screenshots; God Portal's void re-checked
+
 ## 2.4.0 — GOD OF ABSOLUTE, limited edition ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md), QA report: [QA-2.4.0.md](QA-2.4.0.md))
 - ✅ The ball: 5 skills × 3 versions, 2 ultimates (full cinematic order, arena restored), passive, 3 forms by its own level (Lv 70 / 100)
 - ✅ Lv 50 → 100 progression for this ball only (verified battles, owner EXP scale); Lv 60 / 80 / 90 features

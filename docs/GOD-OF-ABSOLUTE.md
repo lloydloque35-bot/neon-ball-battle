@@ -106,6 +106,61 @@ Settings → Graphics → **Cinematic effects: Full / Reduced / Minimal**.
 - It works together with Particle quality.
 - Gameplay is the same at every setting.
 
+## 2.5.0 — Autonomous free will
+
+God of Absolute is **never controlled by a player**: not steering, not abilities, not the ultimate, not manual mode.
+- In battle its button shows **🧠 OWN WILL** and can't be pressed.
+- The engine ignores player commands for it, online too. The server replays the same decisions, so matches stay in sync.
+
+**How it thinks**
+- **5 strategies.** It switches every 6–10 s, or at once after a hard hit, at half health, or when its focus falls. It is deliberately a little unpredictable (a weighted choice), and it never just follows its allies.
+
+  | Strategy | What it does |
+  |---|---|
+  | **DOMINATE** | Hunts the most dangerous enemy |
+  | **JUDGE** | Holds the centre |
+  | **ORBIT** | Watches and circles |
+  | **EXECUTE** | Finishes the weakest enemy |
+  | **WARD** | Patient defence against a stronger foe |
+
+- **Danger sense.** It rates every enemy by attack, form, god status, a charged ultimate and health. It says "A WORTHY FOE." and plays safer against strong ones.
+- **Divine Step.** It teleports out of a shot or strike about to hit it, or behind a target that runs away.
+- **Ultimate timing.** It holds its ultimate while the target is far away, untouchable or hidden. It fires anyway when it is about to fall.
+- **Personality.**
+  - When there is nobody to fight, it drifts in a slow majestic circle.
+  - It reacts with lines such as "INTERESTING…", "I AM ABSOLUTE.", "WITNESS." and "JUDGMENT IS COMPLETE."
+  - It has its own transformation burst and a golden-purple cosmic aura.
+
+**The Outer Realm** — its own dimension beyond the arena. It opens a golden-purple portal and goes there by itself for three reasons:
+- **Hunt:** an enemy hiding outside the arena (a portal escape, a dimensional trap…) is pulled into the realm and fought there.
+- **Recover:** badly hurt and pressed, it steps out for 2.5 s and recovers a little.
+- **Explore:** with nobody near, it explores for 2.5 s, gathers cosmic energy, and sometimes comes back right behind its enemy.
+
+How the Outer Realm stays fair and safe:
+- **Who sees what:** players still in the arena see a small window into the realm.
+- **Time limit:** never more than 8 s (a hunt lasts 6 s by default).
+- **Cooldown:** 18 s by default.
+- **Everyone returns:** always — and at once if God of Absolute falls inside.
+- **Nothing stays behind:** anything created inside is removed when the realm closes.
+- **Who it can hunt:** only real enemy balls; never allies, copies, summons, turrets or anything in God Portal's void.
+- **Other matches:** each match's realm exists only inside that match.
+
+**Owner settings — Admin Dashboard → 👑 God of Absolute → 🧠 Autonomous will** (server-checked, audit-logged):
+- intelligence: Calm / Strategic / Supreme
+- aggression: 0–100
+- leave the arena on/off, hunt on/off, recover on/off, explore on/off
+- Divine Step on/off, speech on/off
+- longest hunt (3–8 s), Outer Realm cooldown (12–40 s)
+- which abilities it may use, and an ability cooldown multiplier
+
+Balance with free will (same method as below):
+
+| | vs top-12 balls | vs God Balls (average) |
+|---|---|---|
+| Lv 50 | 67% | 55% |
+| Lv 70 | 81% | — |
+| Lv 100 | 100% | 81% (God of War still wins half) |
+
 ## The limited edition
 
 - **Price:** PHP 499, one time. Owners appear in the shop as "37 / 100 verified owners • 60 available now • 3 reserved by players paying right now".

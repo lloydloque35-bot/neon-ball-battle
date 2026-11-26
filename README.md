@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.4.2**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.5.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -48,7 +48,8 @@ Version **2.4.2**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
     - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
     - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
-  - **NEW 2.4.0 — GOD OF ABSOLUTE • THE UNRIVALED ONE — LIMITED EDITION, PHP 499** ([docs/GOD-OF-ABSOLUTE.md](docs/GOD-OF-ABSOLUTE.md), QA: [docs/QA-2.4.0.md](docs/QA-2.4.0.md)):
+  - **NEW 2.5.0 — God of Absolute's AUTONOMOUS FREE WILL**: it is never controlled by a player — it picks its own strategies and targets, teleports out of danger, times its own ultimate, and leaves the arena through its own portal into the **Outer Realm** to hunt hiding enemies, recover or explore (always returning). Owner-only AI settings.
+  - **2.4.0 — GOD OF ABSOLUTE • THE UNRIVALED ONE — LIMITED EDITION, PHP 499** ([docs/GOD-OF-ABSOLUTE.md](docs/GOD-OF-ABSOLUTE.md), QA: [docs/QA-2.4.0.md](docs/QA-2.4.0.md)):
     - limited exclusive Supreme God Ball: 100 verified owners at first, numbered editions (#001…), real stock shown in the shop, reserved slots while paying, never oversold
     - starts at **Lv 50** after a verified purchase and levels to **Lv 100** (Celestial Sovereign at Lv 70, The Unrivaled One at Lv 100)
     - 5 skills × 3 versions, ultimate **Absolute Zero – End of All Dimensions**, final-form ultimate **Omniversal Absolute Dominion**, passive **Absolute Authority**

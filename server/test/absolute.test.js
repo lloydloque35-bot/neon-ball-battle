@@ -183,6 +183,30 @@ test('owner panel: owners, pending, completed, errors, restores, settings, annou
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.edition_settings'"));
 });
 
+test('2.4.1 owner rules: the owner\'s God of Absolute shows Lv 100; every battle gives +4 for a victory and +2 for a defeat', async () => {
+  const save = (await owner.get('/api/save')).data;
+  assert.equal(save.balls[ABS].level, 100); assert.equal(save.balls[ABS].owned, true);
+  const T = { mode: '1v1', difficulty: 'hard' };
+  for (const mode of ['1v1', '2v2', 'ffa', 'boss', 'tournament', 'survival', 'endless']) {
+    assert.equal(core.computeRewards({ ...T, mode }, { win: true }).rp, 4, mode + ' victory');
+    assert.equal(core.computeRewards({ ...T, mode }, { win: false }).rp, 2, mode + ' defeat');
+  }
+  assert.equal(core.computeRewards({ ...T, mode: 'practice' }, { win: true }).rp, 0, 'practice gives nothing');
+});
+
+test('2.5.0 owner-only AI settings: validated, stored on the server and sent to every battle', async () => {
+  const p = await player('abs_will_player');
+  assert.ok([401, 403].includes((await p.post('/api/admin/edition/tuning', { will: { intelligence: 3 } })).status), 'players cannot change its will');
+  for (const bad of [{ will: { intelligence: 7 } }, { will: { aggression: 300 } }, { will: { maxRealm: 30 } }, { will: { realmCd: 2 } }, { off: [0, 1, 2, 3, 4] }, { cdMul: 9 }])
+    assert.equal((await owner.post('/api/admin/edition/tuning', bad)).status, 400, JSON.stringify(bad));
+  const r = await owner.post('/api/admin/edition/tuning', { will: { intelligence: 3, aggression: 80, explore: false, maxRealm: 5 }, off: [3], cdMul: 1.2 });
+  assert.equal(r.status, 200); assert.deepEqual([r.data.will.intelligence, r.data.will.aggression, r.data.will.explore, r.data.will.maxRealm, r.data.cdMul], [3, 80, false, 5, 1.2]);
+  const cat = (await p.get('/api/catalog')).data; assert.equal(cat.tuning[ABS].will.intelligence, 3); assert.deepEqual([...cat.tuning[ABS].off], [3]);
+  const panel = (await owner.get('/api/admin/edition')).data; assert.equal(panel.will.aggression, 80); assert.equal(panel.skills.length, 5);
+  assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.edition_tuning'"));
+  await owner.post('/api/admin/edition/tuning', { will: { intelligence: 2, aggression: 60, explore: true, maxRealm: 6 }, off: [], cdMul: 1 });
+});
+
 /* ---------------- PayMongo path (fake API) ---------------- */
 test('PayMongo checkout holds a slot; the signed webhook + server check grants serial & Lv 50; a payment after sell-out is never granted', async () => {
   const sessions = new Map(); let n = 0;
@@ -314,13 +338,3 @@ test('determinism: the same God of Absolute battle replays identically (server v
   }
 });
 
-test('2.4.1 owner rules: the owner\'s God of Absolute shows Lv 100; every battle gives +4 for a victory and +2 for a defeat', async () => {
-  const save = (await owner.get('/api/save')).data;
-  assert.equal(save.balls[ABS].level, 100); assert.equal(save.balls[ABS].owned, true);
-  const T = { mode: '1v1', difficulty: 'hard' };
-  for (const mode of ['1v1', '2v2', 'ffa', 'boss', 'tournament', 'survival', 'endless']) {
-    assert.equal(core.computeRewards({ ...T, mode }, { win: true }).rp, 4, mode + ' victory');
-    assert.equal(core.computeRewards({ ...T, mode }, { win: false }).rp, 2, mode + ' defeat');
-  }
-  assert.equal(core.computeRewards({ ...T, mode: 'practice' }, { win: true }).rp, 0, 'practice gives nothing');
-});

@@ -418,7 +418,7 @@ SUP.chipHooks.push((f, chips) => {
   const s = f.sx;
   if (s.wm > 0) chips.push(['WEAPON ' + Math.round(s.wm) + '%', GUN_GOLD]); if (s.overdriveT > 0) chips.push(['OVERDRIVE', '#ff6d00']); if (s.arsenal) chips.push(['ARSENAL', GUN_BLUE]);
   if (s.dm > 0) chips.push(['DIMENSION ×' + s.dm, PT_PURPLE]); if (s.reflectT > 0) chips.push(['PORTAL REFLECT', PT_PURPLE]);
-  if (f.dim) chips.push(['IN THE INFINITE VOID', '#ea80fc']);
+  if (f.dim) chips.push(BATTLE && BATTLE.absRealmIds && BATTLE.absRealmIds.has(f.dim) ? ['IN THE OUTER REALM', '#ffd54f'] : ['IN THE INFINITE VOID', '#ea80fc']);
 });
 
 /* =====================================================================
@@ -550,8 +550,8 @@ function drawVoidWorld(ctx, B, d, dt) {
 /** what the viewer sees: the void when their own ball is inside it (or when there is no player), the arena otherwise */
 function voidViewDim(B) { const d = B.voidDim; if (!d || d.phase === 'gate') return 0; const p = B.player; if (p) return p.alive || p.dim ? (p.dim || 0) : 0; return d.id; }
 /** a small window into the void for players left in the arena */
-function drawVoidInset(ctx, B, d) {
-  const w = 300, hh = 170, x0 = W - w - 18, y0 = 96, s = w / ARENA.w;
+function drawVoidInset(ctx, B, d, slot = 0) {
+  const w = 300, hh = 170, x0 = W - w - 18, y0 = 96 + slot * (hh + 14), s = w / ARENA.w;
   ctx.save(); ctx.fillStyle = '#05000c'; ctx.strokeStyle = '#b388ff'; ctx.lineWidth = 2; ctx.fillRect(x0, y0, w, hh); ctx.strokeRect(x0, y0, w, hh);
   ctx.beginPath(); ctx.rect(x0, y0, w, hh); ctx.clip(); ctx.translate(x0, y0 + (hh - ARENA.h * s) / 2); ctx.scale(s, s); ctx.translate(-ARENA.x, -ARENA.y);
   for (const p of d.platforms) { ctx.fillStyle = '#2a2147'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); }
@@ -560,22 +560,29 @@ function drawVoidInset(ctx, B, d) {
   ctx.restore();
   ctx.save(); ctx.font = '800 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#ea80fc'; ctx.fillText('◈ INFINITE VOID — ' + Math.max(0, Math.ceil(d.dur - d.t)) + 's', x0 + 8, y0 + 16); ctx.restore();
 }
+/* separate dimensions inside one match (God Portal's Infinite Void, and from 2.5.0 God of Absolute's Outer Realm):
+   each provider lists its open dimensions; the viewer sees the one their own ball is in, and small windows into the others */
+SUP.dimViews = SUP.dimViews || [];
+SUP.dimViews.push(B => { const d = B.voidDim; return d && d.phase !== 'gate' ? [{ id: d.id, world: (ctx, dt) => drawVoidWorld(ctx, B, d, dt), inset: (ctx, slot) => drawVoidInset(ctx, B, d, slot), spectate: true }] : []; });
+function openDims(B) { const out = []; for (const fn of SUP.dimViews) { try { out.push(...fn(B)); } catch (e) { /* visual only */ } } return out; }
+function dimViewOf(B, dims) { const p = B.player; if (p) { const pd = p.dim || 0; return (p.alive || pd) && dims.some(d => d.id === pd) ? pd : 0; } const sp = dims.find(d => d.spectate); return sp ? sp.id : 0; }
 if (typeof Battle !== 'undefined') {
   const baseDraw = Battle.prototype.draw, noHud = () => {};
   Battle.prototype.draw = function (ctx, dt) {
-    const d = this.voidDim; if (!d) return baseDraw.call(this, ctx, dt);
-    const vd = voidViewDim(this), dimOf = x => (x && x.dim) || 0;
+    const dims = openDims(this);
+    if (!dims.length && !this.fighters.some(f => f.dim)) return baseDraw.call(this, ctx, dt);
+    const vd = dimViewOf(this, dims), view = dims.find(d => d.id === vd), dimOf = x => (x && x.dim) || 0;
     const keep = { fighters: this.fighters, projs: this.projs, zones: this.zones, lasers: this.lasers, waves: this.waves, strikes: this.strikes, beams: this.beams, orbs: this.orbs };
     this.fighters = keep.fighters.filter(f => dimOf(f) === vd);
     this.projs = keep.projs.filter(p => (p.dim ?? dimOf(p.owner)) === vd);
     for (const k of ['zones', 'lasers', 'waves', 'strikes', 'beams', 'orbs']) this[k] = keep[k].filter(x => dimOf(x.owner) === vd);
-    this._vd = vd; this.drawHud = noHud;
-    try { baseDraw.call(this, ctx, dt); } finally { Object.assign(this, keep); this._vd = 0; delete this.drawHud; }
-    if (vd === 0 && d.phase !== 'gate') drawVoidInset(ctx, this, d);
+    this._vd = vd; this._world = view ? view.world : null; this.drawHud = noHud;
+    try { baseDraw.call(this, ctx, dt); } finally { Object.assign(this, keep); this._vd = 0; this._world = null; delete this.drawHud; }
+    if (vd === 0) dims.forEach((d, i) => { try { d.inset && d.inset(ctx, i); } catch (e) { /* visual only */ } });
     this.drawHud(ctx);
   };
   const baseArena = Arena.draw;
-  Arena.draw = function (ctx, dt) { const B = BATTLE; if (B && B._vd && B.voidDim) return drawVoidWorld(ctx, B, B.voidDim, dt); return baseArena.call(this, ctx, dt); };
+  Arena.draw = function (ctx, dt) { const B = BATTLE; if (B && B._world) return B._world(ctx, dt); return baseArena.call(this, ctx, dt); };
 }
 
 /* =====================================================================

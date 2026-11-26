@@ -21,6 +21,7 @@ const EDITION_BALLS = {
   godofabsolute: { name: 'GOD OF ABSOLUTE – LIMITED EDITION', startLevel: 50, defaultSupply: 100,
     rewards: ['title_absolute', 'aura_absolute', 'trail_absolute', 'hit_absolute', 'win_absolute'] },
 };
+const WILL_DEFAULT = { intelligence: 2, aggression: 60, transcend: true, hunt: true, retreat: true, explore: true, step: true, speech: true, maxRealm: 6, realmCd: 18 };   // same as gods3.js
 const HOLD_QR_MS = 30 * 60e3, HOLD_CHECKOUT_MS = 20 * 60e3, MAX_SUPPLY = 100000;
 const SOLD_OUT_MSG = 'SOLD OUT – THE ABSOLUTE ERA IS COMPLETE.';
 
@@ -159,7 +160,9 @@ function register(app, S) {
       restores: db.all("SELECT l.at, l.event, l.details, u.username FROM edition_ledger l LEFT JOIN users u ON u.id = l.user_id WHERE l.ball_id = ? AND l.event IN ('restore', 'restore_check') ORDER BY l.id DESC LIMIT 50", BALL).map(r => ({ ...r, details: json(r.details) })),
       ledger: db.all('SELECT l.id, l.at, l.event, l.purchase_id, l.details, u.username, a.username AS actor FROM edition_ledger l LEFT JOIN users u ON u.id = l.user_id LEFT JOIN users a ON a.id = l.actor_id WHERE l.ball_id = ? ORDER BY l.id DESC LIMIT 150', BALL).map(r => ({ ...r, details: json(r.details) })),
       securityEvents: db.all("SELECT kind, severity, details, created_at FROM security_events WHERE kind LIKE 'shop_%' ORDER BY id DESC LIMIT 30"),
-      xpMul: core.xpTune(), ultDur: (tune && json(tune.settings) || {}).ultDur || 3.4, paymentsOpen: S.shopStatus() };
+      xpMul: core.xpTune(), ultDur: (tune && json(tune.settings) || {}).ultDur || 3.4, paymentsOpen: S.shopStatus(),
+      will: { ...WILL_DEFAULT, ...((tune && json(tune.settings) || {}).will || {}) }, off: (tune && json(tune.settings) || {}).off || [], cdMul: (tune && json(tune.settings) || {}).cdMul || 1,
+      skills: ((core.getBall(BALL) || {}).skills || []).map(s => s.name) };
   });
   app.post('/api/admin/edition/settings', ctx => {
     const me = owner(ctx), b = ctx.body, c = cfgOf(BALL), o = owners(BALL), before = { ...c };
@@ -190,6 +193,24 @@ function register(app, S) {
   app.post('/api/admin/edition/tuning', ctx => {
     const me = owner(ctx), b = ctx.body, out = {};
     if (b.xpMul != null) { const v = Number(b.xpMul); if (!(v >= 0.25 && v <= 4)) throw bad('EXP scale must be from 0.25 to 4'); setSetting('absolute_xp_mul', String(v)); core.setXpTune(v); out.xpMul = v; }
+    // 2.5.0 AUTONOMOUS WILL: intelligence, personality, Outer Realm behaviour, abilities — owner only, validated here
+    const will = b.will != null && typeof b.will === 'object' ? (() => { const w = b.will, o = {};
+      if (w.intelligence != null) { const v = Number(w.intelligence); if (![1, 2, 3].includes(v)) throw bad('Intelligence must be 1, 2 or 3'); o.intelligence = v; }
+      if (w.aggression != null) { const v = Number(w.aggression); if (!(v >= 0 && v <= 100)) throw bad('Aggression must be from 0 to 100'); o.aggression = Math.round(v); }
+      if (w.maxRealm != null) { const v = Number(w.maxRealm); if (!(v >= 3 && v <= 8)) throw bad('Outer Realm time must be from 3 to 8 seconds'); o.maxRealm = Math.round(v * 10) / 10; }
+      if (w.realmCd != null) { const v = Number(w.realmCd); if (!(v >= 12 && v <= 40)) throw bad('Outer Realm cooldown must be from 12 to 40 seconds'); o.realmCd = Math.round(v); }
+      for (const k of ['transcend', 'hunt', 'retreat', 'explore', 'step', 'speech']) if (w[k] != null) o[k] = !!w[k];
+      return o; })() : null;
+    const nSkills = (core.getBall(BALL) || { skills: [] }).skills.length;
+    const off = Array.isArray(b.off) ? [...new Set(b.off.filter(i => Number.isInteger(i) && i >= 0 && i < nSkills))].sort() : null;
+    if (off && off.length >= nSkills) throw bad('Keep at least one ability switched on');
+    const cdMul = b.cdMul != null ? Number(b.cdMul) : null; if (cdMul != null && !(cdMul >= 0.5 && cdMul <= 2)) throw bad('Cooldown multiplier must be from 0.5 to 2');
+    if (will || off || cdMul != null) {
+      const r = db.get('SELECT settings FROM admin_ball_tuning WHERE ball_id = ?', BALL); let t = {}; try { t = JSON.parse(r ? r.settings : '{}') || {}; } catch { t = {}; }
+      if (will) t.will = { ...(t.will || {}), ...will }; if (off) t.off = off; if (cdMul != null) t.cdMul = Math.round(cdMul * 10) / 10;
+      db.run('INSERT INTO admin_ball_tuning (ball_id, settings, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(ball_id) DO UPDATE SET settings = excluded.settings, updated_by = excluded.updated_by, updated_at = excluded.updated_at', BALL, JSON.stringify(t), me.id, now());
+      Object.assign(out, { will: t.will, off: t.off, cdMul: t.cdMul });
+    }
     if (b.ultDur != null) {
       const v = Math.round(Number(b.ultDur) * 10) / 10; if (!(v >= 2.4 && v <= 5)) throw bad('Ultimate duration must be from 2.4 to 5 seconds');
       const r = db.get('SELECT settings FROM admin_ball_tuning WHERE ball_id = ?', BALL); let t = {}; try { t = JSON.parse(r ? r.settings : '{}') || {}; } catch { t = {}; }

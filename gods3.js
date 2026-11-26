@@ -262,7 +262,7 @@ const ABS_DEF = limitedGodBall(B(ABS.id, 'God of Absolute Ball', 'God', 'God Tie
   D(ABS.BLACK, ABS.GOLD, ABS.PURPLE, 'absolutecore', [], '', { glow: 1.8, sdeco: ['absrings', 'absfragments'], arings: 2, afrags: 5, aspheres: 0, sfx: { wave: 'triangle', pitch: 0.8 } }),
   [S('ABSOLUTE JUDGMENT', 'ab_judgment', 7, 80, ABS.GOLD), S('REALITY BREAKER', 'ab_reality', 10, 75, ABS.PURPLE), S('CELESTIAL DOMINION', 'ab_dominion', 11, 70, ABS.GOLD), S('INFINITY ERASURE', 'ab_erasure', 8, 90, ABS.WHITE), S('DIVINE REPLICATION', 'ab_replica', 14, 70, ABS.WHITE)],
   U('ABSOLUTE ZERO – END OF ALL DIMENSIONS', 'ab_zero', 115, ABS.GOLD), 'intelligent', { desc: 'LIMITED EXCLUSIVE SUPREME GOD • PHP 499. A supreme cosmic entity with absolute authority over divine energy, spatial reality and celestial power.' }), {
-  godClass: 'LIMITED EXCLUSIVE SUPREME GOD', formMul: [1, 1.0, 1.0], skillK: [1.45, 0.82, 0.34], ultChargeMul: 0.65,
+  godClass: 'LIMITED EXCLUSIVE SUPREME GOD', formMul: [1, 1.0, 0.96], skillK: [1.5, 0.82, 0.3], ultChargeMul: 0.65,
   forms: [{ name: 'ABSOLUTE DIVINITY' },
     { name: 'CELESTIAL SOVEREIGN', design: { c3: ABS.WHITE, arings: 3, afrags: 8, glow: 2.1, sdeco: ['absrings', 'absfragments', 'abssymbols'] } },
     { name: 'THE UNRIVALED ONE', design: { c1: '#0d0820', c2: ABS.WHITE, c3: ABS.GOLD, pat: 'absolutecore2', arings: 4, afrags: 10, aspheres: 4, glow: 2.6, sdeco: ['absrings', 'absfragments', 'abssymbols', 'absspheres', 'absstructure'] } }],
@@ -638,6 +638,22 @@ UI.admin_absolute = async function (body) {
     h('label', {}, 'Ultimate duration (s) ', ult), h('label', {}, 'EXP needed above Lv 50 (×) ', xp),
     h('button', { class: 'btn', onclick: () => adminDo(() => API.post('/api/admin/edition/tuning', { ultDur: +ult.value, xpMul: +xp.value }), () => UI.render_admin()) }, '💾 Save')),
     h('p', { class: 'muted small' }, 'EXP for one level above 50 = (300 + 12 per level) × this number. Levels come only from verified battles.')));
+  // 2.5.0 AUTONOMOUS WILL — only the owner can tune how it thinks; nobody can steer it in battle
+  const W = { ...d.will }, off = new Set(d.off || []);
+  const chk = (k, label) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!W[k], onchange: e => { W[k] = e.target.checked; } }), ' ' + label);
+  const intel = h('select', { onchange: e => { W.intelligence = +e.target.value; } }, ...[[1, 'Calm'], [2, 'Strategic (default)'], [3, 'Supreme']].map(([v, l]) => h('option', { value: v, selected: W.intelligence === v }, l)));
+  const aggV = h('b', {}, String(W.aggression)), agg = h('input', { type: 'range', min: '0', max: '100', step: '5', value: String(W.aggression), oninput: e => { W.aggression = +e.target.value; aggV.textContent = e.target.value; } });
+  const realmT = h('input', { type: 'number', min: '3', max: '8', step: '0.5', value: String(W.maxRealm), style: { width: '70px' }, onchange: e => { W.maxRealm = +e.target.value; } });
+  const realmCd = h('input', { type: 'number', min: '12', max: '40', step: '1', value: String(W.realmCd), style: { width: '70px' }, onchange: e => { W.realmCd = +e.target.value; } });
+  const cdm = h('input', { type: 'number', min: '0.5', max: '2', step: '0.1', value: String(d.cdMul || 1), style: { width: '70px' } });
+  const abil = h('div', { class: 'gshop-methods' }, ...(d.skills || []).map((n, i) => h('label', {}, h('input', { type: 'checkbox', checked: !off.has(i), onchange: e => { e.target.checked ? off.delete(i) : off.add(i); } }), ' ' + n)));
+  body.append(h('div', { class: 'card' }, h('h3', {}, '🧠 Autonomous will — it makes its own decisions'),
+    h('p', { class: 'muted small' }, 'Players can never steer or command God of Absolute. These owner settings shape how it thinks. They apply to every battle and are checked on the server.'),
+    h('div', { class: 'row', style: { gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('label', {}, 'Intelligence ', intel), h('label', {}, 'Aggression ', agg, ' ', aggV)),
+    h('div', { class: 'row', style: { gap: '10px', flexWrap: 'wrap', marginTop: '6px' } }, chk('transcend', 'May leave the arena (Outer Realm)'), chk('hunt', 'Hunts enemies hiding outside the arena'), chk('retreat', 'Recovers in the Outer Realm when badly hurt'), chk('explore', 'Explores the Outer Realm'), chk('step', 'Divine Step teleport'), chk('speech', 'Speaks / reacts')),
+    h('div', { class: 'row', style: { gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '6px' } }, h('label', {}, 'Longest hunt (s) ', realmT), h('label', {}, 'Outer Realm cooldown (s) ', realmCd), h('label', {}, 'Ability cooldown × ', cdm)),
+    h('div', { style: { marginTop: '6px' } }, h('b', {}, 'Abilities it may use: '), abil),
+    h('button', { class: 'btn gold', style: { marginTop: '8px' }, onclick: () => adminDo(() => API.post('/api/admin/edition/tuning', { will: W, off: [...off], cdMul: +cdm.value }), () => UI.render_admin()) }, '💾 Save its will')));
   body.append(h('div', { class: 'card' }, h('h3', {}, `⏳ Pending (${d.pending.length})`), h('p', { class: 'muted small' }, 'QR payments are approved in the 💳 God Shop (PHP) tab — the approval gives the serial number, Lv 50 and the rewards.'),
     tbl([['Player', r => r.username], ['Status', r => r.status], ['Via', r => r.provider], ['Reference', r => r.reference], ['Reserved until', r => r.holdUntil ? dt(r.holdUntil) : 'until checked'], ['Created', r => dt(r.createdAt)]], d.pending)));
   body.append(h('div', { class: 'card' }, h('h3', {}, `👑 Verified owners (${d.owners.length})`), tbl([['#', r => '#' + pad3(r.serial)], ['Player', r => r.username], ['Edition', r => r.edition], ['Since', r => dt(r.granted_at)], ['Purchase', r => r.purchase_id]], d.owners)));
@@ -647,6 +663,310 @@ UI.admin_absolute = async function (body) {
   body.append(h('div', { class: 'card' }, h('h3', {}, `↺ Purchase restorations (${d.restores.length})`), tbl([['When', r => dt(r.at)], ['Player', r => r.username], ['Result', r => r.event === 'restore' ? 'fixed: ' + ((r.details && r.details.fixed) || []).join(', ') : 'checked, all fine']], d.restores)));
   body.append(h('div', { class: 'card' }, h('h3', {}, 'Edition ledger (permanent, cannot be edited)'), tbl([['#', r => r.id], ['When', r => dt(r.at)], ['Event', r => r.event], ['Player', r => r.username], ['By', r => r.actor], ['Details', r => r.details ? JSON.stringify(r.details).slice(0, 90) : '']], d.ledger)));
 };
+/* =====================================================================
+   2.5.0 GOD OF ABSOLUTE — AUTONOMOUS FREE WILL
+   It is never steered or commanded by a player: it reads the battle, picks its own targets and strategies,
+   dodges by teleporting, times its own ultimate, and decides by itself when to leave the arena for the OUTER REALM
+   (to hunt enemies hiding outside the arena, to recover, or to explore) — and it always comes back.
+   Everything here is part of the deterministic battle simulation (seeded RNG only), so online matches stay in sync
+   and the server replays the same decisions. Visual reactions use FX only. The owner tunes it (Admin → God of Absolute).
+   ===================================================================== */
+const WILL_DEFAULT = { intelligence: 2, aggression: 60, transcend: true, hunt: true, retreat: true, explore: true, step: true, speech: true, maxRealm: 6, realmCd: 18 };
+const willCfg = f => { const w = (((f.baseDef || f.def).tuning || {}).will) || {}; const c = { ...WILL_DEFAULT, ...w };
+  c.intelligence = clamp(c.intelligence | 0, 1, 3); c.aggression = clamp(+c.aggression || 0, 0, 100); c.maxRealm = clamp(+c.maxRealm || 6, 3, 8); c.realmCd = clamp(+c.realmCd || 18, 12, 40); return c; };
+const isWill = f => !!(f && f.autonomous && f.alive);
+const STRATS = {
+  DOMINATE: { pers: 'aggressive', col: ABS.GOLD, line: 'BOW BEFORE THE ABSOLUTE.' },
+  JUDGE: { pers: 'tactical', col: ABS.WHITE, line: 'I WILL JUDGE YOU FROM HERE.' },
+  ORBIT: { pers: 'intelligent', col: ABS.PURPLE, line: 'I SEE EVERY MOVE YOU MAKE.' },
+  EXECUTE: { pers: 'aggressive', col: '#ff8a80', line: 'YOUR END HAS BEEN DECIDED.' },
+  WARD: { pers: 'defensive', col: '#80d8ff', line: 'A WORTHY FOE… I WILL BE PATIENT.' },
+};
+const willSay = (f, txt, col = ABS.GOLD, size = 15) => { if (FX.off || !f.will || !f.will.cfg.speech) return; FX.text(f.x, f.y - f.r - 56, txt, col, size, { life: 1.5, pop: 1.3, stroke: '#0b0618' }); };
+/** how dangerous a ball is right now (attack, form, a charged ultimate, being a god, remaining health) */
+function threatOf(e) { return e.effAtk() * (1 + (e.form | 0) * 0.2 + (e.god > 0 ? 0.3 : 0)) * (e.ultMeter >= 85 ? 1.35 : 1) * (e.baseDef && e.baseDef.forms ? 1.25 : 1) * (0.5 + e.hpRatio * 0.5); }
+const powerOf = f => f.effAtk() * (1 + (f.form | 0) * 0.2) * (0.5 + f.hpRatio * 0.5);
+const willFoes = f => f.enemies().filter(e => !e.isClone && !e.unit && !(e.st.outside > 0));
+
+/* ---------- 1. autonomy: no player input ever reaches it (steering, abilities, ultimate, manual mode) ---------- */
+{
+  const apply = Battle.prototype.applyAction;
+  Battle.prototype.applyAction = function (a, pl = this.player) {
+    if (pl && pl.autonomous && (a[0] === 'k' || a[0] === 'u' || a[0] === 'm' || a[0] === 's')) { if (a[0] !== 's') pl.manual = false; return; }
+    return apply.call(this, a, pl);
+  };
+}
+
+/* ---------- 2. the will: strategies, danger sense, its own targets, reactions ---------- */
+function willInit(f) {
+  const cfg = willCfg(f);
+  f.autonomous = true; f.manual = false;
+  f.will = { cfg, strat: 'ORBIT', stratT: 1.5 + rand(1.5), focus: null, said: {}, stepCd: 3, realmCd: 6 + rand(4), decT: 0.5, lastHp: f.hp, idleT: 0, lowSaid: false, form: f.form };
+  if (f.ai) { const diff = ['normal', 'hard', 'expert'][cfg.intelligence - 1]; f.ai.diff = diff; f.ai.p = DIFF[diff]; }
+}
+function chooseStrategy(f, W) {
+  const es = willFoes(f); if (!es.length) return W.strat;
+  const A = W.cfg.aggression / 100, top = es.reduce((a, b) => threatOf(b) > threatOf(a) ? b : a), danger = threatOf(top) / Math.max(1, powerOf(f));
+  const weakest = es.reduce((a, b) => b.hpRatio < a.hpRatio ? b : a);
+  const w = {
+    DOMINATE: (0.3 + A * 1.4) * (0.4 + f.hpRatio) * (danger < 1.2 ? 1.2 : 0.6),
+    JUDGE: (1.2 - A) * 0.7 + (es.length > 1 ? 0.5 : 0),
+    ORBIT: (1.2 - A) * 0.8 * (danger > 1 ? 1.3 : 1),
+    EXECUTE: weakest.hpRatio < 0.35 ? 1.6 : 0.08,
+    WARD: danger > 1.35 && f.hpRatio < 0.65 ? 1.3 : 0.05,
+  };
+  if (danger > 1.3 && !W.said['worthy' + top.sid]) { W.said['worthy' + top.sid] = true; willSay(f, 'A WORTHY FOE.', '#80d8ff'); }
+  // independent and unpredictable: a weighted choice, never simply "follow the others"
+  let sum = 0; for (const k in w) sum += w[k]; let r = rand(sum);
+  for (const k in w) { r -= w[k]; if (r <= 0) return k; }
+  return 'ORBIT';
+}
+/* its own target, by its own strategy (it does not copy its allies' target) */
+{
+  const pick = AIController.prototype.pickTarget;
+  AIController.prototype.pickTarget = function () {
+    const f = this.f, W = f.will; if (!isWill(f) || !W) return pick.call(this);
+    const es = willFoes(f).filter(e => (e.dim || 0) === (f.dim || 0)); if (!es.length) return null;
+    if (W.focus && W.focus.alive && es.includes(W.focus)) return W.focus;
+    let t;
+    if (W.strat === 'DOMINATE' || W.strat === 'WARD') t = es.reduce((a, b) => threatOf(b) > threatOf(a) ? b : a);
+    else if (W.strat === 'EXECUTE') t = es.reduce((a, b) => b.hpRatio < a.hpRatio ? b : a);
+    else if (W.strat === 'JUDGE') t = es.reduce((a, b) => dist2(b.x, b.y, ARENA.cx, ARENA.cy) < dist2(a.x, a.y, ARENA.cx, ARENA.cy) ? b : a);
+    else t = pick.call(this);
+    W.focus = t; return t;
+  };
+}
+/* it times its own ultimate: never into an untouchable or far-away target, unless it is about to fall */
+{
+  const ult = useUltimate;
+  useUltimate = function (f) {
+    if (isWill(f) && f.will) {
+      const t = f.target && f.target.alive ? f.target : nearestEnemy(f);
+      const bad = !t || t.st.invuln > 0.3 || t.st.outside > 0 || len(t.x - f.x, t.y - f.y) > 560;
+      if (bad && f.hpRatio > 0.25) return false;
+    }
+    return ult(f);
+  };
+}
+/* the strategy, reactions, idle behaviour and the realm decisions — every step, in the simulation */
+SUP.worldHooks.push((B, h) => {
+  for (const f of B.fighters) {
+    if (!f.alive || f.isClone || !f.baseDef || f.baseDef.id !== ABS.id) continue;
+    if (!f.will) willInit(f);
+    const W = f.will; f.manual = false;
+    W.stepCd -= h; W.realmCd -= h;
+    // strategy: re-thought every 6–10 s, at once on big events (a hard hit, half health, the focus falls)
+    const big = W.lastHp - f.hp > f.maxHp * 0.08, half = W.lastHp > f.maxHp * 0.5 && f.hp <= f.maxHp * 0.5;
+    if (big) willSay(f, 'INTERESTING…', ABS.WHITE, 13);
+    if (!W.lowSaid && f.hpRatio < 0.25) { W.lowSaid = true; willSay(f, 'I AM ABSOLUTE.', ABS.GOLD, 17); }
+    W.lastHp = f.hp;
+    if ((W.stratT -= h) <= 0 || big || half || (W.focus && !W.focus.alive)) {
+      const s = chooseStrategy(f, W); W.stratT = 6 + rand(4); W.focus = null;
+      const talk = rand() < 0.35;      // rolled in the simulation (same on every screen and on the server), shown only where there is a screen
+      if (s !== W.strat) { W.strat = s; if (!FX.off) { FX.text(f.x, f.y + f.r + 26, '◈ ' + s, STRATS[s].col, 12, { life: 1.1 }); if (talk) willSay(f, STRATS[s].line, STRATS[s].col, 13); } }
+    }
+    if (f.ai) { f.ai.pers = STRATS[W.strat].pers; f.ai.basePers = f.ai.pers; }
+    if (W.form !== f.form) { W.form = f.form; willSay(f, f.form === 2 ? 'WITNESS THE UNRIVALED ONE.' : 'WITNESS.', ABS.GOLD, 17); absTransformFx(f); }
+    // DIVINE STEP: it teleports out of danger, or behind a target that tries to run
+    if (W.cfg.step && W.stepCd <= 0 && f.canAct() && !f.casting) divineStep(f, W);
+    // OUTER REALM decisions (every 0.5 s)
+    if ((W.decT -= h) <= 0) { W.decT = 0.5; realmDecide(B, f, W); }
+  }
+  realmStep(B, h);
+});
+/* idle behaviour: with nobody to fight, it drifts in a slow, majestic circle and the symbols pulse */
+SUP.steerHooks.push(f => {
+  if (!isWill(f) || !f.will) return;
+  if (f.manual) f.manual = false;
+  if (willFoes(f).some(e => (e.dim || 0) === (f.dim || 0))) { f.will.idleT = 0; return; }
+  const W = f.will, a = BATTLE.time * 0.6 + f.sid, tx = ARENA.cx + dcos(a) * 170, ty = ARENA.cy + dsin(a) * 120, dx = tx - f.x, dy = ty - f.y, d = len(dx, dy) || 1;
+  f.steerX = dx / d; f.steerY = dy / d; f.steerPow = 260; W.idleT += 1 / 240;
+  if (!FX.off && Math.random() < 0.02) FX.ring(f.x, f.y, ABS.GOLD, f.r * 2.6, 0.8, 3, f.r * 1.2);
+});
+function divineStep(f, W) {
+  const B = BATTLE, dm = f.dim || 0;
+  let danger = null, tt = 0.6;
+  for (const p of B.projs) {
+    if (p.team === f.team || (p.dim ?? ((p.owner && p.owner.dim) || 0)) !== dm || (p.r || 8) < 5) continue;
+    const rx = f.x - p.x, ry = f.y - p.y, vv = p.vx * p.vx + p.vy * p.vy || 1, t = (rx * p.vx + ry * p.vy) / vv;
+    if (t < 0 || t > tt) continue;
+    if (len(p.x + p.vx * t - f.x, p.y + p.vy * t - f.y) < f.r + (p.r || 8) + 10 && (p.dmg || 0) > f.maxHp * 0.015) { tt = t; danger = p; }
+  }
+  // a marked strike about to land on it
+  if (!danger) for (const s of B.strikes) if (s.team !== f.team && ((s.owner && s.owner.dim) || 0) === dm && s.t < 0.5 && len(s.x - f.x, s.y - f.y) < s.r + f.r) { danger = { vx: f.x - s.x || 1, vy: f.y - s.y }; break; }
+  let to = null;
+  if (danger) { const a = datan2(danger.vy, danger.vx) + (rand() < 0.5 ? HPI : -HPI); to = { x: f.x + dcos(a) * 200, y: f.y + dsin(a) * 200 }; }
+  else if (W.strat === 'EXECUTE' && f.target && f.target.alive && len(f.target.x - f.x, f.target.y - f.y) > 480) to = behind(f.target, f, 50);
+  if (!to) return;
+  const x0 = f.x, y0 = f.y; f.x = inArenaX(to.x, f.r); f.y = inArenaY(to.y, f.r); f.st.invuln = Math.max(f.st.invuln, 0.15);
+  W.stepCd = W.cfg.intelligence === 3 ? 5.5 : 7;
+  if (!FX.off) { absPortalFx(x0, y0, f.r * 1.6, 0.4); absPortalFx(f.x, f.y, f.r * 1.6, 0.5); FX.text(f.x, f.y - f.r - 26, 'DIVINE STEP', ABS.WHITE, 12, { life: 0.6 }); absSound('replica', 2); }
+}
+
+/* ---------- 3. the OUTER REALM: its own dimension beyond the arena ---------- */
+const REALM_RETREAT = 2.5, REALM_EXPLORE = 2.5, REALM_GATE = 0.5;
+const absRealmOf = (B, f) => (B.absRealms || []).find(R => R.owner === f);
+/** an enemy hiding outside the arena (a portal escape, a dimensional trap…) that it may hunt */
+const huntable = (f, e) => e.alive && e.team !== f.team && !e.isClone && !e.unit && !e.minion && !e.summonOnly && e.st.outside > 0.15 && (e.dim || 0) === 0 && !(BATTLE.voidDim && BATTLE.voidDim.foes && BATTLE.voidDim.foes.includes(e));
+function realmDecide(B, f, W) {
+  const C = W.cfg;
+  if (!C.transcend || W.realmCd > 0 || absRealmOf(B, f) || (f.dim || 0) !== 0 || f.casting > 0 || B.cinematic || B.clash || f.st.outside > 0 || f.sx.absUltT > 0) return;
+  // a) HUNT: an enemy is hiding outside the arena → it follows it into the Outer Realm
+  if (C.hunt) { const prey = B.fighters.filter(e => huntable(f, e)); if (prey.length) return openRealm(B, f, 'hunt', prey.reduce((a, b) => threatOf(b) > threatOf(a) ? b : a)); }
+  const es = willFoes(f).filter(e => (e.dim || 0) === 0), near = es.filter(e => len(e.x - f.x, e.y - f.y) < 300);
+  // b) RECOVER: badly hurt and pressed → it steps out of the arena to recover for a moment
+  if (C.retreat && f.hpRatio < 0.3 && near.length && rand() < 0.45) return openRealm(B, f, 'retreat');
+  // c) EXPLORE: nothing worth its attention nearby → it explores the Outer Realm and gathers cosmic energy
+  if (C.explore && f.hpRatio > 0.6 && es.length && !es.some(e => len(e.x - f.x, e.y - f.y) < 420) && rand() < 0.025) return openRealm(B, f, 'explore');
+}
+function openRealm(B, f, kind, prey) {
+  const R = { id: (B.dimN = (B.dimN || 0) + 1), owner: f, kind, prey: prey || null, phase: 'gate', t: 0, dur: kind === 'hunt' ? f.will.cfg.maxRealm : kind === 'retreat' ? REALM_RETREAT : REALM_EXPLORE,
+    gx: f.x, gy: f.y, saved: new Map(), pre: null, ambush: kind === 'explore' && rand() < 0.5 };
+  (B.absRealms || (B.absRealms = [])).push(R); (B.absRealmIds || (B.absRealmIds = new Set())).add(R.id);
+  f.will.realmCd = f.will.cfg.realmCd;
+  if (!FX.off) {
+    vfx((ctx, q) => absGateway(ctx, R.gx, R.gy, 30 + 120 * Math.min(1, q * 2), Math.min(1, q * 4), q * 4), REALM_GATE + 0.3, { keep: true });
+    FX.text(f.x, f.y - f.r - 40, kind === 'hunt' ? 'NONE ESCAPE THE ABSOLUTE.' : kind === 'retreat' ? 'TRANSCEND.' : 'BEYOND THE ARENA…', ABS.GOLD, 15, { life: 1.3, pop: 1.5 });
+    if (prey) vfx((ctx, q) => absGateway(ctx, prey.x, prey.y, prey.r * (1.2 + q), Math.min(1, q * 3), q * 6), REALM_GATE + 0.2, { keep: true });
+    absSound('reality', 2);
+  }
+}
+function enterRealm(B, R) {
+  const f = R.owner;
+  if (!f.alive || (f.dim || 0) !== 0) return closeRealm(B, R, true);
+  const members = [f, ...absCopies(f)];
+  if (R.kind === 'hunt') {
+    const e = R.prey;
+    if (!e || !e.alive || (e.dim || 0) !== 0 || e.isClone) return closeRealm(B, R, true);
+    if (e.st.outside > 0) { e.st.outside = 0; e.portalExit = null; }       // pulled out of its hiding place
+    members.push(e);
+  }
+  R.pre = { zones: new Set(B.zones), lasers: new Set(B.lasers), waves: new Set(B.waves), strikes: new Set(B.strikes) };
+  members.forEach((m, i) => {
+    R.saved.set(m.sid, { x: m.x, y: m.y });
+    m.dim = R.id; m.target = null;
+    const enemy = R.prey && m === R.prey;
+    m.x = inArenaX(ARENA.cx + (enemy ? 230 : -230) + (i > 0 && !enemy ? rand(-60, 60) : 0), m.r); m.y = inArenaY(ARENA.cy + (i > 0 && !enemy ? rand(-80, 80) : 0), m.r);
+    m.vx = m.vy = 0; m.st.invuln = Math.max(m.st.invuln, 0.4);
+  });
+  R.phase = 'inside'; R.t = 0;
+  if (!FX.off) { FX.addFlash(0.25, '#1a0a33'); absSound('transform'); }
+}
+/** always brings everyone back to the arena, and removes everything that was created inside */
+function closeRealm(B, R, aborted) {
+  const f = R.owner, members = B.fighters.filter(m => m.dim === R.id);
+  for (const m of members) {
+    let s = R.saved.get(m.sid) || { x: R.gx, y: R.gy };
+    if (m === f && R.kind === 'explore' && f.alive && R.ambush) { const t = nearestEnemy(f); if (t) s = behind(t, f, 80); }        // it chooses where to come back: sometimes right behind its enemy
+    if (m === f && R.kind === 'retreat' && f.alive) s = safeSpot(f);
+    m.dim = 0; m.x = inArenaX(s.x, m.r); m.y = inArenaY(s.y, m.r);
+    if (m.alive) { m.st.invuln = Math.max(m.st.invuln, 0.5); m.vx = m.vy = 0; }
+  }
+  if (R.phase === 'inside') {
+    B.projs = B.projs.filter(p => (p.dim ?? ((p.owner && p.owner.dim) || 0)) !== R.id && !(p.owner && members.includes(p.owner) && p.dim === R.id));
+    for (const key of ['zones', 'lasers', 'waves', 'strikes']) B[key] = B[key].filter(x => R.pre[key].has(x) || !(x.owner && members.includes(x.owner)));
+  }
+  B.absRealms = B.absRealms.filter(x => x !== R);
+  if (!FX.off && !aborted) { absPortalFx(f.x, f.y, f.r * 2.4, 0.7); FX.text(f.x, f.y - f.r - 40, R.kind === 'hunt' ? 'JUDGMENT IS COMPLETE.' : 'I HAVE RETURNED.', ABS.GOLD, 14, { life: 1.2 }); }
+}
+function realmStep(B, h) {
+  for (const R of (B.absRealms || []).slice()) {
+    R.t += h; const f = R.owner;
+    if (R.phase === 'gate') { if (!f.alive) { closeRealm(B, R, true); continue; } f.vx *= 0.85; f.vy *= 0.85; if (R.t >= REALM_GATE) enterRealm(B, R); continue; }
+    // inside: the owner recovers (retreat) or gathers cosmic energy (explore); a hunt lasts until the prey falls or time runs out
+    if (R.kind === 'retreat' && f.alive) healFighter(f, f.maxHp * 0.015 * h, true);
+    if ((R.kind === 'explore' || R.kind === 'retreat') && f.alive && f.sx && f.sx.ae != null) f.sx.ae = Math.min(100, f.sx.ae + 7 * h);
+    const preyGone = R.kind === 'hunt' && (!R.prey || !R.prey.alive || R.prey.dim !== R.id);
+    if (!f.alive || R.t >= Math.min(8, R.dur) || (preyGone && (R.endT ??= R.t + 0.6) <= R.t)) closeRealm(B, R, false);
+  }
+  // safety net: nobody can ever be left in a closed realm
+  if (B.absRealmIds && B.absRealmIds.size) { const open = new Set((B.absRealms || []).map(R => R.id)); for (const m of B.fighters) if (m.dim && B.absRealmIds.has(m.dim) && !open.has(m.dim)) { m.dim = 0; m.st.invuln = Math.max(m.st.invuln, 0.5); } }
+}
+/* the Outer Realm on screen: the world for whoever is inside it, a small window for everyone else */
+SUP.dimViews.push(B => (B.absRealms || []).filter(R => R.phase === 'inside').map(R => ({ id: R.id, world: (ctx, dt) => drawOuterRealm(ctx, B, R, dt), inset: (ctx, slot) => drawRealmInset(ctx, B, R, slot), spectate: !B.player })));
+/* =====================================================================
+   2.5.0 FREE WILL — visuals and screens (visual only): golden-purple cosmic aura, dimensional portals,
+   the Outer Realm world, the window into it, its transformation burst, and the "OWN WILL" battle controls.
+   ===================================================================== */
+Object.assign(SUP.deco, {
+  absaura(ctx, r, d, t, front) {        // a living golden and purple cosmic aura that breathes behind the ball
+    if (front) return; const q = absQ();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const pulse = 1 + 0.08 * Math.sin(t * 2.2);
+    const g = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 2.4 * pulse); g.addColorStop(0, 'rgba(156,107,255,.35)'); g.addColorStop(0.55, 'rgba(255,213,79,.16)'); g.addColorStop(1, 'rgba(156,107,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 2.4 * pulse, 0, TAU); ctx.fill();
+    for (let i = 0; i < Math.round(3 * Math.max(0.5, q)); i++) { ctx.save(); ctx.rotate(t * (0.4 + i * 0.15) * (i % 2 ? -1 : 1) + i); ctx.strokeStyle = i % 2 ? 'rgba(156,107,255,.5)' : 'rgba(255,213,79,.45)'; ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.beginPath(); ctx.arc(0, 0, r * (1.7 + i * 0.18), 0, Math.PI * 0.7); ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+  },
+});
+for (const fm of [ABS_DEF.design, ...ABS_DEF.forms.map(x => x.design).filter(Boolean)]) if (fm.sdeco && !fm.sdeco.includes('absaura')) fm.sdeco.unshift('absaura');
+if (!ABS_DEF.design.sdeco.includes('absaura')) ABS_DEF.design.sdeco.unshift('absaura');
+delete SUP.forms[ABS.id];
+
+/** a golden-purple dimensional portal (gateway) */
+function absGateway(ctx, x, y, r, a, t) {
+  if (a <= 0.01 || r <= 1) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.translate(x, y);
+  const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r); g.addColorStop(0, '#000000'); g.addColorStop(0.6, '#1a0a33'); g.addColorStop(0.92, 'rgba(156,107,255,.85)'); g.addColorStop(1, 'rgba(255,213,79,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 1.15, 0, 0, TAU); ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) { ctx.strokeStyle = i === 1 ? '#fffde7' : i ? ABS.PURPLE : ABS.GOLD; ctx.lineWidth = 3 - i * 0.6; ctx.setLineDash([r * 0.3, r * 0.12]); ctx.lineDashOffset = -t * 30 * (i + 1);
+    ctx.beginPath(); ctx.ellipse(0, 0, r * (1 - i * 0.12), r * 1.15 * (1 - i * 0.12), t * 0.3 * (i % 2 ? -1 : 1), 0, TAU); ctx.stroke(); }
+  ctx.setLineDash([]); ctx.fillStyle = ABS.GOLD; ctx.font = `bold ${Math.max(10, r * 0.22) | 0}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < 8; i++) { const b = i / 8 * TAU + t; ctx.fillText(ABS_GLYPHS[i], Math.cos(b) * r * 1.15, Math.sin(b) * r * 1.3); }
+  ctx.restore();
+}
+function absPortalFx(x, y, r, life) { if (FX.off) return; vfx((ctx, q) => absGateway(ctx, x, y, r * (q < 0.3 ? q / 0.3 : 1 - (q - 0.3) / 0.7 * 0.8), 1 - q * 0.6, q * 6), life); FX.burst(x, y, ABS.PURPLE, Math.round(18 * absQ()), 300, 5, 0.5); FX.burst(x, y, ABS.GOLD, Math.round(12 * absQ()), 240, 4, 0.5); }
+/** its own transformation burst: a celestial explosion of rings, symbols and purple-gold light */
+function absTransformFx(f) {
+  if (FX.off) return;
+  vfx((ctx, q) => { vCelestialRings(ctx, f.x, f.y, f.r * (1.5 + q * 6), 1 - q, q * 8, 6, ABS.GOLD); absGateway(ctx, f.x, f.y, f.r * (1.2 + q * 2.5), (1 - q) * 0.7, q * 5); }, 1.4);
+  FX.burst(f.x, f.y, ABS.PURPLE, Math.round(60 * absQ()), 640, 7, 1); FX.burst(f.x, f.y, ABS.GOLD, Math.round(60 * absQ()), 520, 6, 1, 'shard'); absSound('transform');
+}
+/** the OUTER REALM: the space beyond the arena — a golden-purple cosmos, the arena floating far away, drifting fragments and a timer */
+function drawOuterRealm(ctx, B, R, dt) {
+  const t = B.time, g = ctx.createRadialGradient(ARENA.cx, ARENA.cy, 30, ARENA.cx, ARENA.cy, W * 0.8);
+  g.addColorStop(0, '#2a1650'); g.addColorStop(0.5, '#0e0620'); g.addColorStop(1, '#020007'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const rng = mulberry32(777 + R.id), q = absQ();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < Math.round(170 * q); i++) { const x = rng() * W, y = rng() * H, s = rng() * 2 + 0.4, tw = 0.5 + 0.5 * Math.sin(t * (1 + rng() * 3) + i); ctx.fillStyle = i % 5 ? `rgba(255,255,255,${0.2 + 0.6 * tw})` : `rgba(255,213,79,${0.3 + 0.6 * tw})`; ctx.fillRect((x + t * 6 * s) % W, y, s, s); }
+  for (let i = 0; i < 3; i++) { const nx = [W * 0.18, W * 0.82, W * 0.5][i], ny = [H * 0.25, H * 0.72, H * 0.12][i], ng = ctx.createRadialGradient(nx, ny, 10, nx, ny, 260); ng.addColorStop(0, i === 1 ? 'rgba(255,213,79,.18)' : 'rgba(156,107,255,.22)'); ng.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = ng; ctx.fillRect(nx - 260, ny - 260, 520, 520); }
+  // the arena it left behind, floating far away
+  ctx.save(); ctx.translate(ARENA.cx, ARENA.cy); ctx.scale(0.22, 0.22); ctx.rotate(Math.sin(t * 0.3) * 0.05); ctx.strokeStyle = 'rgba(64,196,255,.55)'; ctx.lineWidth = 14; ctx.strokeRect(-ARENA.w / 2, -ARENA.h / 2, ARENA.w, ARENA.h); ctx.restore();
+  // drifting golden fragments and constellation lines
+  for (let i = 0; i < Math.round(14 * q); i++) { const a = t * (0.1 + (i % 4) * 0.03) + i * 1.7, rr = 220 + (i * 53) % 330; vFragment(ctx, ARENA.cx + Math.cos(a) * rr * 1.4, ARENA.cy + Math.sin(a) * rr * 0.75, 7 + (i % 3) * 3, a * 2, i % 3 ? ABS.GOLD : '#fff8e1'); }
+  ctx.strokeStyle = 'rgba(255,213,79,.18)'; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = i / 7 * TAU + t * 0.05; ctx.lineTo(ARENA.cx + Math.cos(a) * 520, ARENA.cy + Math.sin(a) * 300); } ctx.closePath(); ctx.stroke();
+  ctx.restore();
+  // the realm's limits are soft golden walls (it is still a bounded, safe space)
+  ctx.save(); ctx.strokeStyle = 'rgba(255,213,79,.25)'; ctx.setLineDash([18, 14]); ctx.lineDashOffset = -t * 20; ctx.lineWidth = 2; ctx.strokeRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h); ctx.restore();
+  const left = Math.max(0, Math.ceil(Math.min(8, R.dur) - R.t));
+  ctx.save(); ctx.font = '900 15px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = ABS.GOLD;
+  ctx.fillText(`✦ OUTER REALM — ${R.kind === 'hunt' ? 'THE HUNT' : R.kind === 'retreat' ? 'TRANSCENDENCE' : 'EXPLORATION'} — ${left}s ✦`, ARENA.cx, ARENA.y + 22); ctx.restore();
+}
+/** a small window into the Outer Realm for everyone still in the arena */
+function drawRealmInset(ctx, B, R, slot) {
+  const w = 260, hh = 146, x0 = 18, y0 = 96 + slot * (hh + 14), s = w / ARENA.w;
+  ctx.save(); ctx.fillStyle = '#0b0618'; ctx.strokeStyle = ABS.GOLD; ctx.lineWidth = 2; ctx.fillRect(x0, y0, w, hh); ctx.strokeRect(x0, y0, w, hh);
+  ctx.beginPath(); ctx.rect(x0, y0, w, hh); ctx.clip(); ctx.translate(x0, y0 + (hh - ARENA.h * s) / 2); ctx.scale(s, s); ctx.translate(-ARENA.x, -ARENA.y);
+  ctx.fillStyle = 'rgba(156,107,255,.12)'; ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
+  for (const f of B.fighters) if (f.alive && f.dim === R.id) drawBall(ctx, f.def, f.x, f.y, f.r, { t: f.t, rot: f.rot, noAura: true, small: true, noSupDeco: true });
+  ctx.restore();
+  ctx.save(); ctx.font = '800 12px "Segoe UI", sans-serif'; ctx.fillStyle = ABS.GOLD; ctx.fillText('✦ OUTER REALM — ' + Math.max(0, Math.ceil(Math.min(8, R.dur) - R.t)) + 's', x0 + 8, y0 + 16); ctx.restore();
+}
+
+/* battle controls: God of Absolute cannot be steered or commanded — the AUTO button shows its own will */
+if (!window.NBB_HEADLESS) {
+  const willBall = () => !!(BATTLE && BATTLE.player && BATTLE.player.baseDef && BATTLE.player.baseDef.id === ABS.id);
+  const sync = UI.syncHud;
+  UI.syncHud = function () {
+    sync.call(this);
+    if (!willBall()) { const b = $('#btnAuto'); if (b) b.disabled = false; return; }
+    const b = $('#btnAuto'); if (b) { b.textContent = '🧠 OWN WILL'; b.disabled = true; b.classList.remove('manual'); b.title = 'God of Absolute makes its own decisions'; }
+    const bar = $('#skillBar'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
+  };
+  const tc = toggleControl;
+  toggleControl = function () { if (willBall()) return toast('🧠 GOD OF ABSOLUTE makes its own decisions. It cannot be controlled.', 'gold'); return tc(); };
+}
 
 if (window.NBB_CORE) Object.assign(window.NBB_CORE, { ABS, limitedGodIds: () => SUP.limitedGodIds.slice(), absUlt: (f, omni, dmg) => absoluteUlt(f, 110, ABS.GOLD, dmg, omni), SUP });
 invalidateRegistry();
