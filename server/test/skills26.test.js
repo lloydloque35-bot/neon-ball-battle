@@ -42,10 +42,10 @@ test('the Unique Skill Registry: unique ids, a category for everything, a signat
   const reg = core.skillRegistry(), ids = new Set();
   for (const r of reg) { assert.ok(!ids.has(r.uid), 'unique uid ' + r.uid); ids.add(r.uid); assert.ok(core.SK_CATS[r.cat], r.uid + ' category ' + r.cat); assert.ok(r.fp.m.length >= 1); }
   assert.ok(reg.length >= 600, 'registry size ' + reg.length);
-  assert.ok(reg.filter(r => r.v26).length >= 187, 'the new abilities');
+  assert.ok(reg.filter(r => r.v26).length >= 186, 'the new abilities');   // 187 in 2.6.0; Anti Ball's one was replaced by its 2.8.0 limited edition kit
   const generic = Object.keys(core.TYPE_META), sharedUlts = ['judgment', 'supernova', 'nova', 'barrage', 'blackhole', 'meteorstorm', 'timestop', 'megabeam', 'storm', 'swarm'];
   for (const r of reg) {
-    if (r.legacy && generic.includes(r.type) && !['adaptive'].includes(r.type)) assert.ok(r.sig, r.uid + ' has a signature mechanic');
+    if (r.legacy && generic.includes(r.type) && !['adaptive'].includes(r.type) && r.ball !== 'anti') assert.ok(r.sig, r.uid + ' has a signature mechanic');   // (Anti Ball's 2.8.0 abilities are unique types)
     if (r.isUlt && sharedUlts.includes(r.type)) assert.ok(r.sig, r.uid + ' (shared ultimate type) has its own phase');
   }
   for (const cat of ['offense', 'defense', 'counter', 'mobility', 'summon', 'arena', 'trap', 'environment', 'transform', 'passive', 'autonomous', 'ultimate']) assert.ok(reg.some(r => r.cat === cat), 'category used: ' + cat);

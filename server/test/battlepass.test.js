@@ -70,22 +70,21 @@ test.before(async () => {
 });
 test.after(async () => { await srv.stop(); pm.srv.close(); });
 
-test('the four Supreme God Balls are Battle Pass balls; Anti Ball stays free (Free Pass)', () => {
+test('the four Supreme God Balls are Battle Pass balls (Anti Ball became a limited edition in 2.8.0)', () => {
   assert.deepEqual([...core.BATTLE_PASS.balls], PASS); assert.equal(core.BATTLE_PASS.pricePhp, 299);
   assert.deepEqual(PRODUCTS.battlepass.balls, [...core.BATTLE_PASS.balls], 'the shop sells exactly the Battle Pass balls');
   assert.equal(PRODUCTS.battlepass.amount, 29900);
   for (const id of PASS) { const d = core.getBall(id); assert.ok(d.godBall && d.pass === 'battlepass' && !d.free && !d.paid && !d.premium, id); }
-  assert.ok(core.getBall('anti').free, 'Anti Ball is free for everyone');
+  assert.ok(core.getBall('anti').edition && !core.getBall('anti').free, 'Anti Ball: 100-copy limited edition since 2.8.0');
   assert.deepEqual([PRODUCTS.coins_10k.amount, PRODUCTS.coins_10k.coins], [9900, 10000]);
   assert.deepEqual([PRODUCTS.coins_1m.amount, PRODUCTS.coins_1m.coins], [99900, 1000000]);
 });
 
-test('without the pass: not playable, not for coins; the free practice test still works; Anti Ball is playable', async () => {
+test('without the pass: not playable, not for coins; the free practice test still works', async () => {
   const p = await player('no_pass_yet');
   for (const id of PASS) assert.equal((await p.post('/api/battle/start', { mode: '1v1', ball: id, difficulty: 'easy' })).status, 403, id + ' is locked');
   assert.equal((await p.post('/api/shop/unlock', { ball: 'godofwar' })).status, 400, 'not for coins');
   assert.equal((await p.post('/api/battle/start', { mode: 'practice', ball: 'solareclipse', trial: true, godTest: true, startForm: 2, dummy: true })).status, 200, 'free practice test');
-  assert.equal((await p.post('/api/battle/start', { mode: '1v1', ball: 'anti', difficulty: 'easy' })).status, 200, 'Anti Ball is free');
   const s = (await p.get('/api/godshop')).data;
   const view = Object.fromEntries(s.products.map(x => [x.id, x]));
   assert.equal(view.battlepass.price, 299); assert.deepEqual(view.battlepass.balls, PASS); assert.equal(view.battlepass.owned, false); assert.equal(view.battlepass.pass, true);
@@ -186,7 +185,7 @@ test('migration 009: players who already played a God Ball keep it; nobody else 
   db.run("INSERT INTO user_balls (user_id, ball_id, owned, level) VALUES (?, 'fire', 0, 3)", id('veteran'));
   db.run("INSERT INTO user_balls (user_id, ball_id, owned, source, unlocked_at) VALUES (?, 'godofguns', 1, 'purchase', 5)", id('buyer'));
   db.close(); db = new DB(file);
-  assert.deepEqual(db.migrate(mig), ['009_battlepass.sql']);
+  assert.deepEqual(db.migrate(mig).slice(0, 1), ['009_battlepass.sql']);
   assert.ok(db.lastBackup && fs.existsSync(db.lastBackup), 'backup before the migration');
   const row = (n, b) => db.get('SELECT * FROM user_balls WHERE user_id = ? AND ball_id = ?', id(n), b);
   assert.equal(row('veteran', 'godofwar').owned, 1); assert.equal(row('veteran', 'godofwar').level, 14, 'progress kept'); assert.equal(row('veteran', 'godofwar').source, 'kept_free_2.2');

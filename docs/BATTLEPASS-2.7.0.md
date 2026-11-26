@@ -5,7 +5,7 @@
 | Item | Price | What the player gets |
 |---|---|---|
 | 🎫 **Battle Pass** | **PHP 299** (one-time) | God of Chaos, God of War, AI Tech and Solar Eclipse, owned forever |
-| 🆓 **Free Pass** | free | Anti Ball, unlocked for every player (same as before) |
+| 🆓 **Free Pass** | free | Anti Ball, unlocked for every player (until 2.8.0 — now a [limited edition](ANTI-BALL-LE-2.8.0.md)) |
 | 🪙 **10,000 coins** | **PHP 99** | 10,000 coins added to the account |
 | 💰 **1,000,000 coins** | **PHP 999** | 1,000,000 coins added to the account |
 
@@ -23,6 +23,7 @@
 
 - **Main menu → 💎 Shop • Battle Pass • Coins.** At the top is the Battle Pass card, with the 4 God Balls and the Free
   Pass, then the coin packs, then the Premium God Balls.
+  (Since 2.8.0 the Free Pass row is gone: Anti Ball became a limited edition.)
 - **Ball selection:** the row "🎫 BATTLE PASS — SUPREME GOD BALLS • PHP 299" shows **🎫 BATTLE PASS** or **✔ OWNED**.
   Anti Ball shows **FREE PASS — UNLOCKED**.
 - **Collection → Supreme God Balls** and the God Ball preview show the price and a **Get the Battle Pass** button.

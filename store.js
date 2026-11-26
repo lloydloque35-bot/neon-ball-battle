@@ -3,7 +3,7 @@
 
    - BATTLE PASS (PHP 299, one-time): God of Chaos, God of War, AI Tech and Solar Eclipse, owned forever.
      Players who had already played them before 2.7.0 keep them (server migration 009).
-   - FREE PASS: Anti Ball stays free for every player.
+   - (2.8.0: Anti Ball became a 100-copy limited edition, so the Free Pass has no ball for now.)
    - COIN PACKS: PHP 99 = 10,000 coins, PHP 999 = 1,000,000 coins.
 
    This file only draws the shop. Nothing here unlocks anything: balls and coins come ONLY from the server, after a
@@ -33,7 +33,7 @@
   const waitingFor = (shop, id) => !!(shop && shop.waiting && shop.waiting.has(id));
   const canBuy = shop => !!(shop && shop.enabled);
 
-  /** the Battle Pass card: the 4 God Balls, what the player already has, the Free Pass (Anti Ball) and the buy button */
+  /** the Battle Pass card: the 4 God Balls, what the player already has and the buy button */
   function passCard(shop) {
     const balls = BATTLE_PASS.balls.map(id => getBall(id)).filter(Boolean), P = product(shop, BATTLE_PASS.id);
     const have = balls.filter(b => canUseBall(b)).length, all = balls.length && have === balls.length;
@@ -49,9 +49,6 @@
     }
     c.append(grid);
     if (have && !all) c.append(h('small', { class: 'muted' }, `You already have ${have} of the 4 (you played them before the Battle Pass). The pass adds the other ${balls.length - have}.`));
-    const anti = getBall('anti');
-    if (anti) { const cv = ballCanvas(anti, 44); UI.addLive(cv, anti, { size: 44 });
-      c.append(h('div', { class: 'bp-free' }, cv, h('div', { style: { flex: 1 } }, h('span', { class: 'tg' }, 'FREE PASS'), ' ', h('b', {}, 'ANTI BALL'), h('div', { class: 'muted', style: { fontSize: '12px' } }, 'Free for every player — already unlocked.')))); }
     const row = h('div', { class: 'gshop-row' });
     if (!all) row.append(waitingFor(shop, BATTLE_PASS.id) ? h('button', { class: 'btn', disabled: true }, '⏳ Waiting for owner check')
       : h('button', { class: 'btn gold big', disabled: !(canBuy(shop) && P), onclick: () => godBuy(BATTLE_PASS.id) }, `🎫 Buy the Battle Pass — PHP ${BATTLE_PASS.pricePhp}`));

@@ -1,5 +1,7 @@
 # Update 2.6.0 — ULTIMATE UNIQUE SKILL, MASTERY & EVOLUTION SYSTEM
 
+> **2.8.0:** Anti Ball got its own limited-edition kit (9 unique skills), so its 2.6.0 extra ability (Anti-Matter Annihilation) was removed: 186 new abilities remain.
+
 An upgrade of the existing game. No ball, purchase, level, transformation or saved progress was removed or reset:
 everything below is added on top (`skills.js`, `server/skills.js`, migration `008_skills.sql`).
 

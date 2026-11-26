@@ -4122,13 +4122,13 @@ const UI = {
     if (!list.length) { box.remove(); return; }
     const row = h('div', { class: 'feat-row' });
     for (const b of list) {
-      const ok = canUseBall(b), status = b.free ? 'FREE PASS — UNLOCKED' : ok ? 'PREMIUM — UNLOCKED' : 'PREMIUM — LOCKED';
+      const ok = canUseBall(b), status = b.edition ? (ok ? 'OWNED' : `PHP ${b.pricePhp} • 100 COPIES`) : b.free ? 'FREE PASS — UNLOCKED' : ok ? 'PREMIUM — UNLOCKED' : 'PREMIUM — LOCKED';
       const cv = ballCanvas(b, 60); this.addLive(cv, b, { size: 60 });
       row.append(h('button', { class: 'feat-card' + (Game.setup.ball === b.id ? ' selected' : '') + (ok ? '' : ' locked'), title: b.desc || '', onclick: () => { if (ok) { Game.setup.ball = b.id; Sound.play('click'); this.render_select(); } else this.openDetail(b.id); } },
-        cv, h('div', { class: 'feat-txt' }, h('small', {}, b.techNo ? 'TECH BALL ' + b.techNo : 'SECRET • NEW'), h('b', {}, (b.techNo ? b.name.replace(/ Ball$/, '') : b.name).toUpperCase()),
-          h('span', { class: 'feat-st ' + (b.free ? 'free' : ok ? 'on' : 'off') }, (ok ? '' : '🔒 ') + status))));
+        cv, h('div', { class: 'feat-txt' }, h('small', {}, b.techNo ? 'TECH BALL ' + b.techNo : b.edition ? 'LIMITED EDITION' : 'SECRET • NEW'), h('b', {}, (b.techNo ? b.name.replace(/ Ball$/, '') : b.name).toUpperCase()),
+          h('span', { class: 'feat-st ' + (b.edition ? (ok ? 'on' : 'anti') : b.free ? 'free' : ok ? 'on' : 'off') }, (ok ? '' : b.edition ? '🛡 ' : '🔒 ') + status))));
     }
-    box.append(h('div', { class: 'feat-title' }, '✦ NEW UPDATE — ANTI BALL & TECH BALLS'), row);
+    box.append(h('div', { class: 'feat-title' }, '✦ ANTI BALL (LIMITED EDITION) & TECH BALLS'), row);
   },
   renderSetup() {
     const S = Game.setup, box = $('#selectSetup'); box.innerHTML = '';
@@ -4206,6 +4206,7 @@ const UI = {
         h('button', { class: 'btn gold', onclick: () => { this.closeModal(); this.show('membership'); } }, '★ View Premium'),
         h('button', { class: 'btn', onclick: () => { this.closeModal(); Game.tryBall(id); } }, '▶ Try in Practice'));
       else if (b.limited) { const ev = currentEventFor(b.id); btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); this.show('events'); } }, ev ? '⏳ Available in event now!' : '⏳ Event exclusive')); }
+      else if (b.paid || b.edition) btns.append(h('button', { class: 'btn gold', onclick: () => { this.closeModal(); this.show('godshop'); } }, `💎 Get it in the Shop — PHP ${b.pricePhp || 99}`), h('button', { class: 'btn', onclick: () => { this.closeModal(); Game.tryBall(id); } }, '▶ Try in Practice'));
       else { const price = RARITY_INFO[b.rarity]?.price || 1000; btns.append(h('button', { class: 'btn gold', disabled: SAVE.coins < price, onclick: () => act(() => Econ.unlock(id), () => { toast(`🔓 <b>${esc(b.name)}</b> unlocked!`, 'gold'); this.openDetail(id); this.refreshCurrent(); }) }, `🔓 Unlock — 🪙 ${fmtNum(price)}`)); }
     } else {
       const nx = EVO[p.evo + 1];

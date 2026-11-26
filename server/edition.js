@@ -18,9 +18,14 @@ const { HttpError, bad } = require('./http');
 const S_ = require('./security');
 
 const EDITION_BALLS = {
-  godofabsolute: { name: 'GOD OF ABSOLUTE – LIMITED EDITION', startLevel: 50, defaultSupply: 100,
-    rewards: ['title_absolute', 'aura_absolute', 'trail_absolute', 'hit_absolute', 'win_absolute'] },
+  godofabsolute: { name: 'GOD OF ABSOLUTE – LIMITED EDITION', price: 499, startLevel: 50, defaultSupply: 100, title: 'title_absolute',
+    rewards: ['title_absolute', 'aura_absolute', 'trail_absolute', 'hit_absolute', 'win_absolute'], soldOut: 'SOLD OUT – THE ABSOLUTE ERA IS COMPLETE.' },
+  // 2.8.0 ANTI BALL: a PERMANENT 100-copy edition — the supply can never change, no new editions, no events, no free unlock.
+  // Old free-version progress (levels, skill tree) comes back when the player buys a copy (migration 010 kept it).
+  anti: { name: 'ANTI BALL – LIMITED EDITION', price: 999, startLevel: 1, defaultSupply: 100, fixedSupply: true, serialPrefix: 'ANTI-', title: 'title_nullbearer',
+    rewards: ['title_nullbearer'], soldOut: 'SOLD OUT — all 100 ANTI BALLS have their owners. It will never return.' },
 };
+const serialLabel = (ball, n) => EDITION_BALLS[ball] && EDITION_BALLS[ball].serialPrefix ? EDITION_BALLS[ball].serialPrefix + String(n).padStart(3, '0') : '#' + String(n).padStart(3, '0');
 const WILL_DEFAULT = { intelligence: 2, aggression: 60, transcend: true, hunt: true, retreat: true, explore: true, step: true, speech: true, maxRealm: 6, realmCd: 18 };   // same as gods3.js
 const HOLD_QR_MS = 30 * 60e3, HOLD_CHECKOUT_MS = 20 * 60e3, MAX_SUPPLY = 100000;
 const SOLD_OUT_MSG = 'SOLD OUT – THE ABSOLUTE ERA IS COMPLETE.';
@@ -35,7 +40,9 @@ function register(app, S) {
 
   function cfgOf(ball) {
     let v = null; try { v = JSON.parse(setting('edition:' + ball) || 'null'); } catch { v = null; }
-    return { supply: EDITION_BALLS[ball].defaultSupply, open: true, edition: 1, announcement: '', ...(v || {}) };
+    const c = { supply: EDITION_BALLS[ball].defaultSupply, open: true, edition: 1, announcement: '', ...(v || {}) };
+    if (EDITION_BALLS[ball].fixedSupply) { c.supply = EDITION_BALLS[ball].defaultSupply; c.edition = 1; }     // permanent: never more than 100
+    return c;
   }
   const saveCfg = (ball, c) => setSetting('edition:' + ball, JSON.stringify({ supply: c.supply, open: !!c.open, edition: c.edition, announcement: c.announcement || '' }));
   const ledger = (ball, event, o = {}) => db.run('INSERT INTO edition_ledger (ball_id, event, user_id, purchase_id, actor_id, details, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -57,16 +64,17 @@ function register(app, S) {
     const c = cfgOf(ball), o = owners(ball), hd = holds(ball);
     const mine = uid ? db.get(`SELECT id, status, hold_until FROM shop_purchases WHERE product = ? AND user_id = ?
       AND ((status IN ('reserved', 'pending', 'creating') AND hold_until > ?) OR (status = 'awaiting' AND provider = 'manual')) ORDER BY created_at DESC`, ball, uid, now()) : null;
-    return { ball, name: EDITION_BALLS[ball].name, price: 499, supply: c.supply, owners: o, reserved: hd, available: Math.max(0, c.supply - o - hd), open: !!c.open,
-      soldOut: o >= c.supply, soldOutText: SOLD_OUT_MSG, edition: c.edition, announcement: c.announcement || '', startLevel: EDITION_BALLS[ball].startLevel,
-      mine: mine ? { purchaseId: mine.id, status: mine.status, holdUntil: mine.hold_until } : null, serial: uid ? serialOf(ball, uid) : null };
+    const E = EDITION_BALLS[ball], serial = uid ? serialOf(ball, uid) : null;
+    return { ball, name: E.name, price: E.price, supply: c.supply, owners: o, reserved: hd, available: Math.max(0, c.supply - o - hd), open: !!c.open,
+      soldOut: o >= c.supply, soldOutText: E.soldOut || SOLD_OUT_MSG, edition: c.edition, announcement: c.announcement || '', startLevel: E.startLevel, permanent: !!E.fixedSupply,
+      mine: mine ? { purchaseId: mine.id, status: mine.status, holdUntil: mine.hold_until } : null, serial, serialLabel: serial ? serialLabel(ball, serial) : null };
   }
   /** throws unless a new slot can be held right now (call inside a transaction, then insert the hold) */
   function assertSlot(ball, uid, except) {
     releaseExpired(ball);
     const c = cfgOf(ball), o = owners(ball);
     if (serialOf(ball, uid)) throw new HttpError(409, 'You already own this edition — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
-    if (o >= c.supply) throw new HttpError(409, SOLD_OUT_MSG, 'SOLD_OUT');
+    if (o >= c.supply) throw new HttpError(409, EDITION_BALLS[ball].soldOut || SOLD_OUT_MSG, 'SOLD_OUT');
     if (!c.open) throw new HttpError(403, 'New purchases of this edition are paused by the game owner. Nothing was charged.', 'EDITION_CLOSED');
     if (o + holds(ball, except) >= c.supply) throw new HttpError(409, 'Every remaining slot is reserved by players who are paying right now. Please try again in a few minutes — nothing was charged.', 'ALL_RESERVED');
   }
@@ -91,9 +99,9 @@ function register(app, S) {
     if (serial > c.supply) { ledger(ball, 'sold_out_refund', { user: uid, purchase: purchaseId, actor, details: { source } }); return { full: true }; }
     db.run('INSERT INTO edition_owners (ball_id, serial, user_id, purchase_id, edition, granted_at) VALUES (?, ?, ?, ?, ?, ?)', ball, serial, uid, purchaseId, c.edition, now());
     const fixed = ensure(uid, ball);
-    S.updateProfile(uid, p => { const lo = p.loadout; if (!lo.title) lo.title = 'title_absolute'; return { loadout: lo }; });   // the nameplate is shown right away
+    S.updateProfile(uid, p => { const lo = p.loadout; if (!lo.title && EDITION_BALLS[ball].title) lo.title = EDITION_BALLS[ball].title; return { loadout: lo }; });   // the nameplate is shown right away
     ledger(ball, 'grant', { user: uid, purchase: purchaseId, actor, details: { serial, edition: c.edition, source, startLevel: EDITION_BALLS[ball].startLevel, rewards: fixed } });
-    S.audit(actor ?? uid, 'edition.granted', purchaseId, null, { ball, serial, user: uid, source });
+    S.audit(actor ?? uid, 'edition.granted', purchaseId, null, { ball, serial, label: serialLabel(ball, serial), user: uid, source });
     return { serial };
   }
   /** restore purchases: re-applies every edition entitlement of this player */
@@ -106,7 +114,7 @@ function register(app, S) {
     }
     return n;
   }
-  S.edition = { EDITION_BALLS, isEdition, status, assertSlot, grant, restore, ensure, ledger, releaseExpired, HOLD_QR_MS, HOLD_CHECKOUT_MS, SOLD_OUT_MSG, serialOf,
+  S.edition = { EDITION_BALLS, isEdition, status, assertSlot, grant, restore, ensure, ledger, releaseExpired, HOLD_QR_MS, HOLD_CHECKOUT_MS, SOLD_OUT_MSG, serialOf, serialLabel,
     /** public badge info for profiles / rankings / the save */
     badgesOf: uid => Object.fromEntries(db.all('SELECT ball_id, serial FROM edition_owners WHERE user_id = ?', uid).map(r => [r.ball_id, r.serial])) };
 
@@ -125,8 +133,8 @@ function register(app, S) {
       if (db.get("SELECT 1 FROM shop_purchases WHERE product = ? AND user_id = ? AND status = 'awaiting'", ball, u.id)) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
       assertSlot(ball, u.id);
       const id = S_.randomId('pur_'), until = now() + HOLD_QR_MS;
-      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, hold_until, created_at, updated_at) VALUES (?, ?, ?, ?, 49900, 'PHP', 'manual', 'reserved', ?, ?, ?)",
-        id, u.id, ball, JSON.stringify([ball]), until, now(), now());
+      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, hold_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'manual', 'reserved', ?, ?, ?)",
+        id, u.id, ball, JSON.stringify([ball]), EDITION_BALLS[ball].price * 100, until, now(), now());
       ledger(ball, 'reserve', { user: u.id, purchase: id, details: { until, via: 'qr' } });
       out = { purchaseId: id, holdUntil: until };
     });
@@ -145,15 +153,17 @@ function register(app, S) {
 
   /* ---------------- owner: GOD OF ABSOLUTE management panel (owner + recent 2FA, audit-logged) ---------------- */
   const owner = ctx => S.requireOwner(ctx);
-  const BALL = 'godofabsolute';
+  /** which edition the owner is managing (?ball= or body.ball; God of Absolute by default) */
+  const ballOf = ctx => { const b = String((ctx.query && ctx.query.ball) || (ctx.body && ctx.body.ball) || 'godofabsolute'); if (!isEdition(b)) throw bad('Unknown edition'); return b; };
   app.get('/api/admin/edition', ctx => {
-    owner(ctx);
+    owner(ctx); const BALL = ballOf(ctx);
     const st = status(BALL), json = v => { try { return JSON.parse(v); } catch { return null; } };
     const rowsOf = sql => db.all(sql, BALL).map(p => ({ id: p.id, username: p.username, status: p.status, provider: p.provider, method: p.method, amount: p.amount / 100,
       reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, holdUntil: p.hold_until, createdAt: p.created_at, paidAt: p.paid_at, note: p.note, payerNote: p.payer_note }));
     const tune = db.get('SELECT settings FROM admin_ball_tuning WHERE ball_id = ?', BALL);
     return { ...st,
-      owners: db.all('SELECT o.serial, o.edition, o.granted_at, o.purchase_id, u.username FROM edition_owners o JOIN users u ON u.id = o.user_id WHERE o.ball_id = ? ORDER BY o.serial', BALL),
+      owners: db.all('SELECT o.serial, o.edition, o.granted_at, o.purchase_id, u.username FROM edition_owners o JOIN users u ON u.id = o.user_id WHERE o.ball_id = ? ORDER BY o.serial', BALL).map(r => ({ ...r, label: serialLabel(BALL, r.serial) })),
+      editions: Object.keys(EDITION_BALLS),
       pending: rowsOf(`SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id WHERE p.product = ? AND (p.status IN ('reserved', 'awaiting') OR (p.status = 'pending' AND p.hold_until > ${now()})) ORDER BY p.created_at`),
       completed: rowsOf("SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id WHERE p.product = ? AND p.status = 'paid' ORDER BY p.paid_at DESC LIMIT 200"),
       errors: rowsOf("SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id WHERE p.product = ? AND p.status IN ('review', 'failed', 'rejected') ORDER BY p.updated_at DESC LIMIT 100"),
@@ -165,8 +175,9 @@ function register(app, S) {
       skills: ((core.getBall(BALL) || {}).skills || []).map(s => s.name) };
   });
   app.post('/api/admin/edition/settings', ctx => {
-    const me = owner(ctx), b = ctx.body, c = cfgOf(BALL), o = owners(BALL), before = { ...c };
-    if (b.supply != null) {
+    const me = owner(ctx), BALL = ballOf(ctx), b = ctx.body, c = cfgOf(BALL), o = owners(BALL), before = { ...c };
+    if (b.supply != null && EDITION_BALLS[BALL].fixedSupply && Number(b.supply) !== c.supply) throw bad(`${EDITION_BALLS[BALL].name} is a permanent ${c.supply}-copy edition: its supply can never change`);
+    if (b.supply != null && !EDITION_BALLS[BALL].fixedSupply) {
       const v = Number(b.supply);
       if (!Number.isInteger(v) || v < 1 || v > MAX_SUPPLY) throw bad(`Supply must be a whole number from 1 to ${MAX_SUPPLY}`);
       if (v < o) throw bad(`Supply cannot be lower than the ${o} verified owners`);
@@ -181,7 +192,8 @@ function register(app, S) {
     return { ok: true, edition: status(BALL) };
   });
   app.post('/api/admin/edition/release', ctx => {
-    const me = owner(ctx), c = cfgOf(BALL), add = Number(ctx.body.add);
+    const me = owner(ctx), BALL = ballOf(ctx), c = cfgOf(BALL), add = Number(ctx.body.add);
+    if (EDITION_BALLS[BALL].fixedSupply) throw bad(`${EDITION_BALLS[BALL].name} is permanently limited: it is never restocked`);
     if (!Number.isInteger(add) || add < 1 || c.supply + add > MAX_SUPPLY) throw bad('Choose how many new slots to release (a whole number, at least 1)');
     c.edition += 1; c.supply += add; c.open = true;
     c.announcement = String(ctx.body.announcement || `Edition ${c.edition} is here: ${add} new GOD OF ABSOLUTE slots.`).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 240);
@@ -191,7 +203,8 @@ function register(app, S) {
     return { ok: true, edition: status(BALL) };
   });
   app.post('/api/admin/edition/tuning', ctx => {
-    const me = owner(ctx), b = ctx.body, out = {};
+    const me = owner(ctx), BALL = ballOf(ctx), b = ctx.body, out = {};
+    if (BALL !== 'godofabsolute') throw bad('Set this ball\'s cooldowns and power in Admin → 🧬 Skills');
     if (b.xpMul != null) { const v = Number(b.xpMul); if (!(v >= 0.25 && v <= 4)) throw bad('EXP scale must be from 0.25 to 4'); setSetting('absolute_xp_mul', String(v)); core.setXpTune(v); out.xpMul = v; }
     // 2.5.0 AUTONOMOUS WILL: intelligence, personality, trips outside the arena, abilities — owner only, validated here
     const will = b.will != null && typeof b.will === 'object' ? (() => { const w = b.will, o = {};

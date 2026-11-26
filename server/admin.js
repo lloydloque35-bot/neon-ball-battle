@@ -219,6 +219,7 @@ function register(app, S) {
     if (!name || !(end > start)) throw bad('Enter a name and a valid time range');
     const ball = S.withCatalog(me, () => core.getBall(String(b.ball || '')));
     if (!ball || ball.adminOnly) throw bad('Choose a non-admin ball for the event');
+    if (ball.edition || ball.paid || ball.pass) throw bad('Paid and limited-edition balls can never be event rewards (no restock through events)');
     const id = 'ev_' + S_.randomToken(8).replace(/[^A-Za-z0-9]/g, 'x');
     db.run('INSERT INTO limited_events (id, name, description, ball_id, start_at, end_at, goal, price, premium_only, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       id, name, str(b.desc, 300), ball.id, start, end, num(b.goal, 1, 50, 3), num(b.price, 0, 1000000, 2500), b.premiumOnly ? 1 : 0, me.id, now());

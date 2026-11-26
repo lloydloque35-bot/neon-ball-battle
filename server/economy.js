@@ -28,6 +28,7 @@ function register(app, S, H) {
   action('/api/shop/unlock', (u, b) => {
     const def = ballOrThrow(b.ball);
     if (def.free) throw bad('This ball is free — it is already unlocked for every player');
+    if (def.edition) throw bad('This is a limited edition: it is sold only in the Shop (PHP), never for coins');
     if (def.paid) throw bad('This Premium God Ball is sold in the Premium God Shop (PHP), not for coins');
     if (def.pass) throw bad('This God Ball comes with the Battle Pass (PHP 299), not for coins');
     if (def.adminOnly || def.limited || def.premium || def.fusion || def.draft || def.enabled === false) throw bad('This ball cannot be bought with coins');

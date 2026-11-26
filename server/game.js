@@ -111,6 +111,8 @@ function register(app, S) {
     updateProfile(uid, p => { let { exp, level } = p; exp += Math.round(amount); while (exp >= ACCOUNT_EXP(level)) { exp -= ACCOUNT_EXP(level); level++; } return { exp, level }; });
   }
   function unlockBall(uid, ballId, source, eventName) {
+    const ed = core.getBall(ballId);
+    if (ed && ed.edition) throw new HttpError(409, `${ed.name} is a limited edition: it can only be bought (never won, summoned or given by an event)`, 'EDITION_ONLY');
     const r = ensureRow(uid, ballId);
     if (r.owned) return false;
     db.run('UPDATE user_balls SET owned = 1, source = ?, unlocked_at = ?, sp = MAX(sp, 1) WHERE user_id = ? AND ball_id = ?', source, now(), uid, ballId);

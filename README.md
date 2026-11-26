@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.7.0**. Battle Pass & coin packs: **[docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.8.0**. Anti Ball limited edition: **[docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)**. Battle Pass & coin packs: **[docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -45,14 +45,15 @@ Version **2.7.0**. Battle Pass & coin packs: **[docs/BATTLEPASS-2.7.0.md](docs/B
   - 6 limited event balls
   - 6 Premium balls: Prism, Mirror, Toxic Reactor, Sonic, Magnetar, Rift
   - **NEW — Anti Ball & Tech Balls update** ([docs/TECH-BALLS.md](docs/TECH-BALLS.md)):
-    - **Anti Ball** (Secret, **FREE for every player**): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
+    - **Anti Ball** (free until 2.7.0; since 2.8.0 a 100-copy **limited edition**, see above): Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution; ultimate **Absolute Zero**; passive Anti-Adaptation
     - **Tech Ball 1 — Mecha Commander** (Premium): combat robots, Mecha Factory, Missile Barrage, Defense Drone, Robot Fusion, automatic Emergency Repair; ultimate **Titan Overdrive**
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
   - **NEW 2.5.0 — God of Absolute's AUTONOMOUS FREE WILL**: it is never controlled by a player — it picks its own strategies and targets, teleports out of danger, times its own ultimate, and leaves the arena by itself to hunt hiding enemies, recover or ambush (always returning). Owner-only AI settings.
   - **NEW 2.5.1 — it REALLY leaves the arena**: it smashes through the wall, flies in the open space outside the walls (the camera pulls back so everyone sees it), fires golden Beyond Lances through the wall, drags hiding enemies out to fight them outside, and crashes back in with a judgment shockwave.
-  - **NEW 2.7.0 — BATTLE PASS & COIN PACKS** ([docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)):
+  - **NEW 2.8.0 — ANTI BALL: LIMITED EDITION** ([docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)): 100 copies worldwide, serials ANTI-001 … ANTI-100, PHP 999, never restocked; a new defensive-counter kit (Null Core, Skill Rejection, Adaptive Matrix, Counter Pulse, Null Zone, Mirror Protocol, System Override, Absolute Resistance, ultimate ANTI EXISTENCE), passive Adaptive Null, the NULL ASCENSION transformation and Anti Ball Mastery (looks only).
+  - **2.7.0 — BATTLE PASS & COIN PACKS** ([docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)):
     - 🎫 Battle Pass PHP 299 (one-time): God of Chaos, God of War, AI Tech and Solar Eclipse, owned forever. Players who already played them keep them.
-    - 🆓 Free Pass: Anti Ball stays free.
+    - 🆓 Free Pass: Anti Ball was free here until 2.8.0 (now a limited edition).
     - 🪙 Coin packs: PHP 99 = 10,000 coins, PHP 999 = 1,000,000 coins.
     - Paid by QR (owner approves) or PayMongo; everything is checked on the server.
   - **2.6.0 — ULTIMATE UNIQUE SKILL, MASTERY & EVOLUTION SYSTEM** ([docs/SKILLS-2.6.0.md](docs/SKILLS-2.6.0.md)): skill slots by rarity (Common 2 … God Tier 10, ultimate included), 187 new abilities that unlock as each ball levels up, a signature mechanic for every classic ability and ultimate (0 duplicate mechanics), skill mastery from verified battles, evolutions, 44 designed combinations, Skill Training mode, animated skill previews, and an owner-only Admin Skill Management panel with a duplicate audit.
@@ -110,7 +111,9 @@ index.html  style.css  script.js     game (rendering, physics, AI, UI; shared de
 supreme.js                           2.1.0 Supreme Admin Balls + the forms / God Clash framework (also loaded by the server)
 gods.js                              2.2.0 Supreme God Balls, 2.7.0 Battle Pass flags (also loaded by the server)
 gods2.js                             2.3.0 Premium God Balls, the Infinite Void, the God Shop screen (also loaded by the server)
+anti.js                              2.8.0 Anti Ball limited edition kit, Adaptive Null, NULL ASCENSION, mastery (also loaded by the server)
 store.js                             2.7.0 shop screen: Battle Pass and coin packs (browser only)
+anti_ui.js                           2.8.0 Anti Ball shop showcase, serial number, mastery, owner panel (browser only)
 online.js                            accounts, cloud save, premium, rankings, fusion, owner dashboard UI
 server/                              Node game server (no dependencies)
   index.js app.js config.js          entry, wiring, environment config

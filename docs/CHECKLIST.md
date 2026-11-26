@@ -1,9 +1,18 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0, 2.7.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0, 2.7.0, 2.8.0)
+
+## 2.8.0 — Anti Ball Limited Edition ([ANTI-BALL-LE-2.8.0.md](ANTI-BALL-LE-2.8.0.md))
+- ✅ Same ball upgraded (no duplicate); permanent 100 copies, serials ANTI-001…ANTI-100, PHP 999, sold out forever when full
+- ✅ No free unlock, no coins, no events, no admin grants; verified payments only; held slots so two buyers never get one copy
+- ✅ Old free-version progress kept (migration 010, backup first); ownership kept across logins and devices
+- ✅ 9 unique skills, Adaptive Null, NULL ASCENSION (visuals, sounds, entrance, victory), counterplay limits, 45% floor
+- ✅ Anti Ball Mastery (10 levels, looks only, NULL MONARCH title)
+- ✅ Shop showcase, skill previews, copies counter, confirmation, serial display, owner panel; PC and phone browser check
+- ✅ Tests: 17 new (167 / 167 pass); balance vs every rarity tier measured
 
 ## 2.7.0 — Battle Pass & Coin Packs ([BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md))
 - ✅ Battle Pass PHP 299 (one-time): the four Supreme God Balls, owned forever; not for coins, not from orbs; free practice test kept
 - ✅ Players who already played them keep them (migration 009, backup first, audit-logged)
-- ✅ Free Pass: Anti Ball stays free
+- ✅ Free Pass: Anti Ball stayed free (until 2.8.0)
 - ✅ Coin packs PHP 99 = 10,000 and PHP 999 = 1,000,000 coins, added once per verified payment / owner approval
 - ✅ Shop screen, selection and collection banners, Upgrade Shop shortcut; PC and phone browser check
 - ✅ Tests: 7 new (152 / 152 pass)

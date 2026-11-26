@@ -51,7 +51,9 @@ function register(app, S) {
       db.run('INSERT INTO skill_mastery (user_id, ball_id, skill_uid, xp, uses, battles, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT(user_id, skill_uid) DO UPDATE SET xp = xp + excluded.xp, uses = uses + excluded.uses, battles = battles + 1, updated_at = excluded.updated_at',
         uid, def.id, k, g, uses, now());
     }
-    const titles = core.masteryTitles(masteryOf(uid)), fresh = [];
+    const mine = masteryOf(uid), titles = core.masteryTitles(mine), fresh = [];
+    // 2.8.0 Anti Ball Mastery level 10: the NULL MONARCH title (looks only; only owners can play Anti Ball)
+    if (def.id === 'anti' && core.antiMasteryOf && core.antiMasteryOf(mine).lv >= 10) titles.push('title_nullmonarch');
     for (const t of titles) if (!db.get('SELECT 1 FROM cosmetics_owned WHERE user_id = ? AND cosmetic_id = ?', uid, t)) { db.run("INSERT INTO cosmetics_owned (user_id, cosmetic_id, acquired_at, source) VALUES (?, ?, ?, 'mastery')", uid, t, now()); fresh.push(t); }
     return { gains, titles: fresh };
   }

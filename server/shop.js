@@ -33,6 +33,8 @@ const PRODUCTS = {
   god_bundle: { id: 'god_bundle', name: 'God of Guns + God Portal', amount: 19800, balls: ['godofguns', 'godportal'] },
   // 2.4.0 LIMITED EDITION: a slot is reserved while paying; ownership + Lv 50 come from server/edition.js on a verified payment
   godofabsolute: { id: 'godofabsolute', name: 'GOD OF ABSOLUTE – LIMITED EDITION', amount: 49900, balls: ['godofabsolute'], edition: true },
+  // 2.8.0 ANTI BALL LIMITED EDITION: 100 copies worldwide, serials ANTI-001 … ANTI-100, never restocked (server/edition.js)
+  anti: { id: 'anti', name: 'ANTI BALL – LIMITED EDITION', amount: 99900, balls: ['anti'], edition: true },
   // 2.7.0 BATTLE PASS: the four Supreme God Balls, one-time, owned forever (players who had already played them keep them:
   // migration 009). A player who already owns some of them can still buy the pass to get the rest.
   battlepass: { id: 'battlepass', name: 'BATTLE PASS — 4 Supreme God Balls', amount: 29900, balls: ['godofchaos', 'godofwar', 'aitech', 'solareclipse'], pass: true },
@@ -42,7 +44,7 @@ const PRODUCTS = {
   coins_1m: { id: 'coins_1m', name: '1,000,000 Coins', amount: 99900, balls: [], coins: 1000000 },
 };
 /** what the PayMongo checkout page says the player is buying */
-const lineDesc = P => P.coins ? 'Game coins — added once to your account' : P.pass ? 'Battle Pass — 4 Supreme God Balls, yours forever' : 'Premium God Ball — permanent ownership';
+const lineDesc = P => P.coins ? 'Game coins — added once to your account' : P.pass ? 'Battle Pass — 4 Supreme God Balls, yours forever' : P.id === 'anti' ? 'Limited edition (100 copies) — your own serial number, yours forever' : 'Premium God Ball — permanent ownership';
 /** two products conflict when they would grant the same ball */
 const overlap = (x, y) => { const A = PRODUCTS[x], B = PRODUCTS[y]; return !!(A && B && A.balls.some(b => B.balls.includes(b))); };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };

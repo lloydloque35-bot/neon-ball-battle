@@ -1,5 +1,7 @@
 # Anti Ball & Tech Balls update
 
+> **2.8.0:** Anti Ball is now a 100-copy limited edition with a new kit — see [ANTI-BALL-LE-2.8.0.md](ANTI-BALL-LE-2.8.0.md). The Anti Ball section below describes the old (2.0) kit.
+
 Three new playable **balls**. They are spherical ball characters, like every other ball in the game.
 
 | Ball | Unlock | Rarity | Abilities | Ultimate | Special |

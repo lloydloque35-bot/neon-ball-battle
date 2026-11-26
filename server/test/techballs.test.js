@@ -1,7 +1,8 @@
 'use strict';
 /**
  * Anti Ball + Tech Balls update: every ability is exercised in real (headless) battles on the shared game
- * core, plus the server-side unlock rules (Anti Ball free for all, Tech Balls need an active Premium).
+ * core, plus the server-side unlock rules (Tech Balls need an active Premium). Since 2.8.0 Anti Ball is a 100-copy
+ * limited edition with a new kit: see anti_edition.test.js.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -30,9 +31,9 @@ test.after(async () => { await srv.stop(); });
 
 const near = (a, b, d = 120) => { a.x = b.x - d; a.y = b.y; a.vx = a.vy = 0; };
 
-test('server: Anti Ball is free for everyone; Tech Balls need an active Premium and keep progress when it lapses', async () => {
-  assert.equal((await player.post('/api/battle/start', { mode: '1v1', ball: 'anti', difficulty: 'easy' })).status, 200, 'Anti Ball free');
-  assert.equal((await player.post('/api/shop/unlock', { ball: 'anti' })).status, 400, 'nothing to buy');
+test('server: Anti Ball needs a verified copy (2.8.0); Tech Balls need an active Premium and keep progress when it lapses', async () => {
+  assert.equal((await player.post('/api/battle/start', { mode: '1v1', ball: 'anti', difficulty: 'easy' })).status, 403, 'Anti Ball: limited edition');
+  assert.equal((await player.post('/api/shop/unlock', { ball: 'anti' })).status, 400, 'not for coins');
   for (const b of ['mecha', 'cyber']) {
     assert.equal((await player.post('/api/battle/start', { mode: '1v1', ball: b, difficulty: 'easy' })).status, 403, b + ' locked without premium');
     assert.equal((await player.post('/api/shop/unlock', { ball: b })).status, 400, b + ' cannot be bought with coins');
@@ -46,7 +47,7 @@ test('server: Anti Ball is free for everyone; Tech Balls need an active Premium 
   srv.db.run('UPDATE subscriptions SET current_period_end = ? WHERE user_id = ?', Date.now() - 1000, uid); srv.S.expireSubscriptions();
   assert.equal((await premium.post('/api/battle/start', { mode: '1v1', ball: 'mecha', difficulty: 'easy' })).status, 403, 'locked again after expiry');
   assert.equal(srv.db.get("SELECT level FROM user_balls WHERE user_id = ? AND ball_id = 'mecha'", uid).level, 17, 'progress preserved');
-  assert.equal((await premium.post('/api/battle/start', { mode: '1v1', ball: 'anti', difficulty: 'easy' })).status, 200, 'Anti Ball stays free');
+  assert.equal((await premium.post('/api/battle/start', { mode: '1v1', ball: 'anti', difficulty: 'easy' })).status, 403, 'Premium does not include the limited edition');
   srv.S.grantPremium(uid, 30, 0);
   assert.equal((await premium.post('/api/battle/start', { mode: '1v1', ball: 'mecha', difficulty: 'easy' })).status, 200, 'back after renewing');
 });
@@ -83,7 +84,7 @@ test('5th and 6th abilities pressed manually are accepted and replay exactly on 
 
 test('the three new balls exist with the right unlock type, rarity and abilities', () => {
   const anti = core.getBall('anti'), mecha = core.getBall('mecha'), cyber = core.getBall('cyber');
-  assert.ok(anti.free && !anti.premium && anti.rarity === 'Secret' && anti.skills.filter(s => !s.v26).length === 6 && anti.ult.type === 'absolutezero' && anti.passive === 'antiadapt');
+  assert.ok(anti.edition && anti.paid && !anti.free && !anti.premium && anti.rarity === 'Limited' && anti.skills.length === 8 && anti.ult.type === 'a_existence' && anti.passive === 'adaptivenull');
   assert.ok(mecha.premium && !mecha.free && mecha.techNo === 1 && mecha.skills.filter(s => !s.v26).length === 5 && mecha.ult.type === 'titan' && mecha.passive === 'repair');
   assert.ok(cyber.premium && !cyber.free && cyber.techNo === 2 && cyber.skills.filter(s => !s.v26).length === 6 && cyber.ult.type === 'skynet' && cyber.heat);
   for (const b of [anti, mecha, cyber]) { for (const s of b.skills) assert.ok(core.SKILL_TYPES[s.type], 'skill type ' + s.type); assert.ok(core.ULT_TYPES[b.ult.type]); }
@@ -92,57 +93,7 @@ test('the three new balls exist with the right unlock type, rarity and abilities
   assert.ok(!core.allBalls().some(b => b.unit));
 });
 
-test('Anti Ball: Null Zone, Power Absorb, Reverse Impact, Mini Black Hole, Void Teleport, Anti Evolution', () => {
-  const { B, me, foe } = arena('anti');
-  run(B, 0.5);
-  // Null Zone weakens enemies and their abilities while inside
-  near(foe, me, 100); const atk0 = foe.effAtk();
-  assert.equal(cast(me, 'nullzone'), true); run(B, 0.1); near(foe, me, 100); run(B, 0.05);
-  assert.ok(foe.st.nulled > 0 && foe.effAtk() < atk0, 'enemy weakened inside the null zone');
-  // Power Absorb swallows projectiles (not every one: limited count) and stores energy
-  assert.equal(cast(me, 'absorb'), true); const left = me.absorbLeft; assert.ok(left >= 4 && left <= core.ANTI.ABSORB_MAX);
-  near(foe, me, 260); shoot(B, foe, me); run(B, 1.2);
-  assert.ok(me.energy > 0 && me.absorbLeft === left - 1, 'projectile absorbed into energy');
-  me.st.absorb = 0;
-  // Reverse Impact sends a projectile back at its source (limited count)
-  assert.equal(cast(me, 'reverse'), true); const rl = me.reverseLeft;
-  near(foe, me, 300); foe.st.invuln = 0; foe.st.phase = 0; const hp0 = foe.hp; shoot(B, foe, me); run(B, 1.6);
-  assert.equal(me.reverseLeft, rl - 1); assert.ok(foe.hp < hp0, 'reversed shot hit the shooter');
-  me.st.reverse = 0;
-  // ultimates can be neither absorbed nor reversed
-  foe.ai = null; B.projs.length = 0;       // only the test's own shot is in flight
-  me.st.absorb = 3; me.absorbLeft = 3; me.st.reverse = 3; me.reverseLeft = 3;
-  near(foe, me, 260); const p = shoot(B, foe, me); B.projs[B.projs.length - 1].ult = true; const e0 = me.energy; run(B, 1.2);
-  assert.equal(me.absorbLeft, 3); assert.equal(me.reverseLeft, 3); assert.equal(me.energy, e0);
-  me.st.absorb = me.st.reverse = 0;
-  // stored energy powers up the next damaging ability, then is spent
-  me.energy = 60; assert.equal(cast(me, 'minihole'), true); assert.equal(me.energy, 0);
-  assert.ok(B.zones.some(z => z.kind === 'minihole' && z.owner === me), 'mini black hole opened');
-  run(B, 4); assert.ok(!B.zones.some(z => z.kind === 'minihole'), 'vortex is temporary');
-  // Void Teleport: briefly gone, then reappears somewhere else
-  const x0 = me.x, y0 = me.y; assert.equal(cast(me, 'voidtp'), true); assert.ok(me.st.outside > 0);
-  run(B, 0.4); assert.ok(!(me.st.outside > 0) && Math.hypot(me.x - x0, me.y - y0) > 60, 'teleported');
-  // Anti Evolution disrupts God Mode / rage bonuses for a while (not permanently)
-  near(foe, me, 200); foe.god = 10; foe.rage = true; const godAtk = foe.effAtk();
-  assert.equal(cast(me, 'antievo'), true);
-  assert.ok(foe.st.antievo > 0 && foe.god <= 5 && foe.effAtk() < godAtk, 'transformation disrupted');
-  run(B, 8); assert.equal(foe.st.antievo, 0, 'effect wears off');
-});
-
-test('Anti Ball: Absolute Zero suppresses abilities briefly; Anti-Adaptation caps below immunity', () => {
-  const { B, me, foe } = arena('anti', 'fire', 11);
-  run(B, 0.5); near(foe, me, 160); foe.st.invuln = 0;
-  me.ultMeter = 100; me.godUsed = true; assert.equal(core.useUltimate(me), true); run(B, 1.2);
-  assert.ok(foe.st.silence > 0, 'enemy abilities suppressed');
-  const sk = foe.skills[0]; sk.cdLeft = 0; sk.locked = false; foe.casting = 0; foe.gcd = 0; assert.equal(core.useSkill(foe, sk), false, 'silenced balls cannot use abilities');
-  run(B, 4); assert.equal(foe.st.silence, 0); assert.ok(foe.silenceImm > 0 || true);
-  // passive: repeated projectile hits build resistance up to 30% (never immunity)
-  const { B: B2, me: a, foe: f2 } = arena('anti', 'fire', 12); run(B2, 0.3);
-  a.st.invuln = 0; let last = Infinity;
-  for (let i = 0; i < 40; i++) { a.hp = a.maxHp; a.st.invuln = 0; a.st.shield = 0; const before = a.hp; core.dealDamage(f2, a, 10, { kind: 'skill', tag: 'projectile', noCrit: true, noDef: true }); last = before - a.hp; }
-  assert.ok(Math.abs(a.antiRes.projectile - core.ANTI.RES_MAX) < 1e-9, 'capped at 30%');
-  assert.ok(last > 0, 'never immune');
-});
+/* the old Anti Ball kit (Power Absorb, Reverse Impact, …) was replaced by the 2.8.0 limited edition kit — see anti_edition.test.js */
 
 test('Mecha Commander: robots (capped), factory, missiles, drone, fusion, emergency repair, Titan', () => {
   const { B, me, foe } = arena('mecha', 'phoenix', 21);

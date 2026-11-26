@@ -9,7 +9,7 @@ const { RateLimiter } = require('./security');
 const { createLogger, createServices } = require('./services');
 const { loadCore } = require('./core');
 
-const VERSION = '2.7.0';
+const VERSION = '2.8.0';
 
 function createGameServer(cfg, opts = {}) {
   const log = opts.log || createLogger(cfg.logLevel);
