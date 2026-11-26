@@ -151,7 +151,8 @@ test('upgraded balls keep their ids; god versions leave the player balls untouch
   for (const id of ['archangel', 'voidemperor', 'omega']) assert.ok(core.getBall(id).supreme, id + ' upgraded in place (saved progress keeps working)');
   for (const id of ['phoenix', 'mirror', 'infinity', 'bloodmoon']) {
     const d = core.getBall(id); assert.ok(d && !d.supreme && !d.adminOnly, id + ' still a normal player ball');
-    assert.ok(d.skills.length <= 4);
+    assert.ok(d.skills.filter(s => !s.v26).length <= 4, 'its own abilities are untouched');
+    assert.equal(d.skills.length + 1, core.SLOT_CAP[d.rarity], '2.6.0: skill slots by rarity (ultimate included)');
   }
   assert.equal(core.ALL_BUILTIN.filter(b => b.id === 'archangel').length, 1, 'no duplicates');
 });

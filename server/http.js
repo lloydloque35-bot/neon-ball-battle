@@ -38,7 +38,7 @@ const SECURITY_HEADERS = {
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json' };
-const PUBLIC_FILES = new Set(['/index.html', '/style.css', '/script.js', '/supreme.js', '/gods.js', '/gods2.js', '/gods3.js', '/online.js', '/manifest.webmanifest']);
+const PUBLIC_FILES = new Set(['/index.html', '/style.css', '/script.js', '/supreme.js', '/gods.js', '/gods2.js', '/gods3.js', '/skills.js', '/online.js', '/manifest.webmanifest']);
 
 class App {
   constructor({ root, secure, trustProxy, log }) {

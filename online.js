@@ -60,7 +60,7 @@ const Online = {
     const base = defaultSave();
     SAVE = Object.assign(base, {
       coins: s.coins, balls: s.balls, stats: { ...base.stats, ...s.stats }, achievements: s.achievements, collectionClaimed: s.collectionClaimed,
-      limited: s.limited, eventProgress: s.eventProgress, settings: { ...DEFAULT_SETTINGS, ...((this.guest && this.guest.settings) || {}), ...s.settings },
+      limited: s.limited, eventProgress: s.eventProgress, skills26: s.skills26 || { mastery: {}, evolutions: {} },      // 2.6.0 skill mastery & evolutions settings: { ...DEFAULT_SETTINGS, ...((this.guest && this.guest.settings) || {}), ...s.settings },
       last: (this.guest && this.guest.last) || base.last,
     });
     setCatalog(s.catalog);
@@ -469,7 +469,7 @@ Object.assign(UI, {
   adTab: 'overview',
   render_admin() {
     const tabs = $('#adminTabs'); tabs.innerHTML = '';
-    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls'], ['shopph', '💳 God Shop (PHP)'], ['absolute', '👑 God of Absolute']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
+    for (const [k, l] of [['overview', '📊 Overview'], ['players', '👥 Players'], ['balls', '◉ Balls'], ...(typeof SUP !== 'undefined' ? [['supreme', '👑 Supreme Balls'], ['shopph', '💳 God Shop (PHP)'], ['absolute', '👑 God of Absolute']] : []), ...(typeof UI.admin_skills26 === 'function' ? [['skills26', '🧬 Skills']] : []), ['events', '✦ Events'], ['money', '★ Premium & Payments'], ['announce', '📢 Announcement'], ['logs', '🛡 Audit & Security'], ['data', '💾 Data']])
       tabs.append(h('button', { class: 'tab admin-tab' + (this.adTab === k ? ' active' : ''), onclick: () => { this.adTab = k; this.render_admin(); } }, l));
     tabs.append(h('button', { class: 'btn admin small', style: { marginLeft: 'auto' }, onclick: () => this.openCreator(null) }, '＋ Create New Ball'));
     const body = $('#adminBody'); body.innerHTML = '<p class="muted">Loading…</p>';
@@ -626,7 +626,7 @@ class LockstepNet {
   local(type, a) {
     if (this.dead || this.pending.length >= 20) return;
     if (type === 'm') { this.localManual = !!a; this.pending.push(['m', a ? 1 : 0]); if (!a) this.lastSteer = '0,0,0'; }
-    else if (type === 'k') this.pending.push(['k', Math.max(0, Math.min(6, a | 0))]);
+    else if (type === 'k') this.pending.push(['k', Math.max(0, Math.min(11, a | 0))]);
     else if (type === 'u') this.pending.push(['u', 0]);
   }
   /* owner console (ADMIN DELETE): ['x', cmd, targetId, v1, v2], validated by the engine and the server */

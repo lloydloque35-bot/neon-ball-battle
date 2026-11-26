@@ -1375,6 +1375,7 @@ class Fighter {
     this.evoMul = ev; this.energy = 0; this.heat = 0; this.absorbLeft = 0; this.reverseLeft = 0; this.silenceImm = 0; this.repairCd = 0; this.repairs = 0; this.guard = null;
     this.form = 0; this.fm = 1; this.xAtk = 1; this.xSpd = 1; this.pAtk = 1; this.pSpd = 1; this.pCd = 1; this.sid = BATTLE && BATTLE.sidN != null ? ++BATTLE.sidN : 0;   // 2.1.0 Supreme forms / admin edits / match id
     if (def.supreme && typeof supremeInit === 'function') supremeInit(this, o);
+    if (typeof skillInit26 === 'function') skillInit26(this, o);        // 2.6.0 skill system: level unlocks, evolutions, mastery look
   }
   get hpRatio() { return this.hp / this.maxHp; }
   get credit() { return this.isClone && this.owner ? this.owner : this; }
@@ -1560,7 +1561,7 @@ function knock(e, fromX, fromY, force) { if (e.st && e.st.outside > 0) return; c
 
 function spawnProj(f, ang, o) {
   BATTLE.projs.push({ owner: f, team: f.team, x: f.x + dcos(ang) * (f.r + 6), y: f.y + dsin(ang) * (f.r + 6), vx: dcos(ang) * o.speed, vy: dsin(ang) * o.speed,
-    speed: o.speed, r: o.r || 10, dmg: o.dmg, col: o.col, effect: o.effect, power: o.power, life: o.life || 2.6, homing: o.homing || 0, target: o.target || f.target, style: o.style || null, boom: o.boom || 0, ult: o.ult ?? CUR_ULT });
+    speed: o.speed, r: o.r || 10, dmg: o.dmg, col: o.col, effect: o.effect, power: o.power, life: o.life || 2.6, homing: o.homing || 0, target: o.target || f.target, style: o.style || null, boom: o.boom || 0, ult: o.ult ?? CUR_ULT, sk: o.sk ?? CUR_SK });
 }
 function explodeAt(f, x, y, rad, dmg, col, effect, force = 520, power = 60) {
   FX.ring(x, y, col, rad, 0.45, 12, 10); FX.ring(x, y, '#ffffff', rad * 0.75, 0.35, 5, 10);
@@ -1581,7 +1582,11 @@ function spawnClone(f, P, life = 6, angOff = 0) {
   FX.burst(c.x, c.y, f.def.design.c3, 24, 300, 6, 0.6); FX.ring(c.x, c.y, f.def.design.c2, 90, 0.4, 6);
   return c;
 }
-const after = (t, fn) => BATTLE.timers.push({ t, fn, u: CUR_ULT });   // timers started by an ultimate stay part of it
+/** 2.6.0: lengths of everything a skill can create, then stamps the new entries with the skill's uid */
+function skLens(B) { return [B.projs.length, B.beams.length, B.waves.length, B.zones.length, B.strikes.length, B.orbs.length, B.lasers.length]; }
+function skMark(B, L, k) { [B.projs, B.beams, B.waves, B.zones, B.strikes, B.orbs, B.lasers].forEach((a, i) => { for (let j = L[i]; j < a.length; j++) if (a[j] && a[j].sk == null) { a[j].sk = k; a[j].tw26 = true; } }); }
+function skStamp(B, L, k) { [B.projs, B.beams, B.waves, B.zones, B.strikes, B.orbs, B.lasers].forEach((a, i) => { for (let j = L[i]; j < a.length; j++) if (a[j] && a[j].sk == null) a[j].sk = k; }); }
+const after = (t, fn) => BATTLE.timers.push({ t, fn, u: CUR_ULT, k: CUR_SK, w: CUR_TW });   // timers started by an ultimate stay part of it
 
 /* =====================================================================
    PORTALS (Portal Master Ball) — all battle logic is deterministic; the
@@ -1672,7 +1677,7 @@ function spawnPortalClone(f, P, ang, disguise) {
 /* a shot fired out of a portal (not from the ball itself) */
 function portalShot(f, x, y, tgt, o) {
   const a = tgt ? datan2(tgt.y - y, tgt.x - x) : rand(TAU);
-  BATTLE.projs.push({ owner: f, team: f.team, x, y, vx: dcos(a) * o.speed, vy: dsin(a) * o.speed, speed: o.speed, r: o.r || 10, dmg: o.dmg, col: o.col, effect: o.effect, power: o.power, life: o.life || 2.4, homing: o.homing || 0, target: tgt, ult: CUR_ULT });
+  BATTLE.projs.push({ owner: f, team: f.team, x, y, vx: dcos(a) * o.speed, vy: dsin(a) * o.speed, speed: o.speed, r: o.r || 10, dmg: o.dmg, col: o.col, effect: o.effect, power: o.power, life: o.life || 2.4, homing: o.homing || 0, target: tgt, ult: CUR_ULT, sk: CUR_SK });
 }
 
 /* =====================================================================
@@ -1681,6 +1686,8 @@ function portalShot(f, x, y, tgt, o) {
    (RNG / rand), so online PvP and server verification stay exact;
    anything using Math.random / vr is visual only.
    ===================================================================== */
+let CUR_TW = false;    // 2.6.0: true while a skill's signature / evolution mechanic runs: what it creates is credited, never re-decorated
+let CUR_SK = null;     // 2.6.0: the skill (uid) whose cast or timer is running: what it creates and the damage it deals are credited to it
 let CUR_ULT = false;   // true while an ultimate (or a timer it scheduled) runs: its shots cannot be absorbed or reversed
 const ANTI = { RES_MAX: 0.3, ABSORB_MAX: 6, REVERSE_MAX: 5, ENERGY_BONUS: 0.6 };
 const UNIT = { ROBOT_MAX: 5, TURRET_MAX: 2, FACTORY_MAX: 1, ALL_MAX: 10, FACTORY_BUILDS: 3, REPAIR_CD: 40, REPAIR_MAX: 3, REPAIR_HEAL: 0.22 };
@@ -2558,7 +2565,7 @@ const Input = {
       if (k === 'p' || k === 'escape') { BATTLE.togglePause(); e.preventDefault(); }
       if (k === 'm') toggleControl();
       const pl = BATTLE.player; if (!pl || !localManual() || BATTLE.paused) return;
-      const idx = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, j: 0, k: 1, l: 2, ';': 3 }[k];
+      const idx = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6, '8': 7, '9': 8, '0': 9, j: 0, k: 1, l: 2, ';': 3 }[k];
       if (k === ' ') { BATTLE.queue('u'); e.preventDefault(); }
       else if (idx != null) BATTLE.queue('k', idx);
       if (k === 'f' && pl.temp) BATTLE.queue('k', pl.skills.length);
@@ -2714,7 +2721,7 @@ class Battle {
       this.dmgMul = 1 + (this.time - sdT) / 25;
     }
     if (this.timeTint > 0) this.timeTint -= h;
-    if (this.timers.length) { const due = []; this.timers = this.timers.filter(t => (t.t -= h) > 0 || (due.push(t), false)); due.forEach(t => { const pv = CUR_ULT; CUR_ULT = !!t.u; try { t.fn(); } finally { CUR_ULT = pv; } }); }
+    if (this.timers.length) { const due = []; this.timers = this.timers.filter(t => (t.t -= h) > 0 || (due.push(t), false)); due.forEach(t => { const pv = CUR_ULT, pk = CUR_SK, pw = CUR_TW, L = t.k ? skLens(this) : null; CUR_ULT = !!t.u; CUR_SK = t.k || null; CUR_TW = !!t.w; try { t.fn(); } finally { CUR_ULT = pv; CUR_SK = pk; CUR_TW = pw; if (L) (t.w ? skMark : skStamp)(this, L, t.k); } }); }
     const F = this.fighters;
     for (const f of F) {
       if (!f.alive) continue;
@@ -2805,7 +2812,7 @@ class Battle {
       const p = this.projs[i]; p.life -= h;
       if (p.dim === undefined) p.dim = p.owner ? (p.owner.dim || 0) : 0;
       if (p.frozen > 0) { p.frozen -= h; p.life += h; continue; }   // Time Freeze
-      if (p.tick) p.tick(p, h);
+      if (p.tick) { if (p.sk) { const pk = CUR_SK, L = skLens(this); CUR_SK = p.sk; try { p.tick(p, h); } finally { CUR_SK = pk; skMark(this, L, p.sk); } } else p.tick(p, h); }
       if (p.homing) {
         if (!p.target || !p.target.alive || (p.target.dim || 0) !== p.dim) { p.target = null; let bd = Infinity; for (const e of this.enemiesOf(p.team, p.dim)) { const dd = dist2(e.x, e.y, p.x, p.y); if (dd < bd) { bd = dd; p.target = e; } } }
         if (p.target && p.target.alive) { const want = datan2(p.target.y - p.y, p.target.x - p.x); let cur = datan2(p.vy, p.vx); const da = ((want - cur + Math.PI * 3) % TAU) - Math.PI; cur += clamp(da, -p.homing * h, p.homing * h); p.vx = dcos(cur) * p.speed; p.vy = dsin(cur) * p.speed; }
@@ -2819,7 +2826,7 @@ class Battle {
         if (b) { p.bounce--; if (p.hits) p.hits.clear(); if (!FX.off) FX.sparks(p.x, p.y, p.col, 5, 260); } }
       if (p.life <= 0 || p.x < ARENA.x + p.r * 0.5 || p.x > ARENA.r - p.r * 0.5 || p.y < ARENA.y + p.r * 0.5 || p.y > ARENA.b - p.r * 0.5) {
         FX.burst(p.x, p.y, p.col, 8, 170, 4, 0.35); if (p.life > 0) Arena.wallHit(clamp(p.x, ARENA.x, ARENA.r), clamp(p.y, ARENA.y, ARENA.b), p.col);
-        if (p.onEnd) p.onEnd(p);
+        if (p.onEnd) { const pk = CUR_SK, L = p.sk ? skLens(this) : null; CUR_SK = p.sk || null; try { p.onEnd(p); } finally { CUR_SK = pk; if (L) skMark(this, L, p.sk); } }
         this.projs.splice(i, 1); continue;
       }
       for (const e of this.fighters) {
@@ -2833,12 +2840,12 @@ class Battle {
             p.reflected = true; p.team = e.team; p.owner = e; p.vx = -p.vx; p.vy = -p.vy; p.target = null; p.life = Math.max(p.life, 1.2);
             FX.ring(p.x, p.y, '#ffffff', 50, 0.25, 4); FX.sparks(p.x, p.y, '#e0f7fa', 8, 380); Sound.play('shield'); break;
           }
-          dealDamage(p.owner, e, p.dmg, { kind: 'skill', tag: 'projectile', effect: p.effect, power: p.power });
+          dealDamage(p.owner, e, p.dmg, { kind: 'skill', tag: 'projectile', effect: p.effect, power: p.power, sk: p.sk });
           if (p.boom) explodeAt(p.owner, p.x, p.y, p.boom, p.dmg * 0.35, p.col, null, 240, p.power);   // missiles explode
           const k = e.boss ? 0.08 : 0.25; e.vx += p.vx * k; e.vy += p.vy * k;
           FX.burst(p.x, p.y, p.col, 14, 260, 5, 0.45); FX.sparks(p.x, p.y, '#ffffff', 6, 360); FX.ring(p.x, p.y, p.col, 46, 0.25, 4);
           Sound.play('hit', 0.6);
-          if (p.onHit) p.onHit(p, e);
+          if (p.onHit) { const pk = CUR_SK, L = p.sk ? skLens(this) : null; CUR_SK = p.sk || null; try { p.onHit(p, e); } finally { CUR_SK = pk; if (L) skMark(this, L, p.sk); } }
           if (p.pierce > 0) { p.pierce--; (p.hits || (p.hits = new Set())).add(e.sid); continue; }   // passes through
           this.projs.splice(i, 1); break;
         }
@@ -2860,7 +2867,7 @@ class Battle {
         if (!e.alive || e.team === b.team || (e.dim || 0) !== (o.dim || 0)) continue;
         if (e.st.phase > 0 || e.st.outside > 0) continue;
         if (segDist(e.x, e.y, o.x, o.y, b.end.x, b.end.y) < e.r + b.w / 2) {
-          dealDamage(o, e, b.dmg * (e.st.reflect > 0 ? 0.5 : e.st.reverse > 0 ? 0.6 : 1), { kind: 'skill', tag: 'beam', effect: b.effect, power: b.power });
+          dealDamage(o, e, b.dmg * (e.st.reflect > 0 ? 0.5 : e.st.reverse > 0 ? 0.6 : 1), { kind: 'skill', tag: 'beam', effect: b.effect, power: b.power, sk: b.sk });
           const px = -dsin(b.ang), py = dcos(b.ang), sd = Math.sign((e.x - o.x) * px + (e.y - o.y) * py) || 1;
           e.vx += (dcos(b.ang) * 160 + px * sd * 120) * (e.boss ? 0.3 : 1); e.vy += (dsin(b.ang) * 160 + py * sd * 120) * (e.boss ? 0.3 : 1);
           FX.sparks(e.x, e.y, b.col, 10, 420); FX.burst(e.x, e.y, b.col, 10, 220, 5, 0.4);
@@ -2877,7 +2884,7 @@ class Battle {
       for (const e of this.fighters) {
         if (!e.alive || e.team === w.team || w.hit.has(e.uid) || e.st.outside > 0 || (e.dim || 0) !== ((w.owner && w.owner.dim) || 0)) continue;
         const d = len(e.x - w.x, e.y - w.y);
-        if (Math.abs(d - w.r) < e.r + w.w / 2) { w.hit.add(e.uid); dealDamage(w.owner, e, w.dmg, { kind: 'skill', tag: 'wave', effect: w.effect, power: w.power }); knock(e, w.x, w.y, w.force); FX.sparks(e.x, e.y, w.col, 10, 400); if (w.onHit && e.alive) w.onHit(e); }
+        if (Math.abs(d - w.r) < e.r + w.w / 2) { w.hit.add(e.uid); dealDamage(w.owner, e, w.dmg, { kind: 'skill', tag: 'wave', effect: w.effect, power: w.power, sk: w.sk }); knock(e, w.x, w.y, w.force); FX.sparks(e.x, e.y, w.col, 10, 400); if (w.onHit && e.alive) { const pk = CUR_SK, L = w.sk ? skLens(this) : null; CUR_SK = w.sk || null; try { w.onHit(e); } finally { CUR_SK = pk; if (L) skMark(this, L, w.sk); } } }
       }
     }
   }
@@ -2903,7 +2910,7 @@ class Battle {
           const a = z.pull * (0.35 + 0.65 * (1 - d / z.r)) * (e.boss ? 0.45 : 1);
           e.vx += dx / d * a * h; e.vy += dy / d * a * h;
         }
-        const key = e.uid; if ((z.ticks.get(key) || 0) <= this.time) { z.ticks.set(key, this.time + (z.kind === 'trap' ? 0.5 : 0.4)); dealDamage(z.owner, e, z.dmg, { kind: 'skill', tag: 'zone', effect: z.effect, power: z.power, noCrit: true }); }
+        const key = e.uid; if ((z.ticks.get(key) || 0) <= this.time) { z.ticks.set(key, this.time + (z.kind === 'trap' ? 0.5 : 0.4)); dealDamage(z.owner, e, z.dmg, { kind: 'skill', tag: 'zone', effect: z.effect, power: z.power, noCrit: true, sk: z.sk }); }
       }
       if (!z.custom && z.kind !== 'trap' && z.kind !== 'nullzone' && z.kind !== 'cybertrap' && z.kind !== 'minihole' && Math.random() < 0.8) { const a = vr(TAU), rr = z.r * vr(0.6, 1); FX.p(z.x + dcos(a) * rr, z.y + dsin(a) * rr, -dcos(a) * rr * 1.6 - dsin(a) * 140, -dsin(a) * rr * 1.6 + dcos(a) * 140, 0.5, vr(2, 4), z.col, 'dot', 0.5); }
     }
@@ -2922,7 +2929,7 @@ class Battle {
       for (const e of this.fighters) {
         if (!e.alive || e.team === s.team || e.st.outside > 0 || (e.dim || 0) !== ((s.owner && s.owner.dim) || 0)) continue;
         const inPillar = s.kind === 'pillar' && Math.abs(e.x - s.x) < s.r * 0.65 + e.r;
-        if (inPillar || len(e.x - s.x, e.y - s.y) < s.r + e.r) { dealDamage(s.owner, e, s.dmg, { kind: 'skill', tag: 'strike', effect: s.effect, power: s.power }); knock(e, s.x, s.y, s.kind === 'titan' ? 650 : 300); }
+        if (inPillar || len(e.x - s.x, e.y - s.y) < s.r + e.r) { dealDamage(s.owner, e, s.dmg, { kind: 'skill', tag: 'strike', effect: s.effect, power: s.power, sk: s.sk }); knock(e, s.x, s.y, s.kind === 'titan' ? 650 : 300); }
       }
     }
   }
@@ -2936,7 +2943,7 @@ class Battle {
           if (!e.alive || e.team === o.team || e.st.outside > 0 || (e.dim || 0) !== (f.dim || 0)) continue;
           if (dist2(e.x, e.y, ox, oy) < (e.r + 11) * (e.r + 11)) {
             const key = e.uid * 10 + k;
-            if ((o.hitCd.get(key) || 0) <= this.time) { o.hitCd.set(key, this.time + 0.45); dealDamage(f, e, o.dmg, { kind: 'skill', tag: 'orb', effect: o.effect, power: o.power }); FX.sparks(ox, oy, o.col, 6, 300); }
+            if ((o.hitCd.get(key) || 0) <= this.time) { o.hitCd.set(key, this.time + 0.45); dealDamage(f, e, o.dmg, { kind: 'skill', tag: 'orb', effect: o.effect, power: o.power, sk: o.sk }); FX.sparks(ox, oy, o.col, 6, 300); }
           }
         }
       }
@@ -2991,7 +2998,7 @@ Battle.prototype.updateLasers = function (h) {
       if (!e.alive || e.team === L.team || e.st.outside > 0 || e.st.phase > 0 || (e.dim || 0) !== (L.owner.dim || 0)) continue;
       if (segDist(e.x, e.y, L.x0, L.y0, L.x1, L.y1) < e.r + L.w / 2 && (L.ticks.get(e.uid) || 0) <= this.time) {
         L.ticks.set(e.uid, this.time + 0.45);
-        dealDamage(L.owner, e, L.dmg, { kind: 'skill', tag: 'laser', power: 60, noCrit: true });
+        dealDamage(L.owner, e, L.dmg, { kind: 'skill', tag: 'laser', power: 60, noCrit: true, sk: L.sk });
         if (!FX.off) { FX.sparks(e.x, e.y, L.col, 8, 380); Sound.play('zap'); }
       }
     }
@@ -3005,7 +3012,7 @@ function techZone(B, z, e, d, h) {
   if (d <= z.detect + e.r && (z.ticks.get(e.uid) || 0) <= B.time) {
     z.ticks.set(e.uid, B.time + 1.1); z.charges--;
     e.st.slow = Math.max(e.st.slow, 2.4); e.vx *= 0.45; e.vy *= 0.45;
-    dealDamage(z.owner, e, z.dmg, { kind: 'skill', tag: 'zone', power: z.power, noCrit: true });
+    dealDamage(z.owner, e, z.dmg, { kind: 'skill', tag: 'zone', power: z.power, noCrit: true, sk: z.sk });
     z.zapT = 0.3;
     if (!FX.off) { FX.bolt(z.x, z.y, e.x, e.y, z.col, 4, 0.3); FX.text(e.x, e.y - e.r - 20, 'TRAPPED', z.col, 14, { life: 0.7 }); Sound.play('zap'); }
     if (z.charges <= 0) z.life = Math.min(z.life, 0.45);
@@ -3678,7 +3685,8 @@ function enemySpec(def, level, diff, extra = {}) {
     tree: level >= 15 ? { power1: 1, cd1: 1, slot3: 1, slot4: 1 } : level >= 5 ? { slot3: 1 } : {}, ...extra };
 }
 function playerSpecFrom(def, p) {
-  return { ball: def.id, isPlayer: true, level: p.level || 1, evo: p.evo || 0, up: { ...(p.up || {}) }, tree: { ...(p.tree || {}) }, allUnlocked: !!(def.adminOnly || def.unlockAll), playerDiff: 'hard', cos: p.cos || null };
+  return { ball: def.id, isPlayer: true, level: p.level || 1, evo: p.evo || 0, up: { ...(p.up || {}) }, tree: { ...(p.tree || {}) }, allUnlocked: !!(def.adminOnly || def.unlockAll), playerDiff: 'hard', cos: p.cos || null,
+    wins: p.wins | 0, maxed: !!p.maxed, sevo: p.sevo || null, mast: p.mast || null };      // 2.6.0: skill unlock conditions, skill evolutions (rules) and mastery (looks only)
 }
 const pickWith = (list, rnd) => list[Math.floor(rnd() * list.length) % list.length];
 /** createTicket(setup, playerProgress, rnd, extra) → ticket (plain JSON) */
@@ -3707,6 +3715,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
 }
 /* ---------- online PvP (shared by the game server and the browser) ---------- */
 const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
+const SKILL_IDX_MAX = 11;     // 2.6.0: ability inputs 0..11 (up to 9 abilities + the ultimate slot, + room for a copied one)
 /** createPvpTicket([{ball, level, evo, up, tree, cos, name}, …x2], seed) → ticket. Both balls run the same strong AI while on AUTO. */
 /* online modes: seats per team. Empty seats are played by the AI */
 const PVP_MODES = {
@@ -3757,7 +3766,7 @@ function cleanPvpActions(list) {
   for (const a of list) {
     if (!Array.isArray(a) || !Number.isInteger(a[0]) || a[0] < 0 || a[0] >= PVP.BLOCK) return null;
     switch (a[1]) {
-      case 'k': if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 6) return null; out.push([a[0], 'k', a[2]]); break;   // up to 6 abilities + a copied one
+      case 'k': if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > SKILL_IDX_MAX) return null; out.push([a[0], 'k', a[2]]); break;   // 2.6.0: up to 10 abilities + a copied one
       case 'u': out.push([a[0], 'u', 0]); break;
       case 'm': out.push([a[0], 'm', a[2] ? 1 : 0]); break;
       case 'x': if (a.length !== 6 || !a.slice(2).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return null; out.push([a[0], 'x', a[2], a[3], a[4], a[5]]); break;   // owner console
@@ -3808,12 +3817,14 @@ function simulateTicket(T, inputs = [], maxSteps = 240 * 60 * 30) {
   while (!B.result && B.stepN < maxSteps) B.step(STEP);
   const r = B.result;
   BATTLE = null;
-  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places } : { ok: false, reason: 'timeout', step: B.stepN };
+  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places, skUse: skUseOf(B) } : { ok: false, reason: 'timeout', step: B.stepN };
 }
+/** 2.6.0: how often each human player's ball used each of its abilities (skill mastery comes from verified battles only) */
+function skUseOf(B) { const out = {}; const list = B.pvp ? (B.slots || []) : (B.player ? [B.player] : []); list.forEach((f, i) => { if (f && f.skUse) out[B.pvp ? f.slot : 0] = { ...f.skUse }; }); return out; }
 /** rewards are computed from a (verified) result — identical on client (guest) and server */
 const RANK_POINTS = { win: 4, draw: 3, loss: 2 };   // rank points per battle (single-player and online)
 function computeRewards(T, r, opt = {}) {
-  if (T.mode === 'practice') return { coins: 0, exp: 0, rp: 0 };
+  if (T.mode === 'practice' || T.mode === 'training' || (T.opts && T.opts.training)) return { coins: 0, exp: 0, rp: 0 };      // practice and 2.6.0 Skill Training: no rewards, no rank points
   const D = DIFF[T.difficulty]; let coins = 0, exp = 0, rp = 0;
   switch (T.mode) {
     case '1v1': coins = r.win ? 60 : 15; exp = r.win ? 60 : 20; break;
@@ -4077,6 +4088,8 @@ const UI = {
       g.append(h('div', { class: 'mode-card' + (m.main ? ' main' : ''), onclick: () => { Sound.play('click'); Game.setup.mode = id; this.show('select'); } },
         m.main ? h('span', { class: 'tag' }, 'MAIN MODE') : null, h('div', { class: 'ico' }, m.ico), h('h3', {}, m.name), h('p', {}, m.desc)));
     }
+    if (typeof Training26 !== 'undefined') g.append(h('div', { class: 'mode-card', onclick: () => { Sound.play('click'); Game.setup.mode = 'practice'; Game.setup.training = true; this.show('select'); } },      // 2.6.0
+      h('span', { class: 'tag' }, 'NEW'), h('div', { class: 'ico' }, '🎯'), h('h3', {}, 'Skill Training'), h('p', {}, 'Test your unlocked abilities on training targets: cooldown timing, combos, damage statistics. No rewards.')));
   },
 
   /* ---------------- BALL SELECTION ---------------- */
@@ -4198,6 +4211,7 @@ const UI = {
       const nx = EVO[p.evo + 1];
       if (nx && !b.adminOnly) btns.append(h('button', { class: 'btn gold', disabled: !canEvolve(id), title: `Requires level ${nx.lvl}`, onclick: () => this.evolve(id) }, `✦ Evolve → ${nx.name} (Lv ${nx.lvl}, 🪙 ${fmtNum(nx.cost)})`));
       btns.append(h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = id; this.closeModal(); this.show('play'); } }, '⚔ Battle'));
+      if (typeof Training26 !== 'undefined') btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); Training26.start(id); } }, '🎯 Skill Training'));      // 2.6.0
       if (!p.owned && !b.adminOnly) btns.append(h('p', { class: 'muted', style: { width: '100%', fontSize: '12px' } }, '★ Unlocked by your Ultimate Premium membership.'));
       if (p.maxed) btns.append(h('p', { class: 'muted', style: { width: '100%', fontSize: '12px', color: '#ffd54f' } }, '★ Premium ball: always at full power for Premium members — Lv 50, fully evolved, every upgrade and ability.'));
       else btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); this.show('shop'); this.shopBall = id; this.render_shop(); } }, '⬆ Upgrade'));
@@ -4208,15 +4222,17 @@ const UI = {
     let html = '';
     if (owned && !b.adminOnly) html += `<div class="row" style="justify-content:space-between"><b>Level ${p.level}${p.level >= maxLvlOf(b) ? ' (MAX)' : ''}${maxLvlOf(b) > MAX_LVL ? ' / ' + maxLvlOf(b) : ''}</b><span class="muted">${p.exp} / ${expNeed(p.level)} EXP • ${p.sp} skill points • ${p.wins}W / ${p.losses}L</span></div><div class="bar exp"><i style="width:${p.exp / expNeed(p.level) * 100}%"></i></div>`;
     html += `<h3 style="margin-top:12px">Stats</h3>${statBar('HP', f.maxHp, 260)}${statBar('ATK', f.atk, 160)}${statBar('DEF', f.dfn, 160)}${statBar('SPD', f.spd, 140)}${statBar('CRIT', f.crit, 100, '%')}`;
-    html += `<h3 style="margin-top:12px">Abilities</h3>`;
+    const sk26 = typeof skillPanel26 === 'function' && b.sk26;      // 2.6.0 skill details (cards, mastery, evolution, previews)
+    if (!sk26) { html += `<h3 style="margin-top:12px">Abilities</h3>`;
     (b.skills || []).forEach((s, i) => {
       const locked = !b.adminOnly && !b.unlockAll && !s.always && ((i === 2 && !p.tree.slot3) || (i >= 3 && !p.tree.slot4));
       html += `<div class="skill-row ${locked ? 'locked' : ''}"><div class="sico" style="color:${esc(s.color)};background:${rgba(s.color, 0.25)}">${SKILL_TYPES[s.type]?.ico || '•'}</div><div><div class="sname">${esc(s.name)} ${locked ? '🔒' : ''}</div><div class="sdesc">${esc(SKILL_TYPES[s.type]?.label || s.type)} — ${esc(SKILL_TYPES[s.type]?.desc || '')}. Power ${s.power}, cooldown ${s.cd}s${s.effect && s.effect !== 'none' ? ', effect: ' + esc(s.effect) : ''}${locked ? ` — unlock in the skill tree (${i === 2 ? 'Lv 5' : 'Lv 12'})` : ''}</div></div></div>`;
     });
     if (b.ult) html += `<div class="skill-row" style="border:1px solid #ffd54f55"><div class="sico" style="color:#ffd54f;background:#ffd54f33">★</div><div><div class="sname">ULTIMATE: ${esc(b.ult.name)}</div><div class="sdesc">${esc(ULT_TYPES[b.ult.type] || b.ult.type)} — power ${b.ult.power}. Charges from time, damage dealt and damage taken.</div></div></div>`;
-    if (b.passiveInfo) html += `<div class="skill-row" style="border:1px solid #b388ff55"><div class="sico" style="color:#b388ff;background:#b388ff33">◆</div><div><div class="sname">PASSIVE: ${esc(b.passiveInfo.name)}</div><div class="sdesc">${esc(b.passiveInfo.desc)}</div></div></div>`;
-    html += `<p class="muted" style="font-size:12px">AI personality: <b>${esc(b.ai)}</b> • Rage Mode at ${RAGE_HP} HP or below (+attack, +speed, faster cooldowns).</p>`;
+    if (b.passiveInfo) html += `<div class="skill-row" style="border:1px solid #b388ff55"><div class="sico" style="color:#b388ff;background:#b388ff33">◆</div><div><div class="sname">PASSIVE: ${esc(b.passiveInfo.name)}</div><div class="sdesc">${esc(b.passiveInfo.desc)}</div></div></div>`; }
     R.insertAdjacentHTML('beforeend', html);
+    if (sk26) R.append(skillPanel26(b, p, f, owned));
+    R.insertAdjacentHTML('beforeend', `<p class="muted" style="font-size:12px">AI personality: <b>${esc(b.ai)}</b> • Rage Mode at ${RAGE_HP} HP or below (+attack, +speed, faster cooldowns).</p>`);
     if (owned && !b.adminOnly) {
       R.append(h('h3', {}, 'Skill Tree'));
       const tree = h('div', { class: 'tree' });
@@ -4762,7 +4778,7 @@ const Main = {
     ctx.setTransform(k, 0, 0, k, 0, 0);
     try {
       const demoVisible = !BATTLE?.cfg.demo || UI.current === 'menu';
-      if (BATTLE && demoVisible) { BATTLE.update(dt); BATTLE.draw(ctx, dt); }
+      if (BATTLE && demoVisible && !BATTLE.preview26) { BATTLE.update(dt); BATTLE.draw(ctx, dt); }      // (2.6.0 skill previews run in their own canvas)
       else { Arena.draw(ctx, dt); }
       if (BATTLE?.cfg.demo && BATTLE.over && Game.demoTimer > 0) { Game.demoTimer -= dt; if (Game.demoTimer <= 0) { BATTLE = null; Game.demo(); } }
       if (!BATTLE && UI.current) Game.demo();
@@ -4796,7 +4812,7 @@ window.NBB_CORE = {
   Battle, Fighter, setCatalog, getBall, useSkill, useUltimate, unitsOf, dealDamage, spawnProj, allBalls, opponentPool, normDiff, enemySpec, playerSpecFrom, defaultSave, mulberry32, prog,
   DIFF, MODES, EVO, TREE, MAX_LVL, expNeed, maxLvlOf, setXpTune: v => { XP_TUNE.high = clamp(+v || 1, 0.25, 4); }, xpTune: () => XP_TUNE.high, UPGRADE_CAPS, upgradeCost, RARITY_INFO, RARITIES, CATEGORIES, ORBS, ACHIEVEMENTS, COLLECTION_REWARDS,
   COSMETICS, COSMETIC_SLOTS, DAILY_REWARDS, FUSION_COST, FUSION_MIN_LEVEL, FUSION_MAX, fusionEligible, makeFusionDef, mixColor, hashStr, sfxOf,
-  rngCount: () => _rngN, setRngHook: fn => { _rngHook = fn; }, BUILTIN_BALLS, LIMITED_BALLS, ADMIN_BALLS, PREMIUM_BALLS, UPDATE_BALLS, SUMMON_BALLS, ALL_BUILTIN, UNIT, ANTI, HEAT, PORTAL, SUMMON_POOL, SKILL_TYPES, ULT_TYPES, EFFECTS, PATTERNS, DECOS, AI_TYPES, EVENT_INFO, builtinEvents, RAGE_HP, STEP,
+  SKILL_IDX_MAX, rngCount: () => _rngN, setRngHook: fn => { _rngHook = fn; }, BUILTIN_BALLS, LIMITED_BALLS, ADMIN_BALLS, PREMIUM_BALLS, UPDATE_BALLS, SUMMON_BALLS, ALL_BUILTIN, UNIT, ANTI, HEAT, PORTAL, SUMMON_POOL, SKILL_TYPES, ULT_TYPES, EFFECTS, PATTERNS, DECOS, AI_TYPES, EVENT_INFO, builtinEvents, RAGE_HP, STEP,
 };
 if (window.NBB_HEADLESS) SAVE = defaultSave();
 else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

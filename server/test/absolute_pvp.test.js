@@ -59,7 +59,7 @@ test('ranked match with God of Absolute: same battle on both screens, Lv 50, all
   assert.equal(spec.ball, ABS); assert.equal(spec.level, 50); assert.equal(spec.cos && spec.cos.title, 'title_absolute');
   core.setCatalog(sa.catalog);
   const Bt = new core.Battle(core.buildBattleConfig(sa.ticket, { headless: true })), me = Bt.fighters.find(f => f.baseDef && f.baseDef.id === ABS);
-  assert.equal(me.skills.filter(s => s.locked).length, 0, 'all five skills unlocked at Lv 50'); assert.equal(me.formCap, 0, 'forms come at Lv 70 / 100');
+  assert.equal(me.skills.filter(s => s.locked && !s.v26).length, 0, 'all five skills unlocked at Lv 50'); assert.equal(me.formCap, 0, 'forms come at Lv 70 / 100');
   A.slot = sa.slot; B.slot = sb.slot; A.live = B.live = true;
   const P = [A, B].sort((x, y) => x.slot - y.slot), sim = expected(sa, 40000);
   await play(P, sa.delay, Math.ceil(sim.step / K) + sa.delay + 1);

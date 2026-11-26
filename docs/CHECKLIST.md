@@ -1,4 +1,17 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0)
+
+## 2.6.0 — Ultimate Unique Skill, Mastery & Evolution System ([SKILLS-2.6.0.md](SKILLS-2.6.0.md))
+- ✅ Skill slots by rarity (ultimate included); Common / Uncommon keep their four abilities (owner choice)
+- ✅ Unique Skill Registry: 640 abilities & ultimates with ids, categories, fingerprints; all 12 categories used
+- ✅ 187 new abilities (offence, defence, counters, mobility, summons, arena, traps, environment, transformations, passives, autonomous)
+- ✅ Signature mechanic for all 224 classic abilities and 65 shared-type ultimates; duplicate audit: 0 duplicates, 0 similar pairs
+- ✅ Gradual unlocks by level (+ wins for the rarest), unlock celebration, previews of locked skills
+- ✅ Mastery (5 ranks, verified battles only, capped, titles; looks only), evolutions (1–3 stages, server-checked, preview first)
+- ✅ 44 designed combinations (follow-ups, counters, arena objects, team reactions)
+- ✅ Skill Training mode (no rewards), skill details UI, battle skill bar for up to 9 abilities
+- ✅ Balance: cast pacing, kit-size factor, stun-loop and invulnerability limits, Underdog Spirit
+- ✅ Admin Skill Management (owner + 2FA, audit log): edit, create (with duplicate check), assign, unlocks, mastery & evolution settings
+- ✅ Migration 008 adds tables only (backup first); 145 tests pass; every ball checked in the browser
 
 ## 2.5.1 — God of Absolute really leaves the arena ([GOD-OF-ABSOLUTE.md](GOD-OF-ABSOLUTE.md))
 - ✅ Breaks through the wall (golden cracks) and flies in the open space outside the walls; the camera pulls back so everyone sees it

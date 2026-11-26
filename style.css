@@ -387,3 +387,53 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer
 .admin-table tr.me td { background: rgba(255,213,79,.12); }
 .tier-line { font-weight: 800; margin-top: 2px; }
 .monthly-coins { border-color: rgba(255,213,79,.6); }
+
+/* ---------- 2.6.0 skills ---------- */
+.sk26 { margin-top: 10px; }
+.sk26-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sk26-head h3 { margin: 0; }
+.sk26-pips { display: inline-flex; gap: 3px; }
+.sk26-pips i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--glow); display: inline-block; }
+.sk26-pips i.on { background: var(--glow); box-shadow: 0 0 6px var(--glow); }
+.sk26-card { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin: 6px 0; border-radius: 12px; border: 1px solid rgba(124,77,255,.35); background: rgba(10,14,40,.6); }
+.sk26-card.ult { border-color: rgba(255,213,79,.6); box-shadow: inset 0 0 18px rgba(255,213,79,.08); }
+.sk26-card.pas { border-color: rgba(179,136,255,.5); }
+.sk26-card.locked { opacity: .72; }
+.sk26-card.locked .sk26-ico { filter: grayscale(.7); }
+.sk26-card.fresh { animation: sk26glow 1.6s ease-in-out 3; border-color: #69f0ae; }
+@keyframes sk26glow { 0%, 100% { box-shadow: 0 0 0 rgba(105,240,174,0); } 50% { box-shadow: 0 0 22px rgba(105,240,174,.85); } }
+.sk26-ico { flex: 0 0 38px; height: 38px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; }
+.sk26-main { flex: 1; min-width: 0; }
+.sk26-name { font-weight: 800; font-size: 14px; }
+.sk26-badge { font-size: 10px; font-weight: 800; border: 1px solid; border-radius: 6px; padding: 0 5px; margin-left: 6px; vertical-align: middle; }
+.sk26-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+.sk26-chip { font-size: 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 0 6px; }
+.sk26-desc { font-size: 12px; color: #cfd8dc; }
+.sk26-sig { font-size: 12px; color: #ffe082; margin-top: 2px; }
+.sk26-lock, .sk26-mast, .sk26-evo { font-size: 12px; margin-top: 4px; }
+.sk26-lock .bar, .sk26-mast .bar { height: 6px; margin: 3px 0; }
+.sk26-mast { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sk26-mast .bar { flex: 1 1 80px; }
+.sk26-stage { font-size: 11px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 0 6px; margin: 0 2px; opacity: .55; }
+.sk26-stage.on { opacity: 1; font-weight: 800; }
+.sk26-evoreq { margin-top: 4px; font-size: 12px; }
+.sk26-btns { display: flex; flex-direction: column; gap: 4px; }
+.sk26-combos { margin-top: 8px; font-size: 12px; }
+.sk26-combo { margin: 3px 0; }
+.sk26-newbar { text-align: center; font-weight: 900; color: #69f0ae; letter-spacing: 1px; padding: 6px; border-radius: 10px; background: rgba(105,240,174,.12); animation: sk26glow 1.6s ease-in-out 3; }
+.sk26-prev { width: 100%; max-width: 960px; border-radius: 12px; border: 1px solid rgba(124,77,255,.5); background: #050816; display: block; margin: 6px auto; }
+.sk26-unlock { text-align: center; }
+.sk26-unlock-title { font-size: 26px; font-weight: 900; color: #69f0ae; letter-spacing: 2px; text-shadow: 0 0 18px rgba(105,240,174,.9); animation: sk26pop .6s cubic-bezier(.2,1.6,.4,1); }
+@keyframes sk26pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.sk26-unlock-card { display: flex; gap: 10px; align-items: center; text-align: left; border: 2px solid; border-radius: 12px; padding: 8px; margin: 8px 0; animation: sk26pop .5s both; background: rgba(10,14,40,.7); }
+.sk26-mres { margin-top: 10px; padding: 8px; border-radius: 10px; border: 1px solid rgba(255,215,64,.4); text-align: left; }
+#skillBar.many { gap: 5px; }
+#skillBar.many button { width: clamp(36px, 4.7vw, 56px); height: clamp(36px, 4.7vw, 56px); font-size: clamp(7px, .85vw, 10px); }
+#skillBar button.pas26 { border-style: dashed; opacity: .75; cursor: default; }
+.train26 { position: absolute; right: 1%; top: 12%; width: min(360px, 44%); max-height: 76%; overflow: auto; z-index: 6; pointer-events: auto; background: rgba(6,10,30,.86); border: 1px solid rgba(124,77,255,.6); border-radius: 12px; padding: 8px; font-size: 12px; }
+.train26-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.train26-btns { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.train26-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.train26-tbl th, .train26-tbl td { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
+.train26-tbl tr.locked { opacity: .45; }
+@media (max-width: 700px) { .train26 { width: 52%; font-size: 10px; top: 14%; } .sk26-card { flex-wrap: wrap; } .sk26-btns { flex-direction: row; } }

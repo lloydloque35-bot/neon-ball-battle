@@ -145,10 +145,11 @@ test('both Premium God Balls: 5 skills x 3 versions, every form different, all f
   assert.equal(core.GAME_VERSION, VERSION); assert.deepEqual([...core.paidGodIds()], PAID);
   const sig = {};
   for (const id of PAID) {
-    const d = core.getBall(id); assert.equal(d.skills.length, 5); assert.equal(d.forms.length, 3); assert.ok(d.finalUlt && d.ult);
+    const d = core.getBall(id); assert.equal(d.skills.filter(s => !s.v26).length, 5); assert.equal(d.forms.length, 3); assert.ok(d.finalUlt && d.ult);
     const T = { v: 2, mode: '1v1', difficulty: 'hard', seed: 1, manual: false, pool: [], opts: {}, teams: [[core.playerSpecFrom(d, prog(1))], [core.enemySpec(core.getBall('fire'), 1, 'easy')]] };
     assert.equal(new core.Battle(core.buildBattleConfig(T, { headless: true })).fighters[0].formCap, 2, 'bought: every form from Lv 1');
     for (let form = 0; form < 3; form++) d.skills.forEach((s, i) => {
+      if (s.v26) return;      // (the 2.6.0 abilities have their own tests)
       const { B, me, foe } = lab(id, { form, enemy: s.type === 'gn_copy' ? 'thunder' : 'fire' });
       if (s.type === 'gn_copy') foe.skills = core.getBall('thunder').skills.map(x => ({ ...x, cdLeft: 5 }));
       run(B, 0.05); const before = snap(B, me, foe), hp0 = foe.hp; me.skills[i].cdLeft = 0;
@@ -174,7 +175,7 @@ test('INFINITE VOID: a separate dimension — enter, fight, hazards, copies, col
   const B = new core.Battle(core.buildBattleConfig(T, { headless: true }));
   const gp = B.player, [a, c] = B.fighters.filter(f => f.team !== 0);
   gp.ai = null; a.ai = null; c.ai = null; a.skills = []; c.skills = []; gp.st.invuln = a.st.invuln = c.st.invuln = 0;
-  gp.x = 400; gp.y = 360; a.x = 520; a.y = 360; c.x = 1000; c.y = 600;
+  gp.x = 400; gp.y = 360; a.x = 520; a.y = 360; c.x = 1120; c.y = 170; c.anchored = true;     // the bystander waits in a far corner
   run(B, 0.1); gp.ultMeter = 100; assert.ok(core.useUltimate(gp)); run(B, 0.3);      // awakening cinematic + ultimate
   let d = B.voidDim; assert.ok(d && d.phase === 'gate', 'the gateway opens');
   const cBefore = { x: c.x, hp: c.hp };

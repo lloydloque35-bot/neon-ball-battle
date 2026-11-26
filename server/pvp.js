@@ -113,8 +113,8 @@ function register(app, S) {
       if (!def || !acc) throw new Error('Choose a ball you own.');
       if (def.draft) throw new Error('Draft balls cannot be used online.');
       if (def.adminOnly && (ranked || !isOwner(u))) throw new Error(ranked ? 'Admin balls are not allowed in ranked matches. Use a private room.' : 'That ball is not available.');
-      const pr = S.progOf(u.id, def.id);
-      return { ball: def.id, level: pr.level, evo: pr.evo, up: pr.up, tree: pr.tree, cos: json(S.profileRow(u.id).loadout, {}), name: p.user.username, fusion: !!def.fusion };
+      const pr = S.progOf(u.id, def.id), x = S.skills26 ? S.skills26.specExtras(u.id, def, pr) : {};      // 2.6.0: skill unlocks (wins), evolutions, mastery looks
+      return { ball: def.id, level: pr.level, evo: pr.evo, up: pr.up, tree: pr.tree, cos: json(S.profileRow(u.id).loadout, {}), name: p.user.username, fusion: !!def.fusion, ...x };
     });
   }
 
@@ -359,7 +359,7 @@ function register(app, S) {
     const winner = r.ok && Number.isInteger(r.winner) && r.winner >= 0 && r.winner < nTeams ? r.winner : -1;
     const places = r.ok && Array.isArray(r.places) && r.places.length === nTeams ? r.places : new Array(nTeams).fill(1);
     let changes;
-    try { changes = db.tx(() => applyResult(M, winner, places)); }
+    try { changes = db.tx(() => applyResult(M, winner, places, r)); }
     catch (e) { S.log.error('[pvp apply]', e); changes = M.players.map(() => ({})); }
     const summary = { mode: M.mode, winner, places, step: r.step, time: r.time, slots: r.slots, reason, left: M.why };
     db.run("UPDATE pvp_matches SET status = 'done', winner_slot = ?, result = ?, changes = ?, inputs = ?, flags = ?, finished_at = ? WHERE id = ?",
@@ -382,7 +382,7 @@ function register(app, S) {
   }
 
   /** season points and rewards — ranked matches only, with daily anti-farming limits */
-  function applyResult(M, winner, places) {
+  function applyResult(M, winner, places, r = {}) {
     const n = M.n, ids = M.players.map(p => p.user.id), teams = M.teams, pts = ids.map(ptsOf), since = dayStart();
     const res = teams.map(t => winner === -1 ? 'draw' : winner === t ? 'win' : 'loss');
     const delta = new Array(n).fill(0); let rewarded = new Array(n).fill(false), notes = new Array(n).fill(''), counted = M.ranked;
@@ -415,6 +415,7 @@ function register(app, S) {
         if (counted) season = S.seasonApply(uid, delta[s], result);
         if (exp) { ({ ups, level } = S.giveBallExp(uid, ball, exp)); S.giveAccountExp(uid, exp); }
       }
+      if (M.ranked && counted && rewarded[s] && S.skills26 && r.skUse) S.withCatalog({ id: uid, role: p.user.role }, () => S.skills26.grant(uid, ball, r.skUse[s], result === 'win'));      // 2.6.0: skill mastery (ranked, verified, within the daily limits)
       return { result, place, ball, coins, exp, ups, level, rpBefore: pts[s], rpAfter: season ? season.after : pts[s], rpDelta: season ? season.after - season.before : 0, tier: season ? season.tier : null, note: notes[s] };
     });
   }

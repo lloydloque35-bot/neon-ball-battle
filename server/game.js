@@ -30,7 +30,8 @@ function register(app, S) {
     const disabled = Object.fromEntries(db.all('SELECT ball_id FROM ball_flags WHERE disabled = 1').map(r => [r.ball_id, true]));
     const fusions = userId ? db.all('SELECT def FROM fusions WHERE user_id = ? ORDER BY created_at', userId).map(r => json(r.def, {})) : [];
     const tuning = Object.fromEntries(db.all('SELECT ball_id, settings FROM admin_ball_tuning').map(r => [r.ball_id, json(r.settings, {})]));   // Supreme ball settings (owner)
-    return { overrides, customBalls, disabled, fusions, tuning };
+    const skills26 = S.skills26 ? S.skills26.catalogPart() : undefined;     // 2.6.0 owner skill management (stored with every battle)
+    return { overrides, customBalls, disabled, fusions, tuning, skills26 };
   }
   /** runs fn with the shared core pointed at this user's catalog (synchronous only) */
   function withCatalog(user, fn) { core.setCatalog(catalogFor(user ? user.id : null, user ? isOwner(user) : false)); return fn(); }
@@ -146,6 +147,7 @@ function register(app, S) {
       daily: dailyState(p), premium: S.premiumOf(uid), catalog: catalogFor(uid, isOwner(user)),
       season: S.seasonBrief ? S.seasonBrief(uid) : null, monthlyCoins: S.monthlyCoins ? S.monthlyCoins(uid) : null,
       tournament: (t => t ? { id: t.id, ...json(t.state, {}) } : null)(db.get("SELECT * FROM tournaments WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1", uid)),
+      skills26: S.skills26 ? S.skills26.savePart(uid) : null,      // 2.6.0: skill mastery XP and evolutions
     };
   }
   S.savePayload = savePayload;
@@ -187,7 +189,7 @@ function register(app, S) {
       const [step, type] = a;
       if (!Number.isInteger(step) || step < 1 || step > MAX_STEPS || step < last) return 'Malformed input step';
       last = step;
-      if (type === 'k') { if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 6 || a.length !== 3) return 'Malformed ability input'; }   // up to 6 abilities + a copied one
+      if (type === 'k') { if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > core.SKILL_IDX_MAX || a.length !== 3) return 'Malformed ability input'; }   // 2.6.0: up to 9 abilities + a copied one
       else if (type === 'u') { if (a.length !== 3 || a[2] !== 0) return 'Malformed ultimate input'; }
       else if (type === 'm') { if (a.length !== 3 || (a[2] !== 0 && a[2] !== 1)) return 'Malformed control input'; }
       else if (type === 'x') { if (a.length !== 6 || !Object.values(core.ADMIN_CMDS).includes(a[2]) || !a.slice(3).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return 'Malformed admin command'; }   // ADMIN DELETE console
@@ -205,6 +207,7 @@ function register(app, S) {
   function newTicket(user, setup, extra = {}, trial = false) {
     const def = core.getBall(setup.ball);
     const pr = trial ? { level: 10, evo: 1, up: {}, tree: { slot3: 1, slot4: 1 } } : progOf(user.id, def.id);
+    if (!trial && S.skills26) Object.assign(pr, S.skills26.specExtras(user.id, def, pr));      // 2.6.0: unlock conditions (wins), evolutions, mastery looks
     pr.cos = json(profileRow(user.id).loadout, {});
     const ticket = core.createTicket(setup, pr, S_.secureRandom, extra);
     const id = S_.randomId('b_'); ticket.id = id;
@@ -325,13 +328,14 @@ function register(app, S) {
     const br = ensureRow(uid, ballId);
     db.run(`UPDATE user_balls SET ${r.win ? 'wins = wins + 1' : 'losses = losses + 1'} WHERE user_id = ? AND ball_id = ?`, uid, br.ball_id);
     const { ups, level } = giveBallExp(uid, ballId, rw.exp);
+    const mastery = S.skills26 ? S.skills26.grant(uid, ballId, r.skUse && r.skUse[0], r.win) : null;      // 2.6.0: skill mastery from this verified battle
     giveAccountExp(uid, rw.exp);
     if (r.win) for (const ev of activeEvents()) if (!ev.premiumOnly || premium) db.run('INSERT INTO event_progress (user_id, event_id, wins) VALUES (?, ?, 1) ON CONFLICT(user_id, event_id) DO UPDATE SET wins = wins + 1', uid, ev.id);
     const fresh = evaluateAchievements(uid);
     const result = { win: r.win, mode: T.mode, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, step: r.step };
     db.run("UPDATE battles SET status = 'verified', finished_at = ?, result = ?, rewards = ?, flags = ? WHERE id = ?", now(), JSON.stringify(result), JSON.stringify(rw), mismatch ? 'mismatch' : null, row.id);
     const extraMsg = T.mode === 'survival' ? `Reached wave ${r.wave}` : T.mode === 'endless' ? `${r.kills} KOs` : '';
-    return { verified: true, mismatch, verifyMs: ms, result, rewards: rw, coins: rw.coins, exp: rw.exp, ups, level, ballId, tourMsg, extraMsg, tour, newAchievements: fresh, save: savePayload(u) };
+    return { verified: true, mismatch, verifyMs: ms, result, rewards: rw, coins: rw.coins, exp: rw.exp, ups, level, ballId, tourMsg, extraMsg, tour, newAchievements: fresh, mastery, save: savePayload(u) };
   }
 
   /* ================= tournaments (AI) ================= */

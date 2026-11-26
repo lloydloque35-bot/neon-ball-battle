@@ -21,7 +21,7 @@ function arena(ball, enemy = 'thunder', seed = 7) {
   return { B, me, foe };
 }
 const run = (B, sec) => { for (let i = 0; i < sec * 240 && !B.result; i++) B.step(core.STEP); };
-const cast = (f, type) => { const sk = f.skills.find(s => s.type === type); assert.ok(sk, 'has ' + type); sk.cdLeft = 0; sk.locked = false; f.st.stun = 0; f.casting = 0; return core.useSkill(f, sk); };
+const cast = (f, type) => { const sk = f.skills.find(s => s.type === type); assert.ok(sk, 'has ' + type); sk.cdLeft = 0; sk.locked = false; f.st.stun = 0; f.casting = 0; f.gcd = 0; return core.useSkill(f, sk); };      // (2.6.0: past the global cast pacing)
 const units = (B, f, kind) => B.fighters.filter(x => x.alive && x.owner === f && x.unit && (!kind || x.unit === kind));
 const shoot = (B, from, at) => core.spawnProj(from, Math.atan2(at.y - from.y, at.x - from.x), { speed: 950, r: 10, dmg: 8, col: '#fff', power: 50, target: at, homing: 9 });
 let srv, player, premium;
@@ -83,9 +83,9 @@ test('5th and 6th abilities pressed manually are accepted and replay exactly on 
 
 test('the three new balls exist with the right unlock type, rarity and abilities', () => {
   const anti = core.getBall('anti'), mecha = core.getBall('mecha'), cyber = core.getBall('cyber');
-  assert.ok(anti.free && !anti.premium && anti.rarity === 'Secret' && anti.skills.length === 6 && anti.ult.type === 'absolutezero' && anti.passive === 'antiadapt');
-  assert.ok(mecha.premium && !mecha.free && mecha.techNo === 1 && mecha.skills.length === 5 && mecha.ult.type === 'titan' && mecha.passive === 'repair');
-  assert.ok(cyber.premium && !cyber.free && cyber.techNo === 2 && cyber.skills.length === 6 && cyber.ult.type === 'skynet' && cyber.heat);
+  assert.ok(anti.free && !anti.premium && anti.rarity === 'Secret' && anti.skills.filter(s => !s.v26).length === 6 && anti.ult.type === 'absolutezero' && anti.passive === 'antiadapt');
+  assert.ok(mecha.premium && !mecha.free && mecha.techNo === 1 && mecha.skills.filter(s => !s.v26).length === 5 && mecha.ult.type === 'titan' && mecha.passive === 'repair');
+  assert.ok(cyber.premium && !cyber.free && cyber.techNo === 2 && cyber.skills.filter(s => !s.v26).length === 6 && cyber.ult.type === 'skynet' && cyber.heat);
   for (const b of [anti, mecha, cyber]) { for (const s of b.skills) assert.ok(core.SKILL_TYPES[s.type], 'skill type ' + s.type); assert.ok(core.ULT_TYPES[b.ult.type]); }
   // mechanical units are never playable, sold or AI opponents
   for (const inc of [false, true]) assert.ok(!core.opponentPool(inc).some(b => b.unit || b.summonOnly));
@@ -134,7 +134,7 @@ test('Anti Ball: Absolute Zero suppresses abilities briefly; Anti-Adaptation cap
   run(B, 0.5); near(foe, me, 160); foe.st.invuln = 0;
   me.ultMeter = 100; me.godUsed = true; assert.equal(core.useUltimate(me), true); run(B, 1.2);
   assert.ok(foe.st.silence > 0, 'enemy abilities suppressed');
-  const sk = foe.skills[0]; sk.cdLeft = 0; sk.locked = false; foe.casting = 0; assert.equal(core.useSkill(foe, sk), false, 'silenced balls cannot use abilities');
+  const sk = foe.skills[0]; sk.cdLeft = 0; sk.locked = false; foe.casting = 0; foe.gcd = 0; assert.equal(core.useSkill(foe, sk), false, 'silenced balls cannot use abilities');
   run(B, 4); assert.equal(foe.st.silence, 0); assert.ok(foe.silenceImm > 0 || true);
   // passive: repeated projectile hits build resistance up to 30% (never immunity)
   const { B: B2, me: a, foe: f2 } = arena('anti', 'fire', 12); run(B2, 0.3);

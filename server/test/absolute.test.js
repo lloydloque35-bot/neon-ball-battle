@@ -197,12 +197,12 @@ test('2.4.1 owner rules: the owner\'s God of Absolute shows Lv 100; every battle
 test('2.5.0 owner-only AI settings: validated, stored on the server and sent to every battle', async () => {
   const p = await player('abs_will_player');
   assert.ok([401, 403].includes((await p.post('/api/admin/edition/tuning', { will: { intelligence: 3 } })).status), 'players cannot change its will');
-  for (const bad of [{ will: { intelligence: 7 } }, { will: { aggression: 300 } }, { will: { maxRealm: 30 } }, { will: { realmCd: 2 } }, { off: [0, 1, 2, 3, 4] }, { cdMul: 9 }])
+  for (const bad of [{ will: { intelligence: 7 } }, { will: { aggression: 300 } }, { will: { maxRealm: 30 } }, { will: { realmCd: 2 } }, { off: [0, 1, 2, 3, 4, 5, 6, 7, 8] }, { cdMul: 9 }])
     assert.equal((await owner.post('/api/admin/edition/tuning', bad)).status, 400, JSON.stringify(bad));
   const r = await owner.post('/api/admin/edition/tuning', { will: { intelligence: 3, aggression: 80, explore: false, maxRealm: 5 }, off: [3], cdMul: 1.2 });
   assert.equal(r.status, 200); assert.deepEqual([r.data.will.intelligence, r.data.will.aggression, r.data.will.explore, r.data.will.maxRealm, r.data.cdMul], [3, 80, false, 5, 1.2]);
   const cat = (await p.get('/api/catalog')).data; assert.equal(cat.tuning[ABS].will.intelligence, 3); assert.deepEqual([...cat.tuning[ABS].off], [3]);
-  const panel = (await owner.get('/api/admin/edition')).data; assert.equal(panel.will.aggression, 80); assert.equal(panel.skills.length, 5);
+  const panel = (await owner.get('/api/admin/edition')).data; assert.equal(panel.will.aggression, 80); assert.equal(panel.skills.length, 9, 'its five abilities + the four 2.6.0 abilities');
   assert.ok(srv.db.get("SELECT 1 FROM audit_logs WHERE action = 'admin.edition_tuning'"));
   await owner.post('/api/admin/edition/tuning', { will: { intelligence: 2, aggression: 60, explore: true, maxRealm: 6 }, off: [], cdMul: 1 });
 });
@@ -271,7 +271,8 @@ test('God of Absolute: identity, price, limited, never an AI opponent, not in fu
   assert.equal(D.name, 'God of Absolute Ball'); assert.equal(D.godClass, 'LIMITED EXCLUSIVE SUPREME GOD');
   assert.ok(D.paid && D.edition && !D.free && !D.premium && D.noOpponent && !core.fusionEligible(D));
   assert.deepEqual([D.pricePhp, D.startLevel, D.maxLevel, ...D.formLevels], [499, 50, 100, 70, 100]);
-  assert.deepEqual([...D.skills.map(s => s.name)], ['ABSOLUTE JUDGMENT', 'REALITY BREAKER', 'CELESTIAL DOMINION', 'INFINITY ERASURE', 'DIVINE REPLICATION']);
+  assert.deepEqual([...D.skills.filter(s => !s.v26).map(s => s.name)], ['ABSOLUTE JUDGMENT', 'REALITY BREAKER', 'CELESTIAL DOMINION', 'INFINITY ERASURE', 'DIVINE REPLICATION']);
+  assert.equal(D.skills.length + 1, 10, '2.6.0: God Tier = 10 skill slots (ultimate included)');
   assert.deepEqual([D.ult.name, D.finalUlt.name, D.passiveInfo.name], ['ABSOLUTE ZERO – END OF ALL DIMENSIONS', 'OMNIVERSAL ABSOLUTE DOMINION', 'ABSOLUTE AUTHORITY']);
   assert.deepEqual([...D.forms.map(f => f.name)], ['ABSOLUTE DIVINITY', 'CELESTIAL SOVEREIGN', 'THE UNRIVALED ONE']);
   assert.ok(!core.allBalls().filter(b => b.enabled && !b.noOpponent).some(b => b.id === ABS));
@@ -281,7 +282,8 @@ test('God of Absolute: identity, price, limited, never an AI opponent, not in fu
 test('a fresh Lv 50 owner has all five skills (no skill-tree slots needed)', () => {
   const T = core.createTicket({ mode: '1v1', ball: ABS, enemy: 'fire', difficulty: 'normal' }, { level: 50, evo: 0, up: {}, tree: {} }, () => 0.5);
   const B = new core.Battle(core.buildBattleConfig(T, { headless: true }));
-  assert.equal(B.player.skills.length, 5); assert.equal(B.player.skills.filter(s => s.locked).length, 0);
+  const own = B.player.skills.filter(s => !s.v26); assert.equal(own.length, 5); assert.equal(own.filter(s => s.locked).length, 0);
+  assert.ok(B.player.skills.filter(s => s.v26).every(s => s.locked), '2.6.0 abilities unlock later with its own level (Lv 55+)');
 });
 
 test('forms unlock with its own level: Lv 50 base only, Lv 70 Celestial Sovereign, Lv 100 The Unrivaled One', () => {
@@ -293,7 +295,7 @@ test('forms unlock with its own level: Lv 50 base only, Lv 70 Celestial Sovereig
 
 test('all 5 skills × 3 forms do something different and leave nothing behind', () => {
   const sig = {};
-  for (let form = 0; form < 3; form++) for (const s of D.skills) {
+  for (let form = 0; form < 3; form++) for (const s of D.skills.filter(s => !s.v26)) {
     const { B, me, foe } = lab({ level: 100, form }); const hp0 = foe.hp;
     const sk = me.skills.find(x => x.type === s.type); sk.locked = false; sk.cdLeft = 0; me.target = foe; assert.notEqual(core.useSkill(me, sk), false, s.type);
     run(B, 9);
@@ -308,7 +310,7 @@ test('all 5 skills × 3 forms do something different and leave nothing behind', 
 test('Divine Replication: copies never exceed the cap (2 / 2 / 3, +1 from Lv 80, never more than 3); re-casting renews instead of adding', () => {
   for (const [lv, form, cap] of [[50, 0, 2], [79, 1, 2], [80, 0, 3], [80, 1, 3], [100, 2, 3]]) {
     const { B, me, foe } = lab({ level: lv, form }); const i = me.skills.findIndex(s => s.type === 'ab_replica');
-    for (let k = 0; k < 4; k++) { me.skills[i].cdLeft = 0; me.skills[i].locked = false; me.target = foe; core.useSkill(me, me.skills[i]); B.step(STEP); }
+    for (let k = 0; k < 4; k++) { me.skills[i].cdLeft = 0; me.skills[i].locked = false; me.gcd = 0; me.target = foe; core.useSkill(me, me.skills[i]); B.step(STEP); }
     assert.equal(B.fighters.filter(f => f.absCopy && f.alive).length, cap, `Lv ${lv} form ${form}`);
     assert.ok(B.fighters.filter(f => f.absCopy).every(c => c.isClone && c.owner === me));
   }

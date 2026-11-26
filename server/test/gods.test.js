@@ -65,7 +65,7 @@ test('four free God Balls: 5 skills (+ Solar Eclipse\'s state control), 2 ultima
     const d = core.getBall(id);
     assert.ok(d.free && d.godBall && !d.adminOnly && !d.premium, id + ' is free');
     assert.equal(d.category, 'God'); assert.ok(d.godClass);
-    const regular = d.skills.filter(s => !s.always);
+    const regular = d.skills.filter(s => !s.always && !s.v26);
     assert.equal(regular.length, 5, id + ' has 5 skills');
     for (const s of [...d.skills, d.ult, d.finalUlt]) { assert.ok(!seen.has(s.type), s.type + ' unique'); seen.add(s.type); }
     for (const s of regular) assert.equal(core.SKILL_TYPES[s.type].forms.length, 3, s.type + ' has 3 versions');
@@ -80,7 +80,7 @@ test('four free God Balls: 5 skills (+ Solar Eclipse\'s state control), 2 ultima
 test('all 20 skills work in all 3 forms, and every form behaves differently', () => {
   const sig = {};
   for (const id of GODS) for (let form = 0; form < 3; form++) core.getBall(id).skills.forEach((s, i) => {
-    if (s.always) return;
+    if (s.always || s.v26) return;      // (the 2.6.0 abilities have their own tests)
     const { B, me, foe } = lab(id, { form });
     assert.equal(me.form, form);
     run(B, 0.05);
@@ -121,7 +121,7 @@ test('passives: Unstable Reality, Battle Instinct, Combat Learning (capped), Cel
   { const { B, me } = lab('godofchaos'); const modes = new Set(); for (let i = 0; i < 12; i++) { run(B, 1.5); modes.add(me.sx.chaosMode); } assert.ok(modes.size >= 2, 'Unstable Reality changes the pattern'); }
   { const { B, me, foe } = lab('godofwar'); const a0 = me.effAtk(); for (let i = 0; i < 6; i++) { core.dealDamage(me, foe, 1, { kind: 'skill', tag: 'projectile' }); run(B, 0.35); }
     assert.ok(me.sx.inst >= 4, 'stacks build'); assert.ok(me.effAtk() > a0 * 1.1, 'stacks raise attack');
-    me.st.timestop = foe.st.timestop = 9; me.x = 200; foe.x = 1000; run(B, 6); assert.equal(me.sx.inst, 0, 'stacks fade without hits'); }
+    me.anchored = foe.anchored = true; me.ai = foe.ai = null; me.x = 200; foe.x = 1000; run(B, 6); assert.equal(me.sx.inst, 0, 'stacks fade without hits'); }
   { const { B, me, foe } = lab('aitech', { form: 2 }); const hits = []; for (let i = 0; i < 20; i++) { const h0 = me.hp; core.dealDamage(foe, me, 20, { kind: 'skill', tag: 'projectile', noCrit: true }); hits.push(h0 - me.hp); me.hp = me.maxHp; }
     assert.ok(hits[19] < hits[0], 'learns'); assert.ok(hits[19] >= hits[0] * 0.74, 'but never more than the cap (25%)');
     const st = me.skills.find(s => s.type === 'ai_shield'); st.cdLeft = 0; core.useSkill(me, st);
