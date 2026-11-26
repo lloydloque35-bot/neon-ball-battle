@@ -744,7 +744,7 @@ const isPremium = () => !!(window.Online && window.Online.isPremium && window.On
 function canUseBall(b) {
   if (!b || !b.enabled && !isAdmin()) return false;
   if (b.adminOnly) return isAdmin();
-  if (b.paid) return isAdmin() || !!prog(b.id).owned;  // Premium God Balls: bought once (PHP), owned forever
+  if (b.paid || b.pass) return isAdmin() || !!prog(b.id).owned;  // Premium God Balls and Battle Pass balls: bought once (PHP), owned forever
   if (b.free) return true;                            // free for every player (Anti Ball)
   if (isAdmin() || prog(b.id).owned) return true;
   return isPremium() && !b.fusion;                    // premium: every non-admin ball, incl. premium & limited
@@ -4122,7 +4122,7 @@ const UI = {
     if (!list.length) { box.remove(); return; }
     const row = h('div', { class: 'feat-row' });
     for (const b of list) {
-      const ok = canUseBall(b), status = b.free ? 'FREE — UNLOCKED' : ok ? 'PREMIUM — UNLOCKED' : 'PREMIUM — LOCKED';
+      const ok = canUseBall(b), status = b.free ? 'FREE PASS — UNLOCKED' : ok ? 'PREMIUM — UNLOCKED' : 'PREMIUM — LOCKED';
       const cv = ballCanvas(b, 60); this.addLive(cv, b, { size: 60 });
       row.append(h('button', { class: 'feat-card' + (Game.setup.ball === b.id ? ' selected' : '') + (ok ? '' : ' locked'), title: b.desc || '', onclick: () => { if (ok) { Game.setup.ball = b.id; Sound.play('click'); this.render_select(); } else this.openDetail(b.id); } },
         cv, h('div', { class: 'feat-txt' }, h('small', {}, b.techNo ? 'TECH BALL ' + b.techNo : 'SECRET • NEW'), h('b', {}, (b.techNo ? b.name.replace(/ Ball$/, '') : b.name).toUpperCase()),
@@ -4164,7 +4164,7 @@ const UI = {
     c.append(ballCanvas(b, 84, { evo: owned ? p.evo : 0 }));
     if (owned && !b.adminOnly) c.append(h('span', { class: 'lv' }, 'Lv ' + p.level));
     if (p.evo) c.append(h('span', { class: 'evo' }, '★'.repeat(p.evo)));
-    if (!owned && o.showLock) c.append(h('div', { class: 'lock' }, b.adminOnly ? '♛ ADMIN' : b.paid ? '💎 PHP ' + (b.pricePhp || 99) : b.premium ? '★ PREMIUM' : b.limited ? '⏳ EVENT' : '🔒 ' + fmtNum(RARITY_INFO[b.rarity]?.price || 1000)));
+    if (!owned && o.showLock) c.append(h('div', { class: 'lock' }, b.adminOnly ? '♛ ADMIN' : b.pass ? '🎫 BATTLE PASS' : b.paid ? '💎 PHP ' + (b.pricePhp || 99) : b.premium ? '★ PREMIUM' : b.limited ? '⏳ EVENT' : '🔒 ' + fmtNum(RARITY_INFO[b.rarity]?.price || 1000)));
     if (owned && !p.owned && !b.adminOnly && !b.free && isPremium()) c.append(h('span', { class: 'evo', title: 'Unlocked by Ultimate Premium' }, '★P'));
     if (b.free) c.append(h('span', { class: 'tag-free' }, 'FREE'));
     if (b.isNew) c.append(h('span', { class: 'tag-new' }, 'NEW'));
@@ -4197,7 +4197,7 @@ const UI = {
     L.append(cv);
     L.insertAdjacentHTML('beforeend', `<h2>${esc(evoName(b, owned ? p.evo : 0))}</h2><div>${rarityBadge(b.rarity)} <span class="muted">• ${esc(b.category)}${b.limited ? ' • LIMITED' : ''}${b.custom ? ' • CUSTOM' : ''}</span></div><p class="muted" style="font-size:13px">${esc(b.desc || 'A powerful battle sphere.')}</p>`);
     if (b.godMode) L.insertAdjacentHTML('beforeend', `<p style="font-size:13px;color:#ffd54f">✦ God Mode eligible — transforms into <b>${esc(b.godName || 'GOD ' + b.name.toUpperCase())}</b> on its first ultimate.</p>`);
-    if (b.free || b.techNo) L.insertAdjacentHTML('beforeend', `<p style="font-size:13px;font-weight:800;color:${b.free ? '#69f0ae' : owned ? '#ffd54f' : '#ff8a80'}">${b.free ? '✔ FREE — UNLOCKED for every player' : owned ? '★ PREMIUM — UNLOCKED' : '🔒 PREMIUM — LOCKED (needs an active Ultimate Premium membership)'}</p>`);
+    if (b.free || b.techNo) L.insertAdjacentHTML('beforeend', `<p style="font-size:13px;font-weight:800;color:${b.free ? '#69f0ae' : owned ? '#ffd54f' : '#ff8a80'}">${b.free ? '✔ FREE PASS — UNLOCKED for every player' : owned ? '★ PREMIUM — UNLOCKED' : '🔒 PREMIUM — LOCKED (needs an active Ultimate Premium membership)'}</p>`);
     const btns = h('div', { class: 'row', style: { justifyContent: 'center' } });
     if (owned && b.isNew) btns.append(h('button', { class: 'btn', onclick: () => { this.closeModal(); Game.tryBall(id); } }, '▶ Ability showcase'));
     if (!owned) {
@@ -4292,7 +4292,7 @@ const ORBS = {
 };
 function localSummon(kind) {
   const O = ORBS[kind]; if (SAVE.coins < O.price) throw new Error('Not enough coins');
-  const pool = allBalls().filter(b => b.enabled && !b.adminOnly && !b.limited && !b.premium && !b.paid && !b.fusion && !b.draft && O.w[b.rarity]);
+  const pool = allBalls().filter(b => b.enabled && !b.adminOnly && !b.limited && !b.premium && !b.paid && !b.pass && !b.fusion && !b.draft && O.w[b.rarity]);
   const total = pool.reduce((s, b) => s + O.w[b.rarity], 0); let r = Math.random() * total, got = pool[0];
   for (const b of pool) { r -= O.w[b.rarity]; if (r <= 0) { got = b; break; } }
   addCoins(-O.price); SAVE.stats.summons++;

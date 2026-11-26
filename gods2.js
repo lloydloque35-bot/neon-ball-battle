@@ -614,9 +614,9 @@ if (!window.NBB_HEADLESS) {
   .gshop-acc input[type=file]{display:none}.gshop-wait{border-color:rgba(105,240,174,.5);background:rgba(105,240,174,.08)}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   const mount = () => {
-    if (!document.getElementById('scr-godshop')) { const sec = h('section', { id: 'scr-godshop', class: 'screen' }, h('header', { class: 'scr-head' }, h('button', { class: 'back', 'data-back': '' }, '‹ Back'), h('h2', {}, '💎 Premium God Shop'), h('div', { class: 'pill' }, '🪙 ', h('b', { class: 'coinVal' }, '0'))), h('div', { class: 'scr-body' }, h('div', { id: 'godShopBody' })));
+    if (!document.getElementById('scr-godshop')) { const sec = h('section', { id: 'scr-godshop', class: 'screen' }, h('header', { class: 'scr-head' }, h('button', { class: 'back', 'data-back': '' }, '‹ Back'), h('h2', {}, '💎 Shop — Battle Pass, God Balls & Coins'), h('div', { class: 'pill' }, '🪙 ', h('b', { class: 'coinVal' }, '0'))), h('div', { class: 'scr-body' }, h('div', { id: 'godShopBody' })));
       const anchor = document.getElementById('scr-shop') || document.querySelector('.screen'); if (anchor) anchor.after(sec); }
-    const mb = document.querySelector('.menu-buttons'); if (mb && !mb.querySelector('[data-go="godshop"]')) { const b = h('button', { class: 'btn gold', 'data-go': 'godshop' }, '💎 Premium God Shop'); const prem = mb.querySelector('[data-go="membership"]'); prem ? prem.after(b) : mb.append(b); }
+    const mb = document.querySelector('.menu-buttons'); if (mb && !mb.querySelector('[data-go="godshop"]')) { const b = h('button', { class: 'btn gold', 'data-go': 'godshop' }, '💎 Shop • Battle Pass • Coins'); const prem = mb.querySelector('[data-go="membership"]'); prem ? prem.after(b) : mb.append(b); }
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
   PARENT.godshop = 'menu';
@@ -665,7 +665,7 @@ function holdTimer(until) {
 /* QR payment: the player pays the owner's QR, then sends the reference number. The OWNER approves it — the page unlocks nothing. */
 function manualPay(product, shop, extra = {}) {
   const P = shop.products.find(p => p.id === product) || (shop.premium && shop.premium.id === product ? shop.premium : null), accs = shop.manual.accounts; if (!P || !accs.length) return;
-  const isPrem = product === 'premium_year';
+  const isPrem = product === 'premium_year', isCoins = !!P.coins;
   let acc = null;
   const img = h('img', { class: 'gshop-qr', alt: 'Payment QR code' }), who = h('div', { class: 'gshop-qr-who' }), tabs = h('div', { class: 'gshop-tabs' });
   const save = h('a', { class: 'btn small', download: 'payment-qr', style: { display: 'none' } }, '⬇ Save QR to my phone');
@@ -688,14 +688,14 @@ function manualPay(product, shop, extra = {}) {
       if (r.soldOut) { UI.closeModal(); return UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '⚠ The last slots were taken'), h('p', {}, `Your reservation had ended and the edition sold out while you were paying. The owner has your reference number (${r.purchase.reference}) and will refund you.`), h('button', { class: 'btn', onclick: () => UI.closeModal() }, 'OK'))); }
       UI.closeModal(); Sound.play('click');
       UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '✔ Sent!'),
-        h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then ${isPrem ? 'turn on ULTIMATE PREMIUM for 1 year' : 'unlock ' + r.purchase.name}.`),
+        h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then ${isPrem ? 'turn on ULTIMATE PREMIUM for 1 year' : isCoins ? `add ${fmtNum(P.coins)} coins to your account` : 'unlock ' + r.purchase.name}.`),
         h('p', { class: 'muted' }, 'Payments are checked by hand, so this can take a while. You will see a message in the game when it is approved. You can also check 🧾 Transaction history.'),
         h('button', { class: 'btn gold', onclick: () => { UI.closeModal(); UI.current === 'membership' ? UI.render_membership() : UI.render_godshop(); } }, 'OK')));
       godShopNotify.waiting = true;
     } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); send.disabled = false; }
   };
   UI.modal(h('div', { class: 'gshop-pay' },
-    h('h2', {}, `${isPrem ? '★' : '💎'} ${P.name} — PHP ${P.price}`),
+    h('h2', {}, `${isPrem ? '★' : isCoins ? '🪙' : P.pass ? '🎫' : '💎'} ${P.name} — PHP ${P.price}`),
     isPrem ? h('p', { class: 'muted', style: { margin: '0 0 6px', fontSize: '13px' } }, 'Premium paid by QR lasts 365 days and does not renew by itself. Pay again any time to add another year.') : null,
     extra.holdUntil ? holdTimer(extra.holdUntil) : null,
     h('ol', { class: 'gshop-steps' },
@@ -706,7 +706,7 @@ function manualPay(product, shop, extra = {}) {
     h('div', { style: { textAlign: 'center' } }, save),
     h('small', { class: 'muted', style: { display: 'block', textAlign: 'center' } }, 'Paying on this same phone? Save the QR, then in your bank app choose Scan QR → upload from gallery.'),
     h('label', {}, 'Reference number', ref), h('label', {}, 'Your name or last 4 digits (optional — helps the owner find it)', note), send,
-    h('p', { class: 'muted', style: { fontSize: '12px', marginBottom: 0 } }, isPrem ? '🔒 Premium turns on only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.' : '🔒 The ball unlocks only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.')));
+    h('p', { class: 'muted', style: { fontSize: '12px', marginBottom: 0 } }, isPrem ? '🔒 Premium turns on only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.' : isCoins ? '🔒 The coins are added only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.' : '🔒 The ball unlocks only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.')));
   pick(accs[0]);
 }
 UI.render_godshop = async function () {
@@ -726,7 +726,7 @@ UI.render_godshop = async function () {
   if (shop && Online.active) { try {
     const mine = (await shopApi('GET', '/api/godshop/purchases')).purchases, recent = Date.now() - 7 * 86400e3;
     shop.waiting = new Set(mine.filter(x => x.status === 'awaiting').flatMap(x => x.product === 'god_bundle' ? ['godofguns', 'godportal', 'god_bundle'] : [x.product]));
-    if (shop.waiting.size) shop.waiting.add('god_bundle');
+    if (['godofguns', 'godportal'].some(x => shop.waiting.has(x))) shop.waiting.add('god_bundle');
     for (const p of mine.filter(x => x.provider === 'manual' && (x.status === 'awaiting' || (x.status === 'rejected' && x.createdAt > recent))))
       body.append(h('div', { class: 'gshop-note' + (p.status === 'awaiting' ? ' gshop-wait' : '') }, p.status === 'awaiting'
         ? `⏳ Waiting for the owner to check your payment: ${p.name} — PHP ${p.amount} — ref ${p.reference}. It unlocks as soon as it is approved.`
@@ -761,7 +761,7 @@ async function godShopReturn() {
   UI.modalLocked = true;
   for (let i = 0; i < 20; i++) {
     let r = null; try { r = await API.post(`/api/godshop/purchases/${encodeURIComponent(id)}/check`, {}); } catch { /* try again */ }
-    if (r && r.purchase.status === 'paid') { await Online.refresh(); UI.closeModal(); Sound.play('evolve'); UI.modal(h('div', { style: { textAlign: 'center' } }, h('h2', {}, '✔ Payment confirmed!'), h('p', {}, `${r.purchase.name} is now yours forever.`), h('button', { class: 'btn gold big', onclick: () => { UI.closeModal(); UI.show('godshop'); } }, 'Open the God Shop'))); return; }
+    if (r && r.purchase.status === 'paid') { await Online.refresh(); UI.closeModal(); Sound.play('evolve'); UI.modal(h('div', { style: { textAlign: 'center' } }, h('h2', {}, '✔ Payment confirmed!'), h('p', {}, r.purchase.coins ? `${fmtNum(r.purchase.coins)} coins were added to your account.` : `${r.purchase.name} is now yours forever.`), h('button', { class: 'btn gold big', onclick: () => { UI.closeModal(); UI.show('godshop'); } }, 'Open the Shop'))); return; }
     if (r && ['expired', 'failed', 'review'].includes(r.purchase.status)) break;
     await new Promise(res => setTimeout(res, 3000));
   }
@@ -776,7 +776,7 @@ async function godShopNotify() {
     const fresh = r.purchases.filter(p => p.provider === 'manual' && (p.status === 'paid' || p.status === 'rejected') && !seen.includes(p.id + ':' + p.status));
     if (fresh.length) {
       if (fresh.some(p => p.status === 'paid')) { await Online.refresh(); Sound.play('evolve'); if (UI.current === 'godshop') UI.render_godshop(); if (UI.current === 'membership') UI.render_membership(); }
-      for (const p of fresh) toast(p.status === 'paid' ? (p.product === 'godofabsolute' ? '👑 Payment approved — GOD OF ABSOLUTE is yours forever, at Lv 50!' : p.product === 'premium_year' ? '★ Payment approved — ULTIMATE PREMIUM is active! Enjoy every ball.' : `✔ Payment approved — ${esc(p.name)} is yours forever!`) : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
+      for (const p of fresh) toast(p.status === 'paid' ? (p.product === 'godofabsolute' ? '👑 Payment approved — GOD OF ABSOLUTE is yours forever, at Lv 50!' : p.product === 'premium_year' ? '★ Payment approved — ULTIMATE PREMIUM is active! Enjoy every ball.' : p.coins ? `🪙 Payment approved — ${fmtNum(p.coins)} coins added!` : p.product === 'battlepass' ? '🎫 Payment approved — the BATTLE PASS is yours: all 4 Supreme God Balls, forever!' : `✔ Payment approved — ${esc(p.name)} is yours forever!`) : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
       try { localStorage.setItem('nbb_gshop_seen', JSON.stringify([...seen, ...fresh.map(p => p.id + ':' + p.status)].slice(-200))); } catch { /* private mode */ }
     }
     if (Online.isOwner() && !godShopNotify.ownerTold) { const s = await API.get('/api/godshop'); if (s.awaitingCount) { godShopNotify.ownerTold = true; toast(`💳 ${s.awaitingCount} QR payment(s) waiting for your check — Admin Dashboard → 💳 God Shop`, 'gold'); } }
@@ -804,7 +804,7 @@ if (!window.NBB_HEADLESS) {
   };
   Game.tryGod = function (id, form = 0) {
     const b = getBall(id); if (!b || !b.godBall) return;
-    if (!b.paid || canUseBall(b)) return tg.call(this, id, form);
+    if (!(b.paid || b.pass) || canUseBall(b)) return tg.call(this, id, form);
     Object.assign(this.setup, { ball: id, enemy: 'random', dummy: true, infinite: true, trial: true, godTest: true, startForm: clamp(form | 0, 0, 2) });   // free try-before-you-buy (practice, no rewards)
     Promise.resolve(this.start('practice')).finally(() => { this.setup.godTest = false; this.setup.startForm = 0; this.setup.dummy = false; this.setup.trial = false; });
   };
@@ -844,7 +844,7 @@ function adminQrCard(s) {
   const M = s.manual, card = h('div', { class: 'card' });
   card.append(h('h3', {}, '📱 QR payments — Maya / MariBank'),
     h('p', {}, M.open ? h('b', { style: { color: '#69f0ae' } }, '✔ QR payments are ON — players can pay you by QR') : h('b', { style: { color: '#ffab40' } }, '⏸ QR payments are OFF — players cannot pay yet')),
-    h('p', { class: 'muted' }, 'For the Premium God Balls (PHP 99 each) and ULTIMATE PREMIUM (1 year). Players scan your QR, pay, and send the reference number. Nothing unlocks until YOU press Approve here. Your QR is kept on the server (not in the public game files) and only shown to signed-in players who press Buy.'));
+    h('p', { class: 'muted' }, 'For the Battle Pass (PHP 299), coin packs (PHP 99 / 999), the Premium God Balls (PHP 99 each) and ULTIMATE PREMIUM (1 year). Players scan your QR, pay, and send the reference number. Nothing unlocks until YOU press Approve here. Your QR is kept on the server (not in the public game files) and only shown to signed-in players who press Buy.'));
   // waiting list
   const wait = h('div', { class: 'card gshop-wait' }, h('h3', {}, `⏳ Waiting for your check (${M.awaiting.length})`));
   if (!M.awaiting.length) wait.append(h('p', { class: 'muted' }, 'Nothing to check right now.'));

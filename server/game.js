@@ -73,7 +73,7 @@ function register(app, S) {
     if (def.enabled === false && !owner && !ballRow(user.id, def.id)?.owned) return null;   // disabled: no NEW access, owners keep it
     if (def.adminOnly) return owner ? 'owner' : null;
     if (owner) return 'owner';
-    if (def.paid) return ballRow(user.id, def.id)?.owned ? 'owned' : (trial ? 'trial' : null);   // Premium God Balls: verified purchase only (not part of the subscription)
+    if (def.paid || def.pass) return ballRow(user.id, def.id)?.owned ? 'owned' : (trial ? 'trial' : null);   // Premium God Balls and Battle Pass balls: verified purchase only (not part of the subscription)
     if (ballRow(user.id, def.id)?.owned) return 'owned';
     if (def.free) return 'free';                         // free for every player (Anti Ball)
     if (!def.fusion && S.premiumOf(user.id).active) return 'premium';

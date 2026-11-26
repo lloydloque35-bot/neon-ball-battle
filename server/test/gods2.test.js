@@ -59,7 +59,7 @@ test('shop not configured: closed, nothing can be charged or granted (never simu
 
 test('before buying: not playable, not for coins, not from orbs; a free practice trial works', async () => {
   const s = (await buyer.get('/api/godshop')).data;
-  assert.equal(s.enabled, true); assert.deepEqual(s.products.map(p => [p.id, p.price]), [['godofguns', 99], ['godportal', 99], ['god_bundle', 198], ['godofabsolute', 499]]);   // 2.4.0 adds the limited edition
+  assert.equal(s.enabled, true); assert.deepEqual(s.products.map(p => [p.id, p.price]), [['godofguns', 99], ['godportal', 99], ['god_bundle', 198], ['godofabsolute', 499], ['battlepass', 299], ['coins_10k', 99], ['coins_1m', 999]]);   // 2.4.0 adds the limited edition, 2.7.0 the Battle Pass and coin packs
   assert.deepEqual(s.methods.map(m => m.id), ['gcash', 'paymaya', 'qrph']);
   assert.equal((await buyer.post('/api/battle/start', { mode: '1v1', ball: 'godofguns' })).status, 403);
   assert.equal((await buyer.post('/api/shop/unlock', { ball: 'godofguns' })).status, 400, 'no coin unlock');

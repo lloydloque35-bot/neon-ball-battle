@@ -4,6 +4,8 @@
  * (GCash, Maya, QR Ph, cards, online banking — whatever is enabled on the owner's PayMongo account).
  *
  *  - God of Guns PHP 99, God Portal PHP 99, both together PHP 198. Permanent ownership on the player's account.
+ *  - 2.7.0 BATTLE PASS PHP 299: the four Supreme God Balls (God of Chaos, God of War, AI Tech, Solar Eclipse), permanent.
+ *  - 2.7.0 COIN PACKS: PHP 99 = 10,000 coins, PHP 999 = 1,000,000 coins. Added once, when the purchase becomes paid.
  *  - A ball is granted ONLY after the server itself has fetched the checkout session from PayMongo and seen a
  *    paid payment of the right amount and currency for that exact purchase. The browser's return page,
  *    and even the webhook body, are never trusted on their own: the webhook (signature-verified) only triggers
@@ -31,7 +33,16 @@ const PRODUCTS = {
   god_bundle: { id: 'god_bundle', name: 'God of Guns + God Portal', amount: 19800, balls: ['godofguns', 'godportal'] },
   // 2.4.0 LIMITED EDITION: a slot is reserved while paying; ownership + Lv 50 come from server/edition.js on a verified payment
   godofabsolute: { id: 'godofabsolute', name: 'GOD OF ABSOLUTE – LIMITED EDITION', amount: 49900, balls: ['godofabsolute'], edition: true },
+  // 2.7.0 BATTLE PASS: the four Supreme God Balls, one-time, owned forever (players who had already played them keep them:
+  // migration 009). A player who already owns some of them can still buy the pass to get the rest.
+  battlepass: { id: 'battlepass', name: 'BATTLE PASS — 4 Supreme God Balls', amount: 29900, balls: ['godofchaos', 'godofwar', 'aitech', 'solareclipse'], pass: true },
+  // 2.7.0 COIN PACKS: the coins are added once, in the same transaction that marks the purchase paid (a verified PayMongo
+  // payment, or the owner's approval of a QR payment). The number of coins is stored on the purchase when it is created.
+  coins_10k: { id: 'coins_10k', name: '10,000 Coins', amount: 9900, balls: [], coins: 10000 },
+  coins_1m: { id: 'coins_1m', name: '1,000,000 Coins', amount: 99900, balls: [], coins: 1000000 },
 };
+/** what the PayMongo checkout page says the player is buying */
+const lineDesc = P => P.coins ? 'Game coins — added once to your account' : P.pass ? 'Battle Pass — 4 Supreme God Balls, yours forever' : 'Premium God Ball — permanent ownership';
 /** two products conflict when they would grant the same ball */
 const overlap = (x, y) => { const A = PRODUCTS[x], B = PRODUCTS[y]; return !!(A && B && A.balls.some(b => B.balls.includes(b))); };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };
@@ -110,16 +121,22 @@ function register(app, S) {
     if (!r.ok) { const msg = data.errors && data.errors[0] && (data.errors[0].detail || data.errors[0].code); S.log.error('[paymongo]', r.status, path, msg); throw new HttpError(502, 'The payment provider refused the request. You were not charged.', 'PROVIDER'); }
     return data;
   }
-  const requireOpen = () => { const s = pmStatus(); if (!s.enabled) throw new HttpError(503, 'The Premium God Shop is not open yet: the owner has not finished setting up payments. Nothing was charged.', 'SHOP_DISABLED'); };
+  const requireOpen = () => { const s = pmStatus(); if (!s.enabled) throw new HttpError(503, 'The shop is not open yet: the owner has not finished setting up payments. Nothing was charged.', 'SHOP_DISABLED'); };
   const owns = (uid, ball) => !!db.get('SELECT 1 FROM user_balls WHERE user_id = ? AND ball_id = ? AND owned = 1', uid, ball);
   const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || (p.product === PREMIUM.id ? PREMIUM : {})).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status,
     provider: p.provider, method: p.method || null, methodName: p.provider === 'manual' ? `${MANUAL_KINDS[p.method] || p.method} (QR)` : (METHODS[p.method] || p.method || null),
-    reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, holdUntil: p.hold_until || null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
+    reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, holdUntil: p.hold_until || null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null, coins: p.coins || null });
 
   function grantBalls(uid, balls, purchaseId) {
     for (const ball of balls) db.run(`INSERT INTO user_balls (user_id, ball_id, owned, source, unlocked_at) VALUES (?, ?, 1, 'purchase', ?)
       ON CONFLICT(user_id, ball_id) DO UPDATE SET owned = 1, source = COALESCE(user_balls.source, 'purchase'), unlocked_at = COALESCE(user_balls.unlocked_at, excluded.unlocked_at)`, uid, ball, now());
     S.audit(uid, 'shop.balls_granted', purchaseId, null, { balls });
+  }
+  /** coin packs: called only inside the transaction that marks the purchase paid, so the coins are added exactly once */
+  function grantCoins(uid, coins, purchaseId) {
+    const n = Math.round(Number(coins)); if (!(n > 0)) throw new HttpError(500, 'Bad coin pack');
+    S.addCoins(uid, n);
+    S.audit(uid, 'shop.coins_granted', purchaseId, null, { coins: n });
   }
   /** the ONLY place a purchase becomes paid: PayMongo's own record of the checkout session must show the payment */
   async function confirmPurchase(p, source) {
@@ -154,6 +171,12 @@ function register(app, S) {
         S.audit(p.user_id, 'shop.purchase_paid', p.id, null, { product: p.product, amount: p.amount, method, source, serial: g.serial || g.already });
         return;
       }
+      if (p.coins) {          // coin pack: the coins come with the paid status, in this one transaction
+        db.run("UPDATE shop_purchases SET status = 'paid', payment_ref = ?, method = ?, livemode = ?, paid_at = ?, updated_at = ? WHERE id = ?", ref, method, A.livemode ? 1 : 0, now(), now(), p.id);
+        grantCoins(p.user_id, p.coins, p.id);
+        S.audit(p.user_id, 'shop.purchase_paid', p.id, null, { product: p.product, amount: p.amount, method, source, coins: p.coins });
+        return;
+      }
       const already = balls.every(b => owns(p.user_id, b));
       db.run("UPDATE shop_purchases SET status = 'paid', payment_ref = ?, method = ?, livemode = ?, paid_at = ?, updated_at = ?, note = ? WHERE id = ?", ref, method, A.livemode ? 1 : 0, now(), now(),
         already ? 'Paid twice for a ball already owned — refund this payment from the PayMongo dashboard' : null, p.id);
@@ -171,7 +194,8 @@ function register(app, S) {
       manual: { enabled: s.manual, accounts: u && s.manual ? manualAccounts().map(accountView) : [] }, premium: premiumView(),
       edition: Object.fromEntries(Object.values(PRODUCTS).filter(p => p.edition).map(p => [p.id, S.edition.status(p.id, u && u.id)])),
       awaitingCount: u && u.role === 'owner' ? db.get("SELECT COUNT(*) AS n FROM shop_purchases WHERE provider = 'manual' AND status = 'awaiting'").n : undefined,
-      products: Object.values(PRODUCTS).map(p => ({ id: p.id, name: p.name, price: p.amount / 100, balls: p.balls, owned: u ? p.balls.every(b => owns(u.id, b) || u.role === 'owner') : false })) };
+      products: Object.values(PRODUCTS).map(p => ({ id: p.id, name: p.name, price: p.amount / 100, balls: p.balls, coins: p.coins || 0, pass: !!p.pass,
+        have: u ? p.balls.filter(b => owns(u.id, b) || u.role === 'owner').length : 0, owned: u ? p.balls.length > 0 && p.balls.every(b => owns(u.id, b) || u.role === 'owner') : false })) };
   });
   app.post('/api/godshop/checkout', async ctx => {
     const u = S.requirePlayable(ctx); requireOpen();
@@ -179,20 +203,20 @@ function register(app, S) {
     const P = PRODUCTS[String(ctx.body.product || '')]; if (!P) throw bad('Unknown product');
     if (u.role === 'owner') throw bad('The owner account already has every ball — nothing to buy');
     const have = P.balls.filter(b => owns(u.id, b));
-    if (have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
-    if (have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
+    if (P.balls.length && have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
+    if (have.length && !P.pass) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
     const open = db.get("SELECT * FROM shop_purchases WHERE user_id = ? AND product = ? AND status = 'pending' AND checkout_url IS NOT NULL AND created_at > ? ORDER BY created_at DESC", u.id, P.id, now() - 20 * 60e3);
     if (open && (!P.edition || open.hold_until > now())) return { url: open.checkout_url, purchaseId: open.id, reused: true };
     const id = S_.randomId('pur_'), ms = methods();
     db.tx(() => {      // limited edition: hold a slot for the checkout (the last slot can only be held once)
       if (P.edition) { S.edition.assertSlot(P.id, u.id); if (db.get("SELECT 1 FROM shop_purchases WHERE product = ? AND user_id = ? AND status = 'awaiting'", P.id, u.id)) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING'); }
-      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, hold_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'paymongo', 'creating', ?, ?, ?)", id, u.id, P.id, JSON.stringify(P.balls), P.amount, P.edition ? now() + S.edition.HOLD_CHECKOUT_MS : null, now(), now());
+      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, hold_until, coins, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'paymongo', 'creating', ?, ?, ?, ?)", id, u.id, P.id, JSON.stringify(P.balls), P.amount, P.edition ? now() + S.edition.HOLD_CHECKOUT_MS : null, P.coins || null, now(), now());
       if (P.edition) S.edition.ledger(P.id, 'reserve', { user: u.id, purchase: id, details: { via: 'paymongo' } });
     });
     let sess;
     try {
       sess = await paymongo('POST', 'checkout_sessions', { data: { attributes: {
-        line_items: [{ name: P.name, amount: P.amount, currency: 'PHP', quantity: 1, description: 'Premium God Ball — permanent ownership' }],
+        line_items: [{ name: P.name, amount: P.amount, currency: 'PHP', quantity: 1, description: lineDesc(P) }],
         payment_method_types: ms, reference_number: id, description: `NEON BALL BATTLE — ${P.name}`, send_email_receipt: false, show_description: true, show_line_items: true,
         success_url: `${cfg.appOrigin}/?purchase=${id}#godshop`, cancel_url: `${cfg.appOrigin}/?purchase=${id}&cancelled=1#godshop`,
         metadata: { purchase_id: id, user_id: String(u.id), product: P.id } } } });
@@ -245,8 +269,8 @@ function register(app, S) {
     if (u.role === 'owner') throw bad('The owner account already has every feature — nothing to buy');
     const a = manualAccounts().find(x => x.id === String(ctx.body.account || '')); if (!a) throw bad('Choose where you sent the payment');
     const have = P.balls.filter(b => owns(u.id, b));
-    if (!isPrem && have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
-    if (!isPrem && have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
+    if (!isPrem && P.balls.length && have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
+    if (!isPrem && have.length && !P.pass) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
     const ref = normRef(ctx.body.reference);
     if (!/^[A-Z0-9]{6,32}$/.test(ref)) throw bad('Type the reference number from your payment receipt (6 to 32 letters or numbers)');
     const waiting = db.all("SELECT product FROM shop_purchases WHERE user_id = ? AND provider = 'manual' AND status = 'awaiting'", u.id);
@@ -276,8 +300,8 @@ function register(app, S) {
     }
     const id = S_.randomId('pur_');
     try {
-      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, payment_ref, method, payer_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'manual', 'awaiting', ?, ?, ?, ?, ?)",
-        id, u.id, P.id, JSON.stringify(P.balls), P.amount, 'manual:' + ref, a.kind, clean(ctx.body.note, 60) || null, now(), now());
+      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, payment_ref, method, payer_note, coins, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'manual', 'awaiting', ?, ?, ?, ?, ?, ?)",
+        id, u.id, P.id, JSON.stringify(P.balls), P.amount, 'manual:' + ref, a.kind, clean(ctx.body.note, 60) || null, P.coins || null, now(), now());
     } catch (e) { if (/UNIQUE/.test(e.message)) throw new HttpError(409, 'This reference number was already used. Check the number on your receipt.', 'REF_USED'); throw e; }
     S.audit(u.id, 'shop.manual_submitted', id, ctx.ip, { product: P.id, amount: P.amount, method: a.kind });
     return { purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', id)) };
@@ -396,12 +420,13 @@ function register(app, S) {
         S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, serial: g.serial || g.already });
         return;
       }
-      const prem = p.product === PREMIUM.id, balls = JSON.parse(p.balls), already = !prem && balls.every(b => owns(p.user_id, b));
+      const prem = p.product === PREMIUM.id, balls = JSON.parse(p.balls), already = !prem && balls.length > 0 && balls.every(b => owns(p.user_id, b));
       db.run("UPDATE shop_purchases SET status = 'paid', paid_at = ?, updated_at = ?, reviewed_by = ?, reviewed_at = ?, note = ? WHERE id = ?", now(), now(), me.id, now(),
         already ? 'The player already owned this — please refund this payment' : null, p.id);
       if (prem) { if (!S.grantPremiumQr) throw new HttpError(500, 'Premium is not available on this server'); S.grantPremiumQr(p.user_id, PREMIUM.days, p.id, p.amount); }
+      else if (p.coins) grantCoins(p.user_id, p.coins, p.id);
       else grantBalls(p.user_id, balls, p.id);
-      S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, duplicate: already });
+      S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, duplicate: already, coins: p.coins || undefined });
     });
     return { ok: true, purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id)) };
   });

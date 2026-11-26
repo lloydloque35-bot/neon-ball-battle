@@ -1,4 +1,12 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0, 2.7.0)
+
+## 2.7.0 — Battle Pass & Coin Packs ([BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md))
+- ✅ Battle Pass PHP 299 (one-time): the four Supreme God Balls, owned forever; not for coins, not from orbs; free practice test kept
+- ✅ Players who already played them keep them (migration 009, backup first, audit-logged)
+- ✅ Free Pass: Anti Ball stays free
+- ✅ Coin packs PHP 99 = 10,000 and PHP 999 = 1,000,000 coins, added once per verified payment / owner approval
+- ✅ Shop screen, selection and collection banners, Upgrade Shop shortcut; PC and phone browser check
+- ✅ Tests: 7 new (152 / 152 pass)
 
 ## 2.6.0 — Ultimate Unique Skill, Mastery & Evolution System ([SKILLS-2.6.0.md](SKILLS-2.6.0.md))
 - ✅ Skill slots by rarity (ultimate included); Common / Uncommon keep their four abilities (owner choice)

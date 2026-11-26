@@ -1,4 +1,7 @@
-# Update 2.2.0 — Four Supreme God Balls (FREE for every player)
+# Update 2.2.0 — Four Supreme God Balls
+
+> **2.7.0:** these four are no longer free. They come with the **Battle Pass (PHP 299, one-time)**. Players who had
+> already played them keep them. See [BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md).
 
 **God of Chaos • God of War • AI Tech • Solar Eclipse**
 

@@ -1,5 +1,8 @@
 # Update 2.3.0 — God of Guns + God Portal (Premium God Balls, PHP 99 each)
 
+> **2.7.0:** the same shop also sells the **Battle Pass (PHP 299)** and **coin packs (PHP 99 / PHP 999)**, with the same
+> QR and PayMongo payments. See [BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md).
+
 There are two new **Supreme Premium God Balls**. You buy them once in Philippine pesos and own them forever on your account.
 
 | Product | Price |

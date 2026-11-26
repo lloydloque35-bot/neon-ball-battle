@@ -1,8 +1,8 @@
 'use strict';
 /**
- * 2.2.0 FOUR SUPREME GOD BALLS (free): God of Chaos, God of War, AI Tech, Solar Eclipse.
- * Every skill in every form, both ultimates, the 12 forms, the passives, God Clash, PvP determinism,
- * free access for every player, and the practice test bar.
+ * 2.2.0 FOUR SUPREME GOD BALLS: God of Chaos, God of War, AI Tech, Solar Eclipse (free until 2.6.0; the Battle Pass
+ * since 2.7.0 — see battlepass.test.js). Every skill in every form, both ultimates, the 12 forms, the passives,
+ * God Clash, PvP determinism, access rules, and the free practice test bar.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -27,15 +27,18 @@ function lab(id, { form = 0, level = 30, godTest = true, enemy = 'fire', seed = 
 const snap = (B, me, foe) => JSON.stringify([Math.round(foe.hp), Math.round(me.hp), B.projs.length, B.zones.length, B.lasers.length, B.waves.length, B.strikes.length, B.fighters.length, B.timers.length, B.cond && B.cond.kind,
   Object.keys(me.sx).filter(k => me.sx[k] > 0 || typeof me.sx[k] === 'string'), Object.keys(foe.sx || {}).filter(k => foe.sx[k] > 0), Object.keys(foe.st).filter(k => foe.st[k] > 0), Object.keys(me.st).filter(k => k !== 'invuln' && me.st[k] > 0), Math.round(foe.x), Math.round(me.x), me.casting > 0, me.sx.variant]);
 
-/* ---------------- server: free for every player ---------------- */
+/* ---------------- server: Battle Pass access, free practice tests ---------------- */
 let srv, player;
 test.before(async () => { srv = await startServer(); player = new Client(srv.base); await player.register('free_god_fan'); });
 test.after(async () => { await srv.stop(); });
 
-test('every player can battle with all four God Balls for free (no premium, no purchase)', async () => {
+test('the four God Balls need the Battle Pass (2.7.0); once owned they battle normally', async () => {
+  for (const id of GODS) assert.equal((await player.post('/api/battle/start', { mode: '1v1', ball: id, difficulty: 'easy' })).status, 403, id + ' needs the Battle Pass');
+  const me = srv.db.get("SELECT id FROM users WHERE username = 'free_god_fan'").id;
+  for (const id of GODS) srv.db.run("INSERT INTO user_balls (user_id, ball_id, owned, source) VALUES (?, ?, 1, 'purchase')", me, id);
   for (const id of GODS) {
     const r = await player.post('/api/battle/start', { mode: '1v1', ball: id, difficulty: 'easy' });
-    assert.equal(r.status, 200, id + ' is free');
+    assert.equal(r.status, 200, id + ' with the pass');
     assert.equal(r.data.ticket.teams[0][0].ball, id);
   }
   const save = (await player.get('/api/save')).data;
@@ -57,13 +60,13 @@ test('free practice tests: any form + test bar, Practice only; test commands are
 });
 
 /* ---------------- engine ---------------- */
-test('four free God Balls: 5 skills (+ Solar Eclipse\'s state control), 2 ultimates, 3 forms, passives', () => {
+test('four God Balls: 5 skills (+ Solar Eclipse\'s state control), 2 ultimates, 3 forms, passives', () => {
   assert.equal(core.GAME_VERSION, VERSION);
   assert.deepEqual([...core.godIds()], GODS);
   const seen = new Set();
   for (const id of GODS) {
     const d = core.getBall(id);
-    assert.ok(d.free && d.godBall && !d.adminOnly && !d.premium, id + ' is free');
+    assert.ok(d.pass === 'battlepass' && !d.free && d.godBall && !d.adminOnly && !d.premium, id + ' is a Battle Pass ball');
     assert.equal(d.category, 'God'); assert.ok(d.godClass);
     const regular = d.skills.filter(s => !s.always && !s.v26);
     assert.equal(regular.length, 5, id + ' has 5 skills');

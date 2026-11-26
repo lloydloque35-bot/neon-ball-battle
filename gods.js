@@ -1,6 +1,8 @@
 /* =====================================================================
-   NEON BALL BATTLE 2.2.0 — FOUR SUPREME GOD BALLS (FREE FOR EVERY PLAYER)
+   NEON BALL BATTLE 2.2.0 — FOUR SUPREME GOD BALLS
    God of Chaos • God of War • AI Tech • Solar Eclipse
+   2.7.0: no longer free — they come with the BATTLE PASS (PHP 299, one-time, owned forever). Players who had already
+   played them keep them (server migration 009). Anti Ball stays free for everyone (the FREE PASS).
 
    Built on the 2.1.0 Supreme framework (supreme.js) and loaded after it in the browser and on the game server,
    so every battle stays deterministic and verifiable. Battle logic only uses the seeded RNG / dcos / dsin.
@@ -8,7 +10,7 @@
    - 5 skills each; EVERY skill has three versions (Base / Awakened / Final God) with different patterns and behaviour
    - 3 forms; the Awakened form unlocks at ball Lv 10 and the Final God Form at Lv 20 (free progression)
    - a regular ultimate + an exclusive final-form ultimate, a passive that grows with the form
-   - FREE: no payment, subscription, premium currency or admin rights needed
+   - (2.2.0–2.6.0: free for every player; 2.7.0: Battle Pass)
    ===================================================================== */
 const GOD_BALLS = [];
 /** registers a free God Ball (Supreme framework: forms, final ultimate, effects) */
@@ -819,6 +821,7 @@ if (!window.NBB_HEADLESS) {
   .god-sec{margin:0 0 14px;padding:10px;border-radius:14px;border:1px solid rgba(255,213,79,.5);background:linear-gradient(120deg,rgba(213,0,249,.14),rgba(255,23,68,.10),rgba(41,121,255,.12),rgba(255,179,0,.12))}
   .god-sec .god-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:900;letter-spacing:1.5px;color:#ffe9a8;text-shadow:0 0 10px rgba(255,213,79,.7);margin:0 2px 8px}
   .god-free{background:#00c853;color:#00170a;border-radius:6px;padding:2px 7px;font-size:11px;letter-spacing:.6px;box-shadow:0 0 8px rgba(0,230,118,.6)}
+  .god-free.god-pass{background:#ffd54f;color:#241a00;box-shadow:0 0 8px rgba(255,213,79,.6)}.god-free.god-lock{background:#ff8a80;color:#2a0000;box-shadow:0 0 8px rgba(255,138,128,.5)}
   .god-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
   .god-card{position:relative;border-radius:12px;border:1px solid rgba(120,170,255,.35);background:rgba(6,12,36,.8);padding:10px;color:#fff;display:flex;flex-direction:column;gap:6px}
   .god-card .gtop{display:flex;gap:10px;align-items:center}.god-card .gtop canvas{flex:none}
@@ -837,6 +840,12 @@ if (!window.NBB_HEADLESS) {
   @media (max-width:640px){.god-modal{grid-template-columns:1fr}.god-row{grid-template-columns:1fr}}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 }
+/** 2.7.0: a God Ball's ownership chip — Battle Pass balls show OWNED or their price; the others stay FREE */
+function godPassChip(b, short) {
+  if (!b.pass) return h('span', { class: 'god-free' }, short ? 'FREE' : 'FREE — UNLOCKED FOR EVERY PLAYER');
+  const ok = canUseBall(b);
+  return h('span', { class: 'god-free' + (ok ? '' : ' god-pass') }, ok ? (short ? '✔ OWNED' : '✔ OWNED — PERMANENT') : (short ? '🎫 BATTLE PASS' : `🎫 BATTLE PASS — PHP ${b.pricePhp} (one-time, all 4 God Balls)`));
+}
 function godProgressBar(b) {
   const lv = prog(b.id).level, pct = clamp(lv / GOD_UNLOCK[1], 0, 1) * 100;
   return h('div', {}, h('div', { class: 'god-prog' }, h('i', { style: { width: pct + '%' } }), h('b', { style: { left: (GOD_UNLOCK[0] / GOD_UNLOCK[1] * 100) + '%' } })),
@@ -845,7 +854,7 @@ function godProgressBar(b) {
 Object.assign(UI, {
   godCard(b) {
     const c = h('div', { class: 'god-card' }), cv = ballCanvas(b, 86, { big: true }); this.addLive(cv, b, { size: 86 });
-    c.append(h('div', { class: 'gtop' }, cv, h('div', {}, h('div', { class: 'gclass' }, b.godClass), h('div', { class: 'gname' }, b.name.replace(/ Ball$/, '').toUpperCase()), h('span', { class: 'god-free' }, 'FREE'))));
+    c.append(h('div', { class: 'gtop' }, cv, h('div', {}, h('div', { class: 'gclass' }, b.godClass), h('div', { class: 'gname' }, b.name.replace(/ Ball$/, '').toUpperCase()), godPassChip(b, true))));
     const icons = h('div', { class: 'god-icons' });
     b.skills.forEach(s => icons.append(h('span', { title: s.name, style: { color: s.color, background: rgba(s.color, 0.18) } }, SKILL_TYPES[s.type]?.ico || '•')));
     icons.append(h('span', { title: 'Ultimate: ' + b.ult.name, style: { color: '#ffd54f', background: '#ffd54f2e' } }, '★'), h('span', { title: 'Final-form ultimate: ' + b.finalUlt.name, style: { color: '#fff', background: '#ffffff22' } }, '✦'));
@@ -854,21 +863,22 @@ Object.assign(UI, {
     b.forms.forEach((fm, k) => forms.append(h('figure', { class: godFormOpen(b, k) ? '' : 'lock' }, ballCanvas(formDef(b, k), 46), h('figcaption', {}, (godFormOpen(b, k) ? '' : '🔒 ') + fm.name))));
     c.append(forms, godProgressBar(b), h('div', { class: 'gbtns' },
       h('button', { class: 'btn gold', onclick: () => this.openGod(b.id) }, '🔍 Inspect'),
-      h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = b.id; this.show('play'); } }, '⚔ Battle')));
+      canUseBall(b) ? h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = b.id; this.show('play'); } }, '⚔ Battle')
+        : h('button', { class: 'btn gold', onclick: () => this.show('godshop') }, `🎫 Battle Pass — PHP ${b.pricePhp}`)));
     return c;
   },
   godSection(container) {
     container.innerHTML = '';
     const list = SUP.godIds.map(id => getBall(id)).filter(b => b && b.enabled !== false); if (!list.length) return;
     const row = h('div', { class: 'god-row' }); list.forEach(b => row.append(this.godCard(b)));
-    container.append(h('div', { class: 'god-sec' }, h('div', { class: 'god-title' }, '⚡ SUPREME GOD BALLS', h('span', { class: 'god-free' }, 'FREE FOR EVERY PLAYER'), h('small', { class: 'muted', style: { letterSpacing: '0' } }, 'Awakened form at ball Lv 10 • Final God Form at Lv 20')), row));
+    container.append(h('div', { class: 'god-sec' }, h('div', { class: 'god-title' }, '⚡ SUPREME GOD BALLS', h('span', { class: 'god-free god-pass' }, `🎫 BATTLE PASS • PHP ${BATTLE_PASS.pricePhp} • ALL 4, FOREVER`), h('small', { class: 'muted', style: { letterSpacing: '0' } }, 'Awakened form at ball Lv 10 • Final God Form at Lv 20')), row));
   },
   /** interactive God Ball preview: every form (and Solar Eclipse's two states), every skill version, practice test */
   openGod(id, form = 0, variant = '') {
     const b = getBall(id); if (!b) return;
     const k = clamp(form, 0, 2), def = formDef(b, k, variant), wrap = h('div', { class: 'god-modal' }), L = h('div', { class: 'gl' }), R = h('div');
     const cv = ballCanvas(def, 240, { big: true }); this.live = this.live.filter(l => !l.modal); this.live.push({ canvas: cv, def, opts: { size: 240, big: true }, rot: 0, modal: true });
-    L.append(h('div', { class: 'gclass', style: { color: '#ffd54f', fontWeight: 900, letterSpacing: '1px', fontSize: '12px' } }, b.godClass), h('h2', { style: { margin: '2px 0' } }, b.name.replace(/ Ball$/, '')), h('span', { class: 'god-free' }, 'FREE — UNLOCKED FOR EVERY PLAYER'), cv);
+    L.append(h('div', { class: 'gclass', style: { color: '#ffd54f', fontWeight: 900, letterSpacing: '1px', fontSize: '12px' } }, b.godClass), h('h2', { style: { margin: '2px 0' } }, b.name.replace(/ Ball$/, '')), godPassChip(b), cv);
     const tabs = h('div', { class: 'god-tabs' });
     b.forms.forEach((fm, i) => tabs.append(h('button', { class: 'btn small' + (i === k ? ' active' : ''), onclick: () => this.openGod(id, i, variant) }, (godFormOpen(b, i) ? '' : '🔒 ') + GOD_FORM_LABELS[i])));
     L.append(tabs, h('div', { style: { fontWeight: 900, color: def.design.c2, letterSpacing: '1px' } }, b.forms[k].name));
@@ -876,7 +886,8 @@ Object.assign(UI, {
     L.append(godProgressBar(b));
     L.append(h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '6px' } },
       h('button', { class: 'btn admin', onclick: () => { this.closeModal(); Game.tryGod(id, k); } }, `▶ Test ${['Base', 'Awakened', 'Final God'][k]} form in Practice`),
-      h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = id; this.closeModal(); this.show('play'); } }, '⚔ Battle'),
+      canUseBall(b) ? h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = id; this.closeModal(); this.show('play'); } }, '⚔ Battle')
+        : h('button', { class: 'btn gold', onclick: () => { this.closeModal(); this.show('godshop'); } }, `🎫 Get the Battle Pass — PHP ${b.pricePhp}`),
       h('button', { class: 'btn', onclick: () => this._godDetail(id) }, '⬆ Stats & skill tree')));
     L.append(h('p', { class: 'muted', style: { fontSize: '12px' } }, 'Practice tests are free and give no rewards: a bar at the top lets you switch forms, fire each ability, refill the ultimate and preview the entrance, victory and defeat animations.'));
     const sk = h('div');
@@ -910,9 +921,11 @@ Object.assign(UI, {
     const list = SUP.godIds.map(id => getBall(id)).filter(b => b && b.enabled !== false); if (!list.length) { box.remove(); return; }
     const row = h('div', { class: 'feat-row' });
     for (const b of list) { const cv = ballCanvas(b, 60); this.addLive(cv, b, { size: 60 });
-      row.append(h('button', { class: 'feat-card' + (Game.setup.ball === b.id ? ' selected' : ''), title: b.desc || '', onclick: () => { Game.setup.ball = b.id; Sound.play('click'); this.render_select(); } },
-        cv, h('div', { class: 'feat-txt' }, h('small', {}, b.godClass), h('b', {}, b.name.replace(/ Ball$/, '').toUpperCase()), h('span', { class: 'feat-st free' }, 'FREE — UNLOCKED')))); }
-    box.append(h('div', { class: 'feat-title' }, '⚡ NEW 2.2.0 — SUPREME GOD BALLS • FREE FOR EVERYONE'), row);
+      const ok = canUseBall(b);
+      row.append(h('button', { class: 'feat-card' + (Game.setup.ball === b.id ? ' selected' : '') + (ok ? '' : ' locked'), title: b.desc || '', onclick: () => { if (ok) { Game.setup.ball = b.id; Sound.play('click'); this.render_select(); } else this.show('godshop'); } },
+        cv, h('div', { class: 'feat-txt' }, h('small', {}, b.godClass), h('b', {}, b.name.replace(/ Ball$/, '').toUpperCase()),
+          h('span', { class: 'feat-st ' + (b.pass ? (ok ? 'on' : 'off') : 'free') }, b.pass ? (ok ? '✔ OWNED' : '🎫 BATTLE PASS') : 'FREE — UNLOCKED')))); }
+    box.append(h('div', { class: 'feat-title' }, `🎫 BATTLE PASS — SUPREME GOD BALLS • PHP ${BATTLE_PASS.pricePhp} • ALL 4 FOREVER`), row);
   };
 }
 /** free practice test of a God Ball in any form (no rewards) */
@@ -922,5 +935,11 @@ Game.tryGod = function (id, form = 0) {
   Promise.resolve(this.start('practice')).finally(() => { this.setup.godTest = false; this.setup.startForm = 0; this.setup.dummy = false; });
 };
 
-if (window.NBB_CORE) Object.assign(window.NBB_CORE, { GOD_BALLS, GOD_UNLOCK, godFormCap, godIds: () => SUP.godIds.slice(), CLASH });
+/* 2.7.0 BATTLE PASS — the four Supreme God Balls are bought once (PHP 299) and owned forever. Ownership comes ONLY from a
+   server-verified payment or the owner's approval of a QR payment (server/shop.js), never from the browser. Their forms
+   still unlock at ball Lv 10 / 20 as before, and anyone can still try them in a free practice test. */
+const BATTLE_PASS = { id: 'battlepass', name: 'BATTLE PASS', pricePhp: 299, balls: ['godofchaos', 'godofwar', 'aitech', 'solareclipse'] };
+for (const d of GOD_BALLS) if (BATTLE_PASS.balls.includes(d.id)) Object.assign(d, { free: false, pass: BATTLE_PASS.id, pricePhp: BATTLE_PASS.pricePhp });
+
+if (window.NBB_CORE) Object.assign(window.NBB_CORE, { GOD_BALLS, GOD_UNLOCK, godFormCap, godIds: () => SUP.godIds.slice(), CLASH, BATTLE_PASS });
 invalidateRegistry();
