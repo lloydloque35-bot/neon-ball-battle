@@ -580,6 +580,7 @@ if (typeof Battle !== 'undefined') {
 
 /* =====================================================================
    PREMIUM GOD SHOP UI — shop screen, purchase return, history, restore; owner setup panel.
+   Two ways to pay: QR (Maya / MariBank / any QR Ph app — the owner approves each payment) and PayMongo checkout.
    The page only shows what the server says: it never marks anything as bought by itself.
    ===================================================================== */
 if (!window.NBB_HEADLESS) {
@@ -594,7 +595,15 @@ if (!window.NBB_HEADLESS) {
   .gshop-methods{display:flex;gap:6px;flex-wrap:wrap}.gshop-methods span{border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:3px 8px;font-size:12px;font-weight:800;background:rgba(255,255,255,.06)}
   .gshop-note{border-radius:10px;padding:10px 12px;border:1px solid rgba(255,213,79,.4);background:rgba(255,213,79,.08);font-size:13px}
   .gshop-row{display:flex;gap:8px;flex-wrap:wrap}.gshop-row .btn{flex:1;min-width:120px}
-  .gshop-tbl{width:100%;border-collapse:collapse;font-size:13px}.gshop-tbl td,.gshop-tbl th{padding:6px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left}`;
+  .gshop-tbl{width:100%;border-collapse:collapse;font-size:13px}.gshop-tbl td,.gshop-tbl th{padding:6px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left}
+  .gshop-pay{max-width:460px}.gshop-pay h2{margin:0 0 6px;font-size:20px}.gshop-steps{margin:4px 0 10px;padding-left:20px;font-size:14px;line-height:1.45}
+  .gshop-qr-box{display:flex;justify-content:center;align-items:center;background:#fff;border-radius:12px;padding:8px;min-height:140px;margin-top:8px}
+  .gshop-qr{display:block;max-width:100%;max-height:50vh;object-fit:contain}.gshop-qr-who{text-align:center;margin:6px 0;font-size:14px}
+  .gshop-pay label{display:flex;flex-direction:column;gap:4px;font-weight:800;font-size:13px;margin-top:8px}
+  .gshop-pay input,.gshop-acc input,.gshop-acc select{padding:9px 10px;border-radius:8px;font-size:16px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;min-width:0}
+  .gshop-pay .send{width:100%;margin-top:12px}.gshop-tabs{display:flex;gap:8px;flex-wrap:wrap}.gshop-tabs .btn{flex:1;min-width:110px}
+  .gshop-acc{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;padding:10px;border:1px solid rgba(255,255,255,.15);border-radius:10px;margin-bottom:8px}
+  .gshop-acc input[type=file]{display:none}.gshop-wait{border-color:rgba(105,240,174,.5);background:rgba(105,240,174,.08)}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   const mount = () => {
     if (!document.getElementById('scr-godshop')) { const sec = h('section', { id: 'scr-godshop', class: 'screen' }, h('header', { class: 'scr-head' }, h('button', { class: 'back', 'data-back': '' }, '‹ Back'), h('h2', {}, '💎 Premium God Shop'), h('div', { class: 'pill' }, '🪙 ', h('b', { class: 'coinVal' }, '0'))), h('div', { class: 'scr-body' }, h('div', { id: 'godShopBody' })));
@@ -615,31 +624,100 @@ function paidGodCard(b, shop, o = {}) {
   const forms = h('div', { class: 'god-forms' }); b.forms.forEach((fm, k) => forms.append(h('figure', {}, ballCanvas(formDef(b, k), 50), h('figcaption', {}, fm.name))));
   c.append(h('small', { class: 'muted' }, b.desc), icons, h('small', { class: 'muted' }, '◆ ' + b.passiveInfo.name + ' • all 3 forms unlocked from the start'), forms);
   const row = h('div', { class: 'gshop-row' });
-  if (!owned && !o.noBuy) row.append(h('button', { class: 'btn gold', disabled: !(shop && shop.enabled), onclick: () => godBuy(b.id) }, `💎 Buy — PHP ${b.pricePhp}`));
+  const waiting = !!(shop && shop.waiting && shop.waiting.has(b.id));
+  if (!owned && !o.noBuy) row.append(waiting ? h('button', { class: 'btn', disabled: true }, '⏳ Waiting for owner check')
+    : h('button', { class: 'btn gold', disabled: !(shop && shop.enabled), onclick: () => godBuy(b.id) }, `💎 Buy — PHP ${b.pricePhp}`));
   row.append(h('button', { class: 'btn', onclick: () => UI.openGod(b.id) }, '🔍 Inspect'), owned ? h('button', { class: 'btn primary', onclick: () => { Game.setup.ball = b.id; UI.show('play'); } }, '⚔ Battle') : h('button', { class: 'btn', onclick: () => Game.tryGod(b.id, 2) }, '▶ Free practice test'));
   c.append(row); return c;
 }
+let godShopCache = null;
 async function godBuy(product) {
   if (!shopOnline()) return toast('Purchases need the online game server', 'bad');
   if (!Online.active) { toast('Sign in first — your purchase is saved to your account', 'bad'); return UI.show('account'); }
+  let shop = godShopCache; try { shop = godShopCache = await shopApi('GET', '/api/godshop'); } catch { /* keep the last answer */ }
+  if (!shop || !shop.enabled) return toast('The shop is not open yet. Nothing was charged.', 'bad');
+  const qr = shop.manual && shop.manual.enabled && shop.manual.accounts.length;
+  if (qr && shop.paymongo) return UI.modal(h('div', { class: 'gshop-pay' }, h('h2', {}, '💎 How do you want to pay?'), h('div', { class: 'gshop-tabs' },
+    h('button', { class: 'btn gold', onclick: () => { UI.closeModal(); manualPay(product, shop); } }, '📱 Scan QR — Maya / MariBank / any bank app'),
+    h('button', { class: 'btn', onclick: () => { UI.closeModal(); paymongoBuy(product); } }, '💳 Automatic checkout (PayMongo)'))));
+  return qr ? manualPay(product, shop) : paymongoBuy(product);
+}
+async function paymongoBuy(product) {
   try { const r = await shopApi('POST', '/api/godshop/checkout', { product }); toast('Opening the secure PayMongo checkout…'); location.assign(r.url); }
   catch (e) { toast('⚠ ' + esc(e.message), 'bad'); }
+}
+/* QR payment: the player pays the owner's QR, then sends the reference number. The OWNER approves it — the page unlocks nothing. */
+function manualPay(product, shop) {
+  const P = shop.products.find(p => p.id === product), accs = shop.manual.accounts; if (!P || !accs.length) return;
+  let acc = null;
+  const img = h('img', { class: 'gshop-qr', alt: 'Payment QR code' }), who = h('div', { class: 'gshop-qr-who' }), tabs = h('div', { class: 'gshop-tabs' });
+  const save = h('a', { class: 'btn small', download: 'payment-qr', style: { display: 'none' } }, '⬇ Save QR to my phone');
+  const pick = async a => {
+    acc = a; [...tabs.children].forEach(b => b.classList.toggle('gold', b.dataset.id === a.id)); img.removeAttribute('src'); save.style.display = 'none'; who.textContent = 'Loading QR…';
+    try { const r = await API.get('/api/godshop/manual/qr/' + encodeURIComponent(a.id)); if (acc !== a) return;
+      img.src = r.image; save.href = r.image; save.setAttribute('download', `pay-${a.kind}-qr.${(r.image.match(/^data:image\/(\w+)/) || [])[1] === 'jpeg' ? 'jpg' : 'png'}`); save.style.display = '';
+      who.textContent = ''; who.append(...[h('b', {}, a.label), a.name ? ' — ' + a.name : '', a.note ? h('div', { class: 'muted' }, a.note) : ''].filter(x => x !== '')); }
+    catch (e) { who.textContent = '⚠ ' + e.message; }
+  };
+  accs.forEach(a => tabs.append(h('button', { class: 'btn', 'data-id': a.id, onclick: () => pick(a) }, a.label)));
+  const ref = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', maxlength: '40', placeholder: 'e.g. 1234 5678 9012' });
+  const note = h('input', { type: 'text', autocomplete: 'off', maxlength: '60', placeholder: 'Your name or the last 4 digits of your number' });
+  const send = h('button', { class: 'btn gold big send' }, '✔ I paid — send for checking');
+  send.onclick = async () => {
+    if (!ref.value.trim()) { ref.focus(); return toast('Type the reference number from your receipt', 'bad'); }
+    send.disabled = true;
+    try {
+      const r = await API.post('/api/godshop/manual/submit', { product, account: acc.id, reference: ref.value, note: note.value });
+      UI.closeModal(); Sound.play('click');
+      UI.modal(h('div', { class: 'gshop-pay', style: { textAlign: 'center' } }, h('h2', {}, '✔ Sent!'),
+        h('p', {}, `The owner will check your payment (reference ${r.purchase.reference}) and then unlock ${r.purchase.name}.`),
+        h('p', { class: 'muted' }, 'Payments are checked by hand, so this can take a while. You will see a message in the game when it is approved. You can also check 🧾 Transaction history.'),
+        h('button', { class: 'btn gold', onclick: () => { UI.closeModal(); UI.render_godshop(); } }, 'OK')));
+      godShopNotify.waiting = true;
+    } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); send.disabled = false; }
+  };
+  UI.modal(h('div', { class: 'gshop-pay' },
+    h('h2', {}, `💎 ${P.name} — PHP ${P.price}`),
+    h('ol', { class: 'gshop-steps' },
+      h('li', {}, 'Pick where to pay. Scan the QR with Maya, MariBank, GCash or any bank app (QR Ph / InstaPay).'),
+      h('li', {}, h('b', {}, `Send exactly PHP ${P.price}.00.`)),
+      h('li', {}, 'Type the ', h('b', {}, 'reference number'), ' from your receipt below and press Send.')),
+    tabs, h('div', { class: 'gshop-qr-box' }, img), who,
+    h('div', { style: { textAlign: 'center' } }, save),
+    h('small', { class: 'muted', style: { display: 'block', textAlign: 'center' } }, 'Paying on this same phone? Save the QR, then in your bank app choose Scan QR → upload from gallery.'),
+    h('label', {}, 'Reference number', ref), h('label', {}, 'Your name or last 4 digits (optional — helps the owner find it)', note), send,
+    h('p', { class: 'muted', style: { fontSize: '12px', marginBottom: 0 } }, '🔒 The ball unlocks only after the owner sees your payment. Each reference number works once; fake ones are rejected. Never share your PIN or OTP with anyone.')));
+  pick(accs[0]);
 }
 UI.render_godshop = async function () {
   const body = $('#godShopBody'); if (!body) return; body.innerHTML = '';
   const gods = SUP.paidGodIds.map(id => getBall(id)).filter(Boolean);
-  let shop = null; if (shopOnline()) { try { shop = await shopApi('GET', '/api/godshop'); } catch { shop = null; } }
-  body.append(h('div', { class: 'card' }, h('h3', { style: { margin: '0 0 4px' } }, 'Supreme Premium God Balls'), h('p', { class: 'muted', style: { margin: 0 } }, 'One-time purchase in Philippine pesos. The ball is saved to your account permanently, on every device. Payments are handled by PayMongo — the game never sees your card, wallet login, PIN or OTP.')));
+  let shop = null; if (shopOnline()) { try { shop = godShopCache = await shopApi('GET', '/api/godshop'); } catch { shop = null; } }
+  // the server says a ball is owned but this device does not know yet (e.g. just approved): sync once
+  if (shop && Online.active && !this._gsSynced && shop.products.some(p => p.owned && !p.balls.every(id => { const b = getBall(id); return b && canUseBall(b); }))) { this._gsSynced = true; try { await Online.refresh(); } catch { /* offline */ } return this.render_godshop(); }
+  this._gsSynced = false;
+  body.append(h('div', { class: 'card' }, h('h3', { style: { margin: '0 0 4px' } }, 'Supreme Premium God Balls'), h('p', { class: 'muted', style: { margin: 0 } }, 'One-time purchase in Philippine pesos. The ball is saved to your account permanently, on every device. Pay with Maya, MariBank, GCash or your bank app — the game never sees your card, wallet login, PIN or OTP.')));
   if (!shopOnline()) body.append(h('div', { class: 'gshop-note' }, 'Purchases need the online game. Open the game from its website and sign in to buy.'));
   else if (!shop || !shop.enabled) body.append(h('div', { class: 'gshop-note' }, '⏳ The shop is not open yet: the owner is still setting up payments. Nothing can be charged until then. You can already inspect both balls and try them for free in Practice.'));
   else if (!Online.active) body.append(h('div', { class: 'gshop-note' }, 'Sign in to buy — your purchase is linked to your account. ', h('button', { class: 'btn small', onclick: () => UI.show('account') }, 'Sign in')));
-  if (shop && shop.enabled) body.append(h('div', { class: 'gshop-methods' }, h('small', { class: 'muted', style: { alignSelf: 'center' } }, 'Pay with:'), ...shop.methods.map(m => h('span', {}, m.name)), shop.mode === 'test' ? h('span', { style: { borderColor: '#ff9100', color: '#ffcc80' } }, 'TEST MODE — no real money') : null));
+  if (shop && shop.manual && shop.manual.enabled) body.append(h('div', { class: 'gshop-methods' }, h('small', { class: 'muted', style: { alignSelf: 'center' } }, '📱 Pay by QR:'),
+    ...(shop.manual.accounts.length ? shop.manual.accounts.map(a => h('span', {}, a.label)) : [h('span', {}, 'Maya / MariBank QR')]), h('span', {}, 'any bank app or GCash can scan it')));
+  if (shop && shop.paymongo) body.append(h('div', { class: 'gshop-methods' }, h('small', { class: 'muted', style: { alignSelf: 'center' } }, '💳 Checkout:'), ...shop.methods.map(m => h('span', {}, m.name)), shop.mode === 'test' ? h('span', { style: { borderColor: '#ff9100', color: '#ffcc80' } }, 'TEST MODE — no real money') : null));
+  if (shop && Online.active) { try {
+    const mine = (await shopApi('GET', '/api/godshop/purchases')).purchases, recent = Date.now() - 7 * 86400e3;
+    shop.waiting = new Set(mine.filter(x => x.status === 'awaiting').flatMap(x => x.product === 'god_bundle' ? ['godofguns', 'godportal', 'god_bundle'] : [x.product]));
+    if (shop.waiting.size) shop.waiting.add('god_bundle');
+    for (const p of mine.filter(x => x.provider === 'manual' && (x.status === 'awaiting' || (x.status === 'rejected' && x.createdAt > recent))))
+      body.append(h('div', { class: 'gshop-note' + (p.status === 'awaiting' ? ' gshop-wait' : '') }, p.status === 'awaiting'
+        ? `⏳ Waiting for the owner to check your payment: ${p.name} — PHP ${p.amount} — ref ${p.reference}. It unlocks as soon as it is approved.`
+        : `✖ Not approved: ${p.name} (ref ${p.reference}) — ${p.note || 'payment not found'}. If you really paid, contact the game owner with your receipt.`));
+  } catch { /* history is optional here */ } }
   const grid = h('div', { class: 'gshop-grid' }); gods.forEach(b => grid.append(paidGodCard(b, shop)));
   const bundleOwned = gods.every(b => canUseBall(b)), anyOwned = gods.some(b => canUseBall(b));
   const bc = h('div', { class: 'gshop-card bundle' }, h('div', { class: 'cls' }, 'BUNDLE'), h('div', { class: 'nm' }, 'GOD OF GUNS + GOD PORTAL'), h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center' } }, ...gods.map(b => { const cv = ballCanvas(b, 80, { big: true }); UI.addLive(cv, b, { size: 80 }); return cv; })),
     bundleOwned ? h('span', { class: 'gshop-owned' }, '✔ YOU OWN BOTH') : h('div', { class: 'gshop-price' }, 'PHP ' + BUNDLE_PRICE_PHP, ' ', h('small', {}, 'both balls • one-time')),
     anyOwned && !bundleOwned ? h('small', { class: 'muted' }, 'You already own one of them — buy the other one on its own.') : null,
-    !anyOwned ? h('button', { class: 'btn gold', disabled: !(shop && shop.enabled), onclick: () => godBuy('god_bundle') }, `💎 Buy both — PHP ${BUNDLE_PRICE_PHP}`) : null);
+    !anyOwned ? (shop && shop.waiting && shop.waiting.has('god_bundle') ? h('button', { class: 'btn', disabled: true }, '⏳ Waiting for owner check') : h('button', { class: 'btn gold', disabled: !(shop && shop.enabled), onclick: () => godBuy('god_bundle') }, `💎 Buy both — PHP ${BUNDLE_PRICE_PHP}`)) : null);
   grid.append(bc); body.append(grid);
   if (shopOnline() && Online.active) body.append(h('div', { class: 'gshop-row', style: { marginTop: '12px' } },
     h('button', { class: 'btn', onclick: async () => { try { const r = await shopApi('POST', '/api/godshop/restore'); await Online.refresh(); toast(r.restored ? `✔ Restored ${r.restored} purchase(s)` : '✔ Your purchases are up to date', 'gold'); this.render_godshop(); } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); } } }, '↺ Restore purchases'),
@@ -647,9 +725,10 @@ UI.render_godshop = async function () {
 };
 async function godHistory() {
   let r; try { r = await shopApi('GET', '/api/godshop/purchases'); } catch (e) { return toast('⚠ ' + esc(e.message), 'bad'); }
-  const lbl = { paid: '✔ Paid', pending: '⏳ Waiting for payment', expired: 'Expired (not paid)', failed: 'Not started', review: '⚠ Under review' };
-  const t = h('table', { class: 'gshop-tbl' }, h('tr', {}, h('th', {}, 'Date'), h('th', {}, 'Item'), h('th', {}, 'Amount'), h('th', {}, 'Status'), h('th', {}, 'Method')));
-  for (const p of r.purchases) t.append(h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.name), h('td', {}, `PHP ${p.amount}`), h('td', {}, lbl[p.status] || p.status), h('td', {}, p.method || '—')));
+  const lbl = { paid: '✔ Paid', pending: '⏳ Waiting for payment', expired: 'Expired (not paid)', failed: 'Not started', review: '⚠ Under review', awaiting: '⏳ Waiting for owner check', rejected: '✖ Not approved' };
+  const t = h('table', { class: 'gshop-tbl' }, h('tr', {}, h('th', {}, 'Date'), h('th', {}, 'Item'), h('th', {}, 'Amount'), h('th', {}, 'Status'), h('th', {}, 'Method'), h('th', {}, 'Reference')));
+  for (const p of r.purchases) t.append(h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.name), h('td', {}, `PHP ${p.amount}`),
+    h('td', {}, lbl[p.status] || p.status, p.status === 'rejected' && p.note ? h('div', { class: 'muted', style: { fontSize: '12px' } }, p.note) : null), h('td', {}, p.methodName || p.method || '—'), h('td', {}, p.reference || '—')));
   UI.modal(h('div', {}, h('h2', {}, '🧾 Transaction history'), r.purchases.length ? h('div', { style: { overflowX: 'auto' } }, t) : h('p', { class: 'muted' }, 'No purchases yet.'), h('p', { class: 'muted', style: { fontSize: '12px' } }, 'Purchase ids are kept for support. Contact the game owner with the date if something looks wrong.')));
 }
 /* back from the PayMongo checkout page: ask the SERVER whether the payment went through */
@@ -668,7 +747,25 @@ async function godShopReturn() {
   }
   UI.closeModal(); toast('Your payment is not confirmed yet. If you paid, it will unlock automatically as soon as PayMongo confirms — or tap "Restore purchases" later.'); UI.show('godshop');
 }
-if (!window.NBB_HEADLESS) { let n = 0; const iv = setInterval(() => { n++; if (window.Online && (Online.active || (Online.available && n > 6) || n > 40)) { clearInterval(iv); godShopReturn(); } }, 500); }
+/* tells the player when the owner approved / rejected a QR payment, and tells the owner how many are waiting */
+async function godShopNotify() {
+  if (!shopOnline() || !Online.active) return; godShopNotify.ran = true;
+  try {
+    const r = await API.get('/api/godshop/purchases'); let seen = []; try { seen = JSON.parse(localStorage.getItem('nbb_gshop_seen') || '[]'); } catch { /* private mode */ }
+    godShopNotify.waiting = r.purchases.some(p => p.status === 'awaiting');
+    const fresh = r.purchases.filter(p => p.provider === 'manual' && (p.status === 'paid' || p.status === 'rejected') && !seen.includes(p.id + ':' + p.status));
+    if (fresh.length) {
+      if (fresh.some(p => p.status === 'paid')) { await Online.refresh(); Sound.play('evolve'); if (UI.current === 'godshop') UI.render_godshop(); }
+      for (const p of fresh) toast(p.status === 'paid' ? `✔ Payment approved — ${esc(p.name)} is yours forever!` : `✖ Payment not approved: ${esc(p.name)} — ${esc(p.note || 'payment not found')}`, p.status === 'paid' ? 'gold' : 'bad');
+      try { localStorage.setItem('nbb_gshop_seen', JSON.stringify([...seen, ...fresh.map(p => p.id + ':' + p.status)].slice(-200))); } catch { /* private mode */ }
+    }
+    if (Online.isOwner() && !godShopNotify.ownerTold) { const s = await API.get('/api/godshop'); if (s.awaitingCount) { godShopNotify.ownerTold = true; toast(`💳 ${s.awaitingCount} QR payment(s) waiting for your check — Admin Dashboard → 💳 God Shop`, 'gold'); } }
+  } catch { /* offline */ }
+}
+if (!window.NBB_HEADLESS) {
+  let n = 0; const iv = setInterval(() => { n++; if (window.Online && (Online.active || (Online.available && n > 6) || n > 40)) { clearInterval(iv); godShopReturn(); godShopNotify(); } }, 500);
+  setInterval(() => { if (window.Online && Online.active && (!godShopNotify.ran || godShopNotify.waiting)) godShopNotify(); }, 90e3);
+}
 
 /* paid God Balls in the Collection, the God preview, the selection row and the free practice test */
 {
@@ -705,11 +802,85 @@ if (!window.NBB_HEADLESS) { let n = 0; const iv = setInterval(() => { n++; if (w
 }
 
 /* ---------------- owner: payment setup & transactions (Admin Dashboard tab) ---------------- */
+/** makes the owner's QR picture small enough to store (and drops photo metadata such as location) */
+function shrinkQr(file) {
+  return new Promise((res, rej) => {
+    if (!/^image\//.test(file.type) || file.size > 15e6) return rej(new Error('Choose a PNG or JPG picture of your QR code'));
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      for (const max of [1000, 820, 660]) {
+        const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
+        for (const [type, q] of [['image/png'], ['image/jpeg', 0.92], ['image/jpeg', 0.85]]) { const d = c.toDataURL(type, q); if (d.length < 520000) return res(d); }
+      }
+      rej(new Error('That picture is too big — take a smaller screenshot of the QR'));
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('That file is not a picture')); };
+    im.src = url;
+  });
+}
+function adminQrCard(s) {
+  const M = s.manual, card = h('div', { class: 'card' });
+  card.append(h('h3', {}, '📱 QR payments — Maya / MariBank'),
+    h('p', {}, M.open ? h('b', { style: { color: '#69f0ae' } }, '✔ QR payments are ON — players can pay you by QR') : h('b', { style: { color: '#ffab40' } }, '⏸ QR payments are OFF — players cannot pay yet')),
+    h('p', { class: 'muted' }, 'Players scan your QR, pay, and send the reference number. Nothing unlocks until YOU press Approve here. Your QR is kept on the server (not in the public game files) and only shown to signed-in players who press Buy.'));
+  // waiting list
+  const wait = h('div', { class: 'card gshop-wait' }, h('h3', {}, `⏳ Waiting for your check (${M.awaiting.length})`));
+  if (!M.awaiting.length) wait.append(h('p', { class: 'muted' }, 'Nothing to check right now.'));
+  else {
+    wait.append(h('p', {}, 'Open your Maya / MariBank app. Press ', h('b', {}, 'Approve'), ' only if you see the money with the ', h('b', {}, 'same reference number'), ' and the ', h('b', {}, 'right amount'), '.'));
+    const t = h('table', { class: 'gshop-tbl' }, h('tr', {}, ...['Date', 'Player', 'Item', 'PHP', 'Paid to', 'Reference', 'Player note', ''].map(x => h('th', {}, x))));
+    for (const p of M.awaiting) t.append(h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.username), h('td', {}, p.name), h('td', {}, h('b', {}, p.amount)), h('td', {}, p.methodName),
+      h('td', {}, h('code', { style: { fontSize: '14px' } }, p.reference)), h('td', {}, p.payerNote || '—'),
+      h('td', {}, h('div', { class: 'row', style: { gap: '6px', flexWrap: 'nowrap' } },
+        h('button', { class: 'btn small green', onclick: () => UI.confirm(`Approve ${esc(p.username)}: PHP ${p.amount}, ref ${esc(p.reference)}?<br><small>Only if you saw this payment in your ${esc(p.methodName)} app. ${esc(p.name)} unlocks right away.</small>`, () => adminDo(() => API.post(`/api/admin/godshop/manual/${p.id}/approve`), () => UI.render_admin()), '✔ Approve') }, '✔ Approve'),
+        h('button', { class: 'btn small danger', onclick: () => adminQrReject(p) }, '✖ Reject')))));
+    wait.append(h('div', { style: { overflowX: 'auto' } }, t));
+  }
+  // accounts + QR images
+  const rows = M.accounts.length ? M.accounts.map(a => ({ ...a })) : [{ kind: 'maya', label: 'Maya', name: '', note: '' }, { kind: 'maribank', label: 'MariBank', name: '', note: '' }];
+  const on = h('input', { type: 'checkbox', checked: M.enabled });
+  const payload = enabled => ({ enabled, accounts: rows.map(({ id, kind, label, name, note }) => ({ id, kind, label, name, note })) });
+  const list = h('div');
+  const draw = () => { list.innerHTML = ''; rows.forEach((a, i) => {
+    const kind = h('select', { onchange: e => { a.kind = e.target.value; } }, ...M.kinds.map(k => h('option', { value: k.id, selected: k.id === a.kind }, k.name)));
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+    file.onchange = async () => {
+      const f = file.files[0]; if (!f) return; let data;
+      try { data = await shrinkQr(f); } catch (e) { return toast('⚠ ' + esc(e.message), 'bad'); }
+      adminDo(async () => { let id = a.id; if (!id) { const r = await API.post('/api/admin/godshop/manual/settings', payload(M.enabled)); id = r.manual.accounts[i].id; } return API.post('/api/admin/godshop/manual/qr', { account: id, image: data }); }, () => UI.render_admin());
+    };
+    list.append(h('div', { class: 'gshop-acc' }, kind,
+      h('input', { value: a.label || '', maxlength: '30', placeholder: 'Button name (e.g. Maya)', oninput: e => { a.label = e.target.value; } }),
+      h('input', { value: a.name || '', maxlength: '40', placeholder: 'Name buyers see (e.g. JUAN D.)', oninput: e => { a.name = e.target.value; } }),
+      h('input', { value: a.note || '', maxlength: '140', placeholder: 'Note for buyers (optional)', oninput: e => { a.note = e.target.value; } }),
+      h('div', { class: 'row', style: { gap: '6px', alignItems: 'center', flexWrap: 'wrap', gridColumn: '1 / -1' } },
+        h('label', { class: 'btn small gold' }, a.hasQr ? '⬆ Replace QR picture' : '⬆ Upload QR picture', file),
+        a.hasQr ? h('button', { class: 'btn small', onclick: async () => { try { const r = await API.get('/api/godshop/manual/qr/' + encodeURIComponent(a.id)); UI.modal(h('div', { style: { textAlign: 'center' } }, h('h3', {}, a.label), h('img', { src: r.image, alt: 'QR', style: { maxWidth: '100%', maxHeight: '70vh', background: '#fff', borderRadius: '10px' } }))); } catch (e) { toast('⚠ ' + esc(e.message), 'bad'); } } }, '👁 View QR') : h('small', { style: { color: '#ffab40', fontWeight: 800 } }, 'No QR picture yet'),
+        h('button', { class: 'btn small danger', onclick: () => { rows.splice(i, 1); draw(); } }, 'Remove'))));
+  }); };
+  draw();
+  card.append(wait, h('h3', {}, 'Your payment accounts'), h('p', { class: 'muted' }, 'Upload the "Receive money" QR screenshot from your Maya or MariBank app. Use the name exactly as it shows in the app, so buyers know they are paying the right person.'), list,
+    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
+      rows.length < M.maxAccounts ? h('button', { class: 'btn small', onclick: () => { rows.push({ kind: 'qrph', label: '', name: '', note: '' }); draw(); } }, '＋ Add account') : null,
+      h('label', { class: 'chk' }, on, ' Turn QR payments ON'),
+      h('button', { class: 'btn gold', onclick: () => adminDo(() => API.post('/api/admin/godshop/manual/settings', payload(on.checked)), () => UI.render_admin()) }, '💾 Save')));
+  return card;
+}
+function adminQrReject(p) {
+  const reason = h('input', { type: 'text', maxlength: '120', value: 'No payment with this reference number', style: { width: '100%' } });
+  UI.modal(h('div', {}, h('h3', {}, `Reject ${p.username}'s payment (ref ${p.reference})?`), h('p', { class: 'muted' }, 'The player will see this reason. You can still approve it later if you find the money.'), reason,
+    h('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '10px', gap: '8px' } }, h('button', { class: 'btn', onclick: () => UI.closeModal() }, 'Cancel'),
+      h('button', { class: 'btn danger', onclick: () => adminDo(() => API.post(`/api/admin/godshop/manual/${p.id}/reject`, { reason: reason.value }), () => { UI.closeModal(); UI.render_admin(); }) }, '✖ Reject'))));
+}
 UI.admin_shopph = async function (body) {
   const s = await API.get('/api/admin/godshop'); body.innerHTML = '';
-  const ok = s.enabled;
-  body.append(h('div', { class: 'card' }, h('h3', {}, '💳 Premium God Shop — PayMongo setup'),
-    h('p', {}, ok ? h('b', { style: { color: '#69f0ae' } }, `✔ The shop is OPEN (${s.mode === 'live' ? 'LIVE — real payments' : 'TEST mode — no real money'})`) : h('b', { style: { color: '#ffab40' } }, '⏳ The shop is closed until everything below is done. Nothing can be charged.')),
+  body.append(adminQrCard(s));
+  const ok = s.paymongo;
+  body.append(h('div', { class: 'card' }, h('h3', {}, '💳 Automatic checkout — PayMongo (optional)'),
+    h('p', { class: 'muted' }, 'Only needed if you want payments to unlock automatically. PayMongo needs a registered business (DTI + BIR). QR payments above work without it.'),
+    h('p', {}, ok ? h('b', { style: { color: '#69f0ae' } }, `✔ PayMongo checkout is ON (${s.mode === 'live' ? 'LIVE — real payments' : 'TEST mode — no real money'})`) : h('b', { style: { color: '#ffab40' } }, '⏸ PayMongo checkout is OFF until everything below is done.')),
     s.problems.length ? h('ul', {}, ...s.problems.map(p => h('li', {}, p))) : null,
     h('table', { class: 'gshop-tbl' },
       h('tr', {}, h('td', {}, 'Secret key'), h('td', {}, s.key || 'not set (PAYMONGO_SECRET_KEY)')), h('tr', {}, h('td', {}, 'Mode'), h('td', {}, s.mode || '—')),
@@ -720,17 +891,12 @@ UI.admin_shopph = async function (body) {
       h('button', { class: 'btn gold', onclick: () => adminDo(() => API.post('/api/admin/godshop/register-webhook'), () => this.render_admin()) }, '🔗 Register webhook automatically'))));
   const sel = new Set(s.methods), boxes = h('div', { class: 'gshop-methods' });
   for (const m of s.allMethods) boxes.append(h('label', {}, h('input', { type: 'checkbox', checked: sel.has(m.id), onchange: e => { e.target.checked ? sel.add(m.id) : sel.delete(m.id); } }), ' ' + m.name));
-  body.append(h('div', { class: 'card' }, h('h3', {}, 'Payment methods shown at checkout'), h('p', { class: 'muted' }, 'Tick only the methods that are ACTIVATED on your PayMongo account (Settings → Payment Methods). QR Ph works with most bank apps and e-wallets.'), boxes,
+  body.append(h('div', { class: 'card' }, h('h3', {}, 'PayMongo payment methods'), h('p', { class: 'muted' }, 'Tick only the methods that are ACTIVATED on your PayMongo account (Settings → Payment Methods).'), boxes,
     h('button', { class: 'btn', style: { marginTop: '8px' }, onclick: () => adminDo(() => API.post('/api/admin/godshop/methods', { methods: [...sel] }), () => this.render_admin()) }, '💾 Save methods')));
   body.append(h('div', { class: 'card' }, h('h3', {}, `Sales — ${s.totals.paid} paid • PHP ${s.totals.revenue.toFixed(2)}`),
-    s.purchases.length ? h('div', { style: { overflowX: 'auto' } }, h('table', { class: 'gshop-tbl' }, h('tr', {}, ...['Date', 'Player', 'Item', 'PHP', 'Status', 'Method', 'Checkout', 'Note'].map(x => h('th', {}, x))),
-      ...s.purchases.map(p => h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.username), h('td', {}, p.name), h('td', {}, p.amount), h('td', {}, p.status), h('td', {}, p.method || '—'), h('td', {}, p.ref || '—'), h('td', {}, p.note || ''))))) : h('p', { class: 'muted' }, 'No purchases yet.')));
-  body.append(h('div', { class: 'card' }, h('h3', {}, 'How to open the shop'), h('ol', {},
-    h('li', {}, 'Create a PayMongo account and finish business verification (needed for live payments).'),
-    h('li', {}, 'Put your SECRET key on the game server as PAYMONGO_SECRET_KEY (start with the sk_test_ key). Never put it in the game files.'),
-    h('li', {}, 'Restart the server, open this tab and press "Register webhook automatically" (APP_ORIGIN must be your https address).'),
-    h('li', {}, 'Tick the payment methods that are active on your PayMongo account, then test a purchase in TEST mode.'),
-    h('li', {}, 'For real money: switch to the sk_live_ key, set PAYMONGO_LIVE_CONFIRMED=true, restart and register the webhook again.'))));
+    s.purchases.length ? h('div', { style: { overflowX: 'auto' } }, h('table', { class: 'gshop-tbl' }, h('tr', {}, ...['Date', 'Player', 'Item', 'PHP', 'Status', 'Method', 'Reference', 'Note'].map(x => h('th', {}, x))),
+      ...s.purchases.map(p => h('tr', {}, h('td', {}, new Date(p.createdAt).toLocaleString()), h('td', {}, p.username), h('td', {}, p.name), h('td', {}, p.amount), h('td', {}, p.status), h('td', {}, p.methodName || p.method || '—'), h('td', {}, p.reference || p.ref || '—'),
+        h('td', {}, [p.note, p.payerNote && 'player: ' + p.payerNote].filter(Boolean).join(' • ')), p.provider === 'manual' && p.status === 'rejected' ? h('td', {}, h('button', { class: 'btn small green', onclick: () => UI.confirm(`Approve ${esc(p.username)}'s rejected payment (ref ${esc(p.reference)}) after all?`, () => adminDo(() => API.post(`/api/admin/godshop/manual/${p.id}/approve`), () => UI.render_admin()), 'Approve') }, 'Approve')) : null)))) : h('p', { class: 'muted' }, 'No purchases yet.')));
 };
 
 if (window.NBB_CORE) Object.assign(window.NBB_CORE, { paidGodIds: () => SUP.paidGodIds.slice(), PAID_PRICE_PHP, BUNDLE_PRICE_PHP });

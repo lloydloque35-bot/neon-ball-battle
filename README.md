@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.3.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.3.1**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -51,7 +51,7 @@ Version **2.3.0**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SEC
   - **NEW 2.3.0 — 2 Premium God Balls, PHP 99 each (PHP 198 for both)** ([docs/PREMIUM-GOD-SHOP.md](docs/PREMIUM-GOD-SHOP.md)):
     - **God of Guns** (weapon master: floating arsenal, railguns, bullet storms, orbital cannon) and **God Portal** (portals, summons, dimensional traps)
     - God Portal's ultimate takes its opponent into the **Infinite Void**, a real second battle space with platforms, gravity, zones, hazards and a portal network
-    - **Premium God Shop** with PayMongo (GCash, Maya, QR Ph, online banking, cards): server-verified payments, permanent ownership, restore and history
+    - **Premium God Shop**: pay by **QR** to the owner's Maya / MariBank (any bank app or GCash can scan it; the owner approves each payment), or automatic PayMongo checkout. Permanent ownership, restore and history
   - **2.2.0 — 4 Supreme God Balls, FREE for every player** ([docs/GOD-BALLS.md](docs/GOD-BALLS.md)):
     - **God of Chaos**, **God of War**, **AI Tech**, **Solar Eclipse** — 5 skills each with 3 versions (Base / Awakened / Final God), a regular and a final-form ultimate, 3 forms (Awakened at ball Lv 10, Final God Form at Lv 20) and a passive
     - **GOD CLASH**: two God ultimates at the same moment lock together and the battle state decides the winner
@@ -101,7 +101,7 @@ server/                              Node game server (no dependencies)
   auth.js security.js http.js        sessions, 2FA, CSRF, rate limits, headers, static whitelist
   game.js economy.js verifier.js     cloud save, verified battles (worker threads), economy
   billing.js                         Stripe subscription + signed webhooks
-  shop.js                            Premium God Shop: PayMongo one-time PHP purchases (verified server-side)
+  shop.js                            Premium God Shop: QR payments (owner-approved) + PayMongo checkout (verified server-side)
   admin.js                           owner-only API
   pvp.js ws.js                       online PvP: matchmaking, rooms, lockstep relay (WebSocket)
   core.js                            loads script.js + supreme.js + gods.js + gods2.js headlessly for server-side replays

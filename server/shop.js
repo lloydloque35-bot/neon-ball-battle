@@ -13,6 +13,13 @@
  *  - Card numbers, wallet logins, PINs and OTPs never reach this server (PayMongo-hosted pages).
  *    Secret keys live in environment variables (or, for the webhook secret, the server database) — never in the game files.
  *  - If PayMongo is not configured, checkout is unavailable. Purchases are never simulated.
+ *
+ * 2.3.1 MANUAL QR PAYMENTS (Maya / MariBank / any QR Ph app) — for owners without a registered business:
+ *  - The owner uploads their own receive-money QR in the Admin Dashboard (stored in the server database, never in the
+ *    game files; shown only to signed-in players who open the payment screen).
+ *  - The player pays, then sends the reference number from their receipt. Nothing is unlocked by that.
+ *  - The OWNER checks their own Maya / MariBank app and presses Approve (owner + 2FA, audit-logged). Only then is the
+ *    ball granted. A reference number can be used only once, ever (UNIQUE in the database).
  */
 const crypto = require('node:crypto');
 const S_ = require('./security');
@@ -25,6 +32,23 @@ const PRODUCTS = {
 };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };
 const PAID_EVENTS = ['checkout_session.payment.paid'];
+const MANUAL_KINDS = { maya: 'Maya', maribank: 'MariBank', gcash: 'GCash', qrph: 'Other bank / e-wallet (QR Ph)' };
+const MAX_ACCOUNTS = 4, MAX_QR_BYTES = 400 * 1024, MAX_AWAITING = 3;
+const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max);
+/** player-typed reference number: spaces and dashes removed, upper case, 6–32 letters/numbers */
+const normRef = v => String(v == null ? '' : v).toUpperCase().replace(/[\s\-]/g, '');
+/** only real PNG / JPEG / WEBP images (checked by their first bytes, not just the name) */
+function parseQrImage(dataUrl) {
+  const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) throw bad('The QR must be a PNG, JPG or WEBP image');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length < 64) throw bad('That image is empty');
+  if (buf.length > MAX_QR_BYTES) throw bad('The QR image must be smaller than 400 KB');
+  const real = { png: buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG', jpeg: buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
+    webp: buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP' }[m[1]];
+  if (!real) throw bad('That file is not a real image');
+  return `data:image/${m[1]};base64,${buf.toString('base64')}`;
+}
 const now = () => Date.now();
 
 /** Paymongo-Signature: "t=<unix>,te=<test sig>,li=<live sig>"; sig = hex HMAC-SHA256(`${t}.${rawBody}`, webhook secret) */
@@ -45,8 +69,8 @@ function register(app, S) {
   const keyMode = () => C.secretKey.startsWith('sk_live_') ? 'live' : C.secretKey.startsWith('sk_test_') ? 'test' : null;
   const webhookSecret = () => C.webhookSecret || setting('paymongo_webhook_secret') || '';
   const methods = () => { const m = (setting('paymongo_methods') || '').split(',').filter(x => METHODS[x]); return m.length ? m : C.methods.filter(x => METHODS[x]); };
-  /** why the shop is (not) open — shown to the owner, never any secret */
-  function status() {
+  /** why PayMongo checkout is (not) open — shown to the owner, never any secret */
+  function pmStatus() {
     const mode = keyMode(), problems = [];
     if (!mode) problems.push('PAYMONGO_SECRET_KEY is not set (sk_test_... for testing, sk_live_... for real payments)');
     if (mode === 'live' && !C.liveConfirmed) problems.push('Live payments are locked until PAYMONGO_LIVE_CONFIRMED=true (after PayMongo has verified your business)');
@@ -55,6 +79,17 @@ function register(app, S) {
     if (!methods().length) problems.push('No payment methods selected');
     return { enabled: !problems.length, mode, problems };
   }
+  /* manual QR payment settings (owner-managed, server database only) */
+  function manualCfg() {
+    try { const v = JSON.parse(setting('manual_pay') || 'null'); if (v && Array.isArray(v.accounts)) return { enabled: !!v.enabled, accounts: v.accounts }; } catch { /* reset below */ }
+    return { enabled: false, accounts: [] };
+  }
+  const saveManual = m => setSetting('manual_pay', JSON.stringify({ enabled: !!m.enabled, accounts: m.accounts }));
+  const manualAccounts = () => manualCfg().accounts.filter(a => MANUAL_KINDS[a.kind] && a.qr);
+  const manualOpen = () => manualCfg().enabled && manualAccounts().length > 0;
+  const accountView = a => ({ id: a.id, kind: a.kind, kindName: MANUAL_KINDS[a.kind], label: a.label || MANUAL_KINDS[a.kind], name: a.name || '', note: a.note || '' });
+  /** the shop is open when at least one way to pay is ready */
+  function status() { const p = pmStatus(), m = manualOpen(); return { ...p, enabled: p.enabled || m, paymongo: p.enabled, manual: m }; }
   S.shopStatus = status;
 
   async function paymongo(method, path, body) {
@@ -66,9 +101,11 @@ function register(app, S) {
     if (!r.ok) { const msg = data.errors && data.errors[0] && (data.errors[0].detail || data.errors[0].code); S.log.error('[paymongo]', r.status, path, msg); throw new HttpError(502, 'The payment provider refused the request. You were not charged.', 'PROVIDER'); }
     return data;
   }
-  const requireOpen = () => { const s = status(); if (!s.enabled) throw new HttpError(503, 'The Premium God Shop is not open yet: the owner has not finished setting up payments. Nothing was charged.', 'SHOP_DISABLED'); };
+  const requireOpen = () => { const s = pmStatus(); if (!s.enabled) throw new HttpError(503, 'The Premium God Shop is not open yet: the owner has not finished setting up payments. Nothing was charged.', 'SHOP_DISABLED'); };
   const owns = (uid, ball) => !!db.get('SELECT 1 FROM user_balls WHERE user_id = ? AND ball_id = ? AND owned = 1', uid, ball);
-  const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || {}).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status, method: p.method || null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
+  const purchaseView = p => ({ id: p.id, product: p.product, name: (PRODUCTS[p.product] || {}).name || p.product, amount: p.amount / 100, currency: p.currency, status: p.status,
+    provider: p.provider, method: p.method || null, methodName: p.provider === 'manual' ? `${MANUAL_KINDS[p.method] || p.method} (QR)` : (METHODS[p.method] || p.method || null),
+    reference: p.provider === 'manual' && p.payment_ref ? p.payment_ref.slice(7) : null, createdAt: p.created_at, paidAt: p.paid_at || null, note: p.note || null });
 
   function grantBalls(uid, balls, purchaseId) {
     for (const ball of balls) db.run(`INSERT INTO user_balls (user_id, ball_id, owned, source, unlocked_at) VALUES (?, ?, 1, 'purchase', ?)
@@ -111,7 +148,9 @@ function register(app, S) {
   /* ---------------- player API ---------------- */
   app.get('/api/godshop', ctx => {
     const s = status(), u = ctx.user;
-    return { enabled: s.enabled, mode: s.mode, currency: 'PHP', methods: methods().map(id => ({ id, name: METHODS[id] })),
+    return { enabled: s.enabled, mode: s.mode, currency: 'PHP', paymongo: s.paymongo, methods: s.paymongo ? methods().map(id => ({ id, name: METHODS[id] })) : [],
+      manual: { enabled: s.manual, accounts: u && s.manual ? manualAccounts().map(accountView) : [] },
+      awaitingCount: u && u.role === 'owner' ? db.get("SELECT COUNT(*) AS n FROM shop_purchases WHERE provider = 'manual' AND status = 'awaiting'").n : undefined,
       products: Object.values(PRODUCTS).map(p => ({ id: p.id, name: p.name, price: p.amount / 100, balls: p.balls, owned: u ? p.balls.every(b => owns(u.id, b) || u.role === 'owner') : false })) };
   });
   app.post('/api/godshop/checkout', async ctx => {
@@ -149,7 +188,7 @@ function register(app, S) {
     const u = S.requireUser(ctx); S.limit(ctx, 'shopchk:' + u.id, 30, 300e3);
     const id = String(ctx.params.id || ''); if (!S_.isId(id)) throw bad('Bad purchase id');
     let p = db.get('SELECT * FROM shop_purchases WHERE id = ? AND user_id = ?', id, u.id); if (!p) throw new HttpError(404, 'Purchase not found');
-    if (p.status === 'pending' && status().enabled) p = await confirmPurchase(p, 'return');
+    if (p.status === 'pending' && p.provider === 'paymongo' && pmStatus().enabled) p = await confirmPurchase(p, 'return');
     return { purchase: purchaseView(p), owned: JSON.parse(p.balls).filter(b => owns(u.id, b)) };
   });
   /** restore purchases: re-grants everything paid and re-checks recent pending checkouts */
@@ -159,10 +198,45 @@ function register(app, S) {
     let restored = 0;
     for (const p of list) {
       if (p.status === 'paid') { const balls = JSON.parse(p.balls); if (!balls.every(b => owns(u.id, b))) { db.tx(() => grantBalls(u.id, balls, p.id)); restored++; } }
-      else if ((p.status === 'pending' || p.status === 'expired') && p.created_at > now() - 7 * 86400e3 && status().enabled) { const q = await confirmPurchase(p, 'restore'); if (q.status === 'paid') restored++; }
+      else if (p.provider === 'paymongo' && (p.status === 'pending' || p.status === 'expired') && p.created_at > now() - 7 * 86400e3 && pmStatus().enabled) { const q = await confirmPurchase(p, 'restore'); if (q.status === 'paid') restored++; }
     }
     S.audit(u.id, 'shop.restore', null, ctx.ip, { restored });
     return { restored, owned: Object.values(PRODUCTS).flatMap(p => p.balls).filter((b, i, a) => a.indexOf(b) === i && owns(u.id, b)) };
+  });
+
+  /* ---------------- manual QR payment (player side): pay the owner's QR, send the reference, wait for approval ---------------- */
+  app.get('/api/godshop/manual/qr/:id', ctx => {
+    const u = S.requireUser(ctx); S.limit(ctx, 'shopqr:' + u.id, 40, 600e3);
+    const id = String(ctx.params.id || ''), a = manualCfg().accounts.find(x => x.id === id && x.qr);
+    if (!a || (!manualOpen() && u.role !== 'owner')) throw new HttpError(404, 'This payment option is not available');
+    return { image: a.qr, account: accountView(a) };
+  });
+  app.post('/api/godshop/manual/submit', ctx => {
+    const u = S.requirePlayable(ctx);
+    if (!manualOpen()) throw new HttpError(503, 'QR payments are not open right now. Please do not send money yet.', 'SHOP_DISABLED');
+    S.limit(ctx, 'shopman:' + u.id, 10, 3600e3, 'Too many payment reports. Please wait for the owner to check the ones you sent.');
+    const P = PRODUCTS[String(ctx.body.product || '')]; if (!P) throw bad('Unknown product');
+    if (u.role === 'owner') throw bad('The owner account already has every ball — nothing to buy');
+    const a = manualAccounts().find(x => x.id === String(ctx.body.account || '')); if (!a) throw bad('Choose where you sent the payment');
+    const have = P.balls.filter(b => owns(u.id, b));
+    if (have.length === P.balls.length) throw new HttpError(409, 'You already own this — check "Restore purchases" if it does not show up', 'ALREADY_OWNED');
+    if (have.length) throw new HttpError(409, 'You already own one of these balls — buy the other one on its own (PHP 99)', 'PARTLY_OWNED');
+    const ref = normRef(ctx.body.reference);
+    if (!/^[A-Z0-9]{6,32}$/.test(ref)) throw bad('Type the reference number from your payment receipt (6 to 32 letters or numbers)');
+    const waiting = db.all("SELECT product FROM shop_purchases WHERE user_id = ? AND provider = 'manual' AND status = 'awaiting'", u.id);
+    if (waiting.some(w => w.product === P.id || w.product === 'god_bundle' || P.id === 'god_bundle')) throw new HttpError(409, 'You already sent a payment for this. Please wait for the owner to check it.', 'AWAITING');
+    if (waiting.length >= MAX_AWAITING) throw new HttpError(429, 'Please wait for the owner to check the payments you already sent.', 'AWAITING');
+    if (db.get('SELECT 1 FROM shop_purchases WHERE payment_ref = ?', 'manual:' + ref)) {
+      S.secEvent(u.id, 'shop_manual_ref_reused', 2, { ref }, ctx.ip);
+      throw new HttpError(409, 'This reference number was already used. Check the number on your receipt.', 'REF_USED');
+    }
+    const id = S_.randomId('pur_');
+    try {
+      db.run("INSERT INTO shop_purchases (id, user_id, product, balls, amount, currency, provider, status, payment_ref, method, payer_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'PHP', 'manual', 'awaiting', ?, ?, ?, ?, ?)",
+        id, u.id, P.id, JSON.stringify(P.balls), P.amount, 'manual:' + ref, a.kind, clean(ctx.body.note, 60) || null, now(), now());
+    } catch (e) { if (/UNIQUE/.test(e.message)) throw new HttpError(409, 'This reference number was already used. Check the number on your receipt.', 'REF_USED'); throw e; }
+    S.audit(u.id, 'shop.manual_submitted', id, ctx.ip, { product: P.id, amount: P.amount, method: a.kind });
+    return { purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', id)) };
   });
 
   /* ---------------- PayMongo webhook (signature verified, each event once) ---------------- */
@@ -199,12 +273,15 @@ function register(app, S) {
   const mask = k => k ? k.slice(0, 8) + '••••' + k.slice(-4) : null;
   app.get('/api/admin/godshop', ctx => {
     owner(ctx);
-    const s = status(), rows = db.all('SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id ORDER BY p.created_at DESC LIMIT 60');
+    const s = status(), rows = db.all('SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id ORDER BY p.created_at DESC LIMIT 60'), M = manualCfg();
+    const awaiting = db.all("SELECT p.*, u.username FROM shop_purchases p JOIN users u ON u.id = p.user_id WHERE p.provider = 'manual' AND p.status = 'awaiting' ORDER BY p.created_at LIMIT 100");
     const paid = db.get("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total FROM shop_purchases WHERE status = 'paid'");
     return { ...s, key: mask(C.secretKey), webhookSecret: C.webhookSecret ? 'environment' : setting('paymongo_webhook_secret') ? 'saved on the server' : null,
       webhookUrl: `${cfg.appOrigin}/api/godshop/webhook/paymongo`, events: PAID_EVENTS, liveConfirmed: C.liveConfirmed,
       methods: methods(), allMethods: Object.entries(METHODS).map(([id, name]) => ({ id, name })),
-      totals: { paid: paid.n, revenue: paid.total / 100 }, purchases: rows.map(p => ({ ...purchaseView(p), username: p.username, ref: p.provider_ref ? p.provider_ref.slice(0, 12) + '…' : null })) };
+      totals: { paid: paid.n, revenue: paid.total / 100 }, purchases: rows.map(p => ({ ...purchaseView(p), username: p.username, payerNote: p.payer_note || null, ref: p.provider_ref ? p.provider_ref.slice(0, 12) + '…' : null })),
+      manual: { enabled: M.enabled, open: s.manual, kinds: Object.entries(MANUAL_KINDS).map(([id, name]) => ({ id, name })), maxAccounts: MAX_ACCOUNTS,
+        accounts: M.accounts.map(a => ({ ...accountView(a), hasQr: !!a.qr })), awaiting: awaiting.map(p => ({ ...purchaseView(p), username: p.username, payerNote: p.payer_note || null })) } };
   });
   app.post('/api/admin/godshop/test', async ctx => {
     const me = owner(ctx); if (!keyMode()) throw bad('Set PAYMONGO_SECRET_KEY first');
@@ -229,6 +306,56 @@ function register(app, S) {
     S.audit(me.id, 'admin.shop_methods', null, ctx.ip, { methods: list });
     return { ok: true, methods: list };
   });
+
+  /* ---------------- owner: manual QR payments (accounts, QR images, approve / reject) ---------------- */
+  app.post('/api/admin/godshop/manual/settings', ctx => {
+    const me = owner(ctx), M = manualCfg(), list = Array.isArray(ctx.body.accounts) ? ctx.body.accounts.slice(0, MAX_ACCOUNTS + 1) : [];
+    if (list.length > MAX_ACCOUNTS) throw bad(`At most ${MAX_ACCOUNTS} payment accounts`);
+    const accounts = list.map(x => {
+      if (!x || !MANUAL_KINDS[x.kind]) throw bad('Choose Maya, MariBank, GCash or Other bank for every account');
+      const old = M.accounts.find(a => a.id === x.id);
+      return { id: old ? old.id : S_.randomId('qa_'), kind: x.kind, label: clean(x.label, 30) || MANUAL_KINDS[x.kind], name: clean(x.name, 40), note: clean(x.note, 140), qr: old ? old.qr : null };
+    });
+    const enabled = !!ctx.body.enabled;
+    if (enabled && !accounts.some(a => a.qr)) throw bad('Upload at least one QR code before turning QR payments on');
+    saveManual({ enabled, accounts });
+    S.audit(me.id, 'admin.shop_manual_settings', null, ctx.ip, { enabled, accounts: accounts.map(a => ({ kind: a.kind, label: a.label, qr: !!a.qr })) });
+    return { ok: true, manual: { enabled, open: manualOpen(), accounts: accounts.map(a => ({ ...accountView(a), hasQr: !!a.qr })) } };
+  });
+  app.post('/api/admin/godshop/manual/qr', { bodyLimit: 700 * 1024 }, ctx => {
+    const me = owner(ctx), M = manualCfg(), a = M.accounts.find(x => x.id === String(ctx.body.account || ''));
+    if (!a) throw new HttpError(404, 'Save the account first, then upload its QR');
+    a.qr = ctx.body.image == null ? null : parseQrImage(ctx.body.image);
+    if (!M.accounts.some(x => x.qr)) M.enabled = false;
+    saveManual(M);
+    S.audit(me.id, a.qr ? 'admin.shop_manual_qr_uploaded' : 'admin.shop_manual_qr_removed', a.id, ctx.ip, { kind: a.kind });
+    return { ok: true, open: manualOpen() };
+  });
+  const manualRow = ctx => { const id = String(ctx.params.id || ''); if (!S_.isId(id)) throw bad('Bad payment id'); const p = db.get('SELECT * FROM shop_purchases WHERE id = ?', id); if (!p || p.provider !== 'manual') throw new HttpError(404, 'Payment not found'); return p; };
+  /** the ONLY way a manual payment unlocks a ball: the owner saw the money in their own app and approved it */
+  app.post('/api/admin/godshop/manual/:id/approve', ctx => {
+    const me = owner(ctx), p0 = manualRow(ctx);
+    db.tx(() => {
+      const p = db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id);
+      if (p.status === 'paid') throw new HttpError(409, 'This payment was already approved');
+      if (p.status !== 'awaiting' && p.status !== 'rejected') throw bad('This payment cannot be approved');
+      const balls = JSON.parse(p.balls), already = balls.every(b => owns(p.user_id, b));
+      db.run("UPDATE shop_purchases SET status = 'paid', paid_at = ?, updated_at = ?, reviewed_by = ?, reviewed_at = ?, note = ? WHERE id = ?", now(), now(), me.id, now(),
+        already ? 'The player already owned this — please refund this payment' : null, p.id);
+      grantBalls(p.user_id, balls, p.id);
+      S.audit(me.id, 'shop.manual_approved', p.id, ctx.ip, { user: p.user_id, product: p.product, amount: p.amount, method: p.method, ref: p.payment_ref, duplicate: already });
+    });
+    return { ok: true, purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', p0.id)) };
+  });
+  app.post('/api/admin/godshop/manual/:id/reject', ctx => {
+    const me = owner(ctx), p = manualRow(ctx);
+    if (p.status !== 'awaiting') throw bad('Only payments that are waiting can be rejected');
+    const reason = clean(ctx.body.reason, 120) || 'The payment was not found';
+    db.run("UPDATE shop_purchases SET status = 'rejected', note = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ? AND status = 'awaiting'", reason, me.id, now(), now(), p.id);
+    S.audit(me.id, 'shop.manual_rejected', p.id, ctx.ip, { user: p.user_id, product: p.product, ref: p.payment_ref, reason });
+    S.secEvent(p.user_id, 'shop_manual_rejected', 1, { purchase: p.id });
+    return { ok: true, purchase: purchaseView(db.get('SELECT * FROM shop_purchases WHERE id = ?', p.id)) };
+  });
 }
 
-module.exports = { register, PRODUCTS, METHODS, verifyPaymongoSignature };
+module.exports = { register, PRODUCTS, METHODS, MANUAL_KINDS, verifyPaymongoSignature, parseQrImage, normRef };

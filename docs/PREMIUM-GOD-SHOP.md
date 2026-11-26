@@ -14,6 +14,10 @@ There are two new **Supreme Premium God Balls**. You buy them once in Philippine
 - **Free practice test.** Anyone can try them in Practice (no rewards) before buying.
 - **Nothing else changes.** All other balls, God of Time and the free God Balls are unchanged.
 
+Two ways to pay (the owner turns on one or both):
+- **📱 QR payment (2.3.1)** — the player scans the owner's **Maya** or **MariBank** QR (it is a QR Ph / InstaPay code, so **any bank app or GCash** can pay it), then types the reference number. The **owner checks their own app and presses Approve**. No business registration needed.
+- **💳 PayMongo checkout** — automatic unlock, but PayMongo needs a registered business (DTI + BIR).
+
 The code is in `gods2.js` (balls, Infinite Void, shop screen) and `server/shop.js` (payments).
 
 ---
@@ -87,12 +91,42 @@ How it stays safe:
 
 ---
 
+## 📱 QR payments — Maya / MariBank (2.3.1)
+
+### How a player pays
+1. Opens **💎 Premium God Shop** (signed in) and presses **Buy**.
+2. Picks **Maya** or **MariBank**, scans the QR (or saves it and uploads it in their bank app if they are on the same phone).
+3. Sends **exactly PHP 99** (or PHP 198 for both).
+4. Types the **reference number** from their receipt and presses **I paid — send for checking**.
+5. Sees "⏳ Waiting for the owner to check your payment". When the owner approves, the game says **"Payment approved — … is yours forever!"** and the ball unlocks on every device.
+
+### How the owner sets it up (one time)
+1. Open the Maya or MariBank app → **Receive money / My QR** → take a screenshot.
+2. In the game: **Admin Dashboard → 💳 God Shop (PHP)**.
+3. Press **⬆ Upload QR picture** for Maya, then for MariBank. Type the name buyers should see (for example `JUAN D.`).
+4. Tick **Turn QR payments ON** and press **💾 Save**.
+
+### How the owner checks a payment
+1. You get a message in the game when payments are waiting ("💳 … QR payment(s) waiting").
+2. Open **Admin Dashboard → 💳 God Shop (PHP)** → **⏳ Waiting for your check**.
+3. Open your Maya / MariBank app. Find the payment with the **same reference number** and the **right amount**.
+4. Found it → **✔ Approve** (the ball unlocks right away). Not found → **✖ Reject** with a reason (the player sees it). You can still approve a rejected one later.
+
+### Why it is safe
+- **Only the owner's Approve unlocks a ball** (owner account + 2FA, checked on the server, audit-logged). The player's "I paid" screen unlocks nothing.
+- **One reference number = one payment, forever.** Spaces, dashes and small letters don't matter. A reused number is refused and logged as a security event.
+- A player can't report a ball they already own, can have only one waiting report per ball (3 at most), and can send at most 10 reports per hour.
+- **Your QR is not in the game files or on GitHub.** It is stored in the server database and only sent to signed-in players who open the payment window. The picture is checked to be a real image (PNG / JPG / WEBP, under 400 KB), and the dashboard re-draws it before uploading, which removes photo data such as location.
+- The game never asks for or stores PINs, OTPs, passwords or card numbers.
+
+---
+
 ## The Premium God Shop
 
 - **Open it from:** the main menu (**💎 Premium God Shop**), the Collection, or the God Ball preview.
 - **Each ball shows:** price, class, live animation, skills, forms, passive, and an "owned" badge.
 - **Buttons:**
-  - **Buy** opens PayMongo's secure checkout. The payment methods shown are the ones you switched on: GCash, Maya, QR Ph (most bank and e-wallet apps), online banking (BPI / UnionBank), cards, and others.
+  - **Buy** opens the QR payment window (above) and/or PayMongo's secure checkout. PayMongo shows the methods you switched on: GCash, Maya, QR Ph (most bank and e-wallet apps), online banking (BPI / UnionBank), cards, and others.
   - **↺ Restore purchases** re-checks your account.
   - **🧾 Transaction history** lists every purchase.
 - **After paying,** the game comes back and asks the **server** to confirm the payment with PayMongo. The page itself never unlocks anything.
@@ -122,7 +156,9 @@ How it stays safe:
   - Every purchase, grant, restore and setup change is audit-logged.
   - Bad signatures and wrong amounts create security events.
 
-### Owner setup (Admin Dashboard → 💳 God Shop (PHP))
+### PayMongo setup (optional — Admin Dashboard → 💳 God Shop (PHP))
+
+PayMongo only accepts online payments for a **registered business** (DTI + BIR); an unregistered individual's money stays in a PayMongo wallet. If you don't have that, use QR payments above.
 
 1. **Create a PayMongo account** and finish business verification (needed for real payments).
 2. **Add the test key to the server** (Web → Sites → your site → Environment), then restart:
@@ -158,7 +194,9 @@ The tab also shows:
 - all 10 skills in all 3 forms, both ultimates and the forms
 - the Infinite Void: entry, isolation from bystanders, copies, damage, safe return, God Portal dying inside, the 3-dimension final form, and PvP replay
 
-The full suite has 94 tests, all passing.
+`server/test/manualpay.test.js` covers QR payments: closed until set up, owner-only setup / approve / reject, real images only, QR hidden from guests, nothing unlocked before approval, one reference = one payment, approve → permanent ownership, reject → nothing (and approve later), and turning it off.
+
+The full suite has 101 tests, all passing.
 
 ## Balance
 
