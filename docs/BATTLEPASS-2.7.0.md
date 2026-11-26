@@ -25,7 +25,7 @@
   Pass, then the coin packs, then the Premium God Balls.
   (Since 2.8.0 the Free Pass row is gone: Anti Ball became a limited edition.)
 - **Ball selection:** the row "🎫 BATTLE PASS — SUPREME GOD BALLS • PHP 299" shows **🎫 BATTLE PASS** or **✔ OWNED**.
-  Anti Ball shows **FREE PASS — UNLOCKED**.
+  (Until 2.8.0 Anti Ball showed **FREE PASS — UNLOCKED** here; now it shows its limited-edition price or OWNED.)
 - **Collection → Supreme God Balls** and the God Ball preview show the price and a **Get the Battle Pass** button.
 - **Upgrade Shop:** a "Need more coins?" shortcut to the coin packs.
 
