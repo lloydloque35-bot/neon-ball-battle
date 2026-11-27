@@ -71,7 +71,7 @@ const Online = {
     try { await API.post(all ? '/api/auth/logout-all' : '/api/auth/logout'); } catch { /* already signed out */ }
     this.leave(); toast('Signed out. You are playing as Guest on this device.');
   },
-  leave() { UI.acctTab = 'signin'; this.active = false; this.me = null; this.save = null; this.events = null; API.csrf = ''; CATALOG = null; loadSave(); invalidateRegistry(); this.guest = null; refreshCoins(); },
+  leave() { syncAdminBtn(false); UI.acctTab = 'signin'; this.active = false; this.me = null; this.save = null; this.events = null; API.csrf = ''; CATALOG = null; loadSave(); invalidateRegistry(); this.guest = null; refreshCoins(); },
   syncSettings() {
     clearTimeout(this._st);
     this._st = setTimeout(() => { if (this.active) API.post('/api/settings', SAVE.settings).catch(() => {}); }, 800);
@@ -263,9 +263,12 @@ Object.assign(UI, {
 });
 
 /* ---------------- main menu status ---------------- */
+/** the Admin Dashboard button exists only for the signed-in owner account; every other player never sees it.
+ *  (Hiding it is only for looks: every admin request is still checked on the server — owner account + 2FA.) */
+function syncAdminBtn(show = Online.isOwner()) { const b = document.getElementById('menuAdmin'); if (b) b.classList.toggle('hidden', !show); }
 const _renderMenu = UI.render_menu;
 UI.render_menu = function () {
-  _renderMenu.call(this);
+  _renderMenu.call(this); syncAdminBtn();
   const acc = $('#menuAccount'), cloud = $('#menuCloud');
   if (Online.active) { acc.textContent = '👤 ' + Online.me.user.username + (Online.isPremium() ? ' ★' : ''); cloud.textContent = '☁ Cloud save'; }
   else { acc.textContent = Online.available ? '👤 Sign in' : '👤 Account'; cloud.textContent = '💾 Guest (this device)'; }
