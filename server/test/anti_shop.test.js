@@ -121,7 +121,7 @@ test('migration 010: Anti Ball rows that were owned while it was free are locked
   db.run("INSERT INTO user_balls (user_id, ball_id, owned, level) VALUES (?, 'anti', 0, 7)", id('player2'));
   db.run("INSERT INTO user_balls (user_id, ball_id, owned, level) VALUES (?, 'fire', 1, 9)", id('player2'));
   db.close(); db = new DB(file);
-  assert.deepEqual(db.migrate(mig), ['010_anti_edition.sql']); assert.ok(db.lastBackup && fs.existsSync(db.lastBackup));
+  const applied = db.migrate(mig); assert.equal(applied[0], '010_anti_edition.sql', 'later migrations (2.9.0: 011) may follow'); assert.ok(db.lastBackup && fs.existsSync(db.lastBackup));
   const r = db.get("SELECT * FROM user_balls WHERE user_id = ? AND ball_id = 'anti'", id('summoner'));
   assert.equal(r.owned, 0); assert.equal(r.level, 22); assert.equal(r.wins, 31); assert.equal(r.tree, '{"slot4":1}'); assert.equal(r.source, 'locked_2.8:summon');
   assert.equal(db.get("SELECT level FROM user_balls WHERE user_id = ? AND ball_id = 'anti'", id('player2')).level, 7);

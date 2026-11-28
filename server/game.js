@@ -196,6 +196,8 @@ function register(app, S) {
       else if (type === 'm') { if (a.length !== 3 || (a[2] !== 0 && a[2] !== 1)) return 'Malformed control input'; }
       else if (type === 'x') { if (a.length !== 6 || !Object.values(core.ADMIN_CMDS).includes(a[2]) || !a.slice(3).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return 'Malformed admin command'; }   // ADMIN DELETE console
       else if (type === 's') { if (a.length !== 5 || ![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return 'Malformed steering input'; }
+      else if (type === 't') { if (a.length !== 3 || !Number.isInteger(a[2]) || a[2] < 0 || a[2] > 9999) return 'Malformed notebook input'; }   // 2.9.0 Fate Notebook target
+      else if (type === 'c') { if (a.length !== 3 || a[2] !== 0) return 'Malformed clash input'; }                                           // 2.9.0 Reality Clash press
       else return 'Unknown input type';
     }
     return null;
@@ -210,6 +212,7 @@ function register(app, S) {
     const def = core.getBall(setup.ball);
     const pr = trial ? { level: 10, evo: 1, up: {}, tree: { slot3: 1, slot4: 1 } } : progOf(user.id, def.id);
     if (!trial && S.skills26) Object.assign(pr, S.skills26.specExtras(user.id, def, pr));      // 2.6.0: unlock conditions (wins), evolutions, mastery looks
+    if (!trial && S.reality && def.realityGod) pr.gm29 = S.reality.levelOf(user.id, def.id);    // 2.9.0: God Mastery level (looks only)
     pr.cos = json(profileRow(user.id).loadout, {});
     const ticket = core.createTicket(setup, pr, S_.secureRandom, extra);
     const id = S_.randomId('b_'); ticket.id = id;
@@ -232,8 +235,10 @@ function register(app, S) {
       if (!access(u, def, { trial })) throw new HttpError(403, 'You do not have access to this ball', 'NO_ACCESS');
       const pool = new Set(core.opponentPool(isOwner(u)).map(x => x.id));
       for (const k of ['enemy', 'ally']) if (b[k] && b[k] !== 'random' && !pool.has(b[k])) throw bad('That opponent is not available');
-      if (mode === 'boss' && b.boss && (!pool.has(b.boss))) throw bad('That boss is not available');
-      const setup = { mode, ball: def.id, enemy: b.enemy || 'random', ally: b.ally || 'random', difficulty: core.normDiff(b.difficulty), ffaCount: S_.clampInt(b.ffaCount, 3, 6, 4), boss: b.boss || 'ancientgod', infinite: !!b.infinite, dummy: !!b.dummy, manual: !!b.manual };
+      const archon = mode === 'boss' && b.boss === 'fracturedarchon';      // 2.9.0 secret cosmic boss: unlocked by 3 Boss Battle wins or owning a Reality God
+      if (archon && !(S.reality && S.reality.archonUnlockedFor(u))) throw new HttpError(403, 'This boss is still sealed. Win 3 Boss Battles (or own a Reality God) to find it.', 'LOCKED');
+      if (mode === 'boss' && b.boss && !archon && (!pool.has(b.boss))) throw bad('That boss is not available');
+      const setup = { mode, ball: def.id, enemy: b.enemy || 'random', ally: b.ally || 'random', difficulty: core.normDiff(b.difficulty), ffaCount: S_.clampInt(b.ffaCount, 3, 6, 4), boss: b.boss || 'ancientgod', infinite: !!b.infinite, dummy: !!b.dummy, manual: !!b.manual, arena: b.arena === 'collision' ? 'collision' : null };
       if (b.godTest) {       // free God Ball practice test (any form, test bar): every player, God Balls only, Practice only (no rewards)
         if (!def.godBall || mode !== 'practice') throw bad('Practice tests are only for the God Balls');
         setup.godTest = true; setup.startForm = S_.clampInt(b.startForm, 0, 2, 0);
@@ -331,13 +336,15 @@ function register(app, S) {
     db.run(`UPDATE user_balls SET ${r.win ? 'wins = wins + 1' : 'losses = losses + 1'} WHERE user_id = ? AND ball_id = ?`, uid, br.ball_id);
     const { ups, level } = giveBallExp(uid, ballId, rw.exp);
     const mastery = S.skills26 ? S.skills26.grant(uid, ballId, r.skUse && r.skUse[0], r.win) : null;      // 2.6.0: skill mastery from this verified battle
+    const reality = S.reality ? S.reality.afterBattle(uid, row, T, r) : null;                             // 2.9.0: God Mastery and the Fractured Archon's rewards
+    if (reality && reality.archon && reality.archon.coins) { rw.coins += reality.archon.coins; }
     giveAccountExp(uid, rw.exp);
     if (r.win) for (const ev of activeEvents()) if (!ev.premiumOnly || premium) db.run('INSERT INTO event_progress (user_id, event_id, wins) VALUES (?, ?, 1) ON CONFLICT(user_id, event_id) DO UPDATE SET wins = wins + 1', uid, ev.id);
     const fresh = evaluateAchievements(uid);
     const result = { win: r.win, mode: T.mode, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, step: r.step };
     db.run("UPDATE battles SET status = 'verified', finished_at = ?, result = ?, rewards = ?, flags = ? WHERE id = ?", now(), JSON.stringify(result), JSON.stringify(rw), mismatch ? 'mismatch' : null, row.id);
     const extraMsg = T.mode === 'survival' ? `Reached wave ${r.wave}` : T.mode === 'endless' ? `${r.kills} KOs` : '';
-    return { verified: true, mismatch, verifyMs: ms, result, rewards: rw, coins: rw.coins, exp: rw.exp, ups, level, ballId, tourMsg, extraMsg, tour, newAchievements: fresh, mastery, save: savePayload(u) };
+    return { verified: true, mismatch, verifyMs: ms, result, rewards: rw, coins: rw.coins, exp: rw.exp, ups, level, ballId, tourMsg, extraMsg, tour, newAchievements: fresh, mastery, reality, save: savePayload(u) };
   }
 
   /* ================= tournaments (AI) ================= */

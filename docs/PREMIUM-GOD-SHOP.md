@@ -2,6 +2,10 @@
 
 > **2.7.0:** the same shop also sells the **Battle Pass (PHP 299)** and **coin packs (PHP 99 / PHP 999)**, with the same
 > QR and PayMongo payments. See [BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md).
+>
+> **2.9.0:** the same shop also sells **FATE NOTE BALL (PHP 99)**, with the same verified QR and PayMongo payments. The two
+> other Reality Gods (The Void Below, The Absolute Above) are bought with **50,000 coins** instead. See
+> [REALITY-2.9.0.md](REALITY-2.9.0.md).
 
 There are two new **Supreme Premium God Balls**. You buy them once in Philippine pesos and own them forever on your account.
 

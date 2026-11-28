@@ -15,6 +15,7 @@ const GODS2 = path.join(__dirname, '..', 'gods2.js');       // 2.3.0 Premium God
 const GODS3 = path.join(__dirname, '..', 'gods3.js');       // 2.4.0 God of Absolute, limited edition (needs gods2.js)
 const SKILLS = path.join(__dirname, '..', 'skills.js');     // 2.6.0 unique skill registry, new skills, mastery, evolutions, combinations (needs gods3.js)
 const ANTI = path.join(__dirname, '..', 'anti.js');         // 2.8.0 Anti Ball limited edition kit (needs skills.js)
+const REALITY = path.join(__dirname, '..', 'reality.js');   // 2.9.0 Reality Gods, Reality Collision, the Collision Zone arena, the Fractured Archon (needs anti.js)
 
 function loadCore() {
   const src = fs.readFileSync(SCRIPT, 'utf8');
@@ -36,6 +37,7 @@ function loadCore() {
   if (fs.existsSync(GODS2) && fs.existsSync(GODS3)) vm.runInContext(fs.readFileSync(GODS3, 'utf8'), ctx, { filename: 'gods3.js' });
   if (fs.existsSync(GODS3) && fs.existsSync(SKILLS)) vm.runInContext(fs.readFileSync(SKILLS, 'utf8'), ctx, { filename: 'skills.js' });
   if (fs.existsSync(SKILLS) && fs.existsSync(ANTI)) vm.runInContext(fs.readFileSync(ANTI, 'utf8'), ctx, { filename: 'anti.js' });
+  if (fs.existsSync(ANTI) && fs.existsSync(REALITY)) vm.runInContext(fs.readFileSync(REALITY, 'utf8'), ctx, { filename: 'reality.js' });
   if (!ctx.NBB_CORE) throw new Error('Game core failed to load');
   return ctx.NBB_CORE;
 }

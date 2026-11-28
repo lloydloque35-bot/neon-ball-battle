@@ -2,6 +2,9 @@
 
 > **2.7.0:** these four are no longer free. They come with the **Battle Pass (PHP 299, one-time)**. Players who had
 > already played them keep them. See [BATTLEPASS-2.7.0.md](BATTLEPASS-2.7.0.md).
+>
+> **2.9.0:** three more God Balls use the same framework: The Void Below, The Absolute Above and Fate Note Ball. See
+> [REALITY-2.9.0.md](REALITY-2.9.0.md). All God Balls are listed in the new **✦ Supreme God Collection**.
 
 **God of Chaos • God of War • AI Tech • Solar Eclipse**
 

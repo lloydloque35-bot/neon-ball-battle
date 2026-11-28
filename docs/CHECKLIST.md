@@ -1,4 +1,22 @@
-# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0, 2.7.0, 2.8.0)
+# Development checklist — v2.0 master upgrade (+ 2.1.0, 2.2.0, 2.3.0, 2.3.1, 2.4.0, 2.5.0, 2.5.1, 2.6.0, 2.7.0, 2.8.0, 2.9.0)
+
+## 2.9.0 — Reality vs Absolute ([REALITY-2.9.0.md](REALITY-2.9.0.md), QA: [QA-2.9.0.md](QA-2.9.0.md))
+- ✅ Three original Reality Gods (renamed from the requested names, with the owner's approval):
+  - The Void Below (50,000 coins);
+  - The Absolute Above (50,000 coins);
+  - Fate Note Ball (PHP 99).
+- ✅ 15 abilities × 3 form versions, 3 passives with energy meters, 6 ultimates (the arena is restored after each), 9 forms, own sounds and looks.
+- ✅ Safety limits: warnings, resistance windows, caps (Death Sentence ≤ 30% max HP), counterplay. Deletion is a battle effect only.
+- ✅ Reality Collision rivalry + Reality Clash: timing inputs replayed by the server; 60% timing / 40% battle state.
+- ✅ God Synergy: 3 pairs, team cooldowns, no loops.
+- ✅ Reality Collision Zone arena: solid geometry, wells, platforms, marked hazards, spawns, deterministic. The classic arena is unchanged.
+- ✅ Secret boss THE FRACTURED ARCHON: 3 phases, co-op rooms, server-checked unlock, rewards once per verified win.
+- ✅ God Mastery: from verified battles only, saved on the server, looks and titles only.
+- ✅ Supreme God Collection (all 11 God Balls, search / sort / filters), lobby showcase, shop section, Fate Notebook (touch-friendly).
+- ✅ 50,000-coin purchase: atomic, never negative, never twice, recorded and audited.
+- ✅ PHP 99 purchase: through the verified shop.
+- ✅ Migration 011 adds tables only (backup first).
+- ✅ Tests: 25 new (192 / 192 pass). Balance measured against every top tier and in the three head-to-heads.
 
 ## 2.8.0 — Anti Ball Limited Edition ([ANTI-BALL-LE-2.8.0.md](ANTI-BALL-LE-2.8.0.md))
 - ✅ Same ball upgraded (no duplicate); permanent 100 copies, serials ANTI-001…ANTI-100, PHP 999, sold out forever when full

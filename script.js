@@ -2661,6 +2661,7 @@ class Battle {
       case 'm': pl.manual = !!a[1]; if (!pl.manual) pl.inP = 0; break;
       case 's': pl.inX = a[1] / 100; pl.inY = a[2] / 100; pl.inP = a[3]; break;
       case 'x': if (typeof supremeCommand === 'function') supremeCommand(pl, a.slice(1)); break;   // ADMIN DELETE console (validated inside the engine)
+      case 't': case 'c': if (typeof rgInput === 'function') rgInput(pl, a); break;                  // 2.9.0 Fate Notebook target / Reality Clash press
     }
   }
   pumpInputs() {
@@ -3686,7 +3687,7 @@ function enemySpec(def, level, diff, extra = {}) {
 }
 function playerSpecFrom(def, p) {
   return { ball: def.id, isPlayer: true, level: p.level || 1, evo: p.evo || 0, up: { ...(p.up || {}) }, tree: { ...(p.tree || {}) }, allUnlocked: !!(def.adminOnly || def.unlockAll), playerDiff: 'hard', cos: p.cos || null,
-    wins: p.wins | 0, maxed: !!p.maxed, sevo: p.sevo || null, mast: p.mast || null };      // 2.6.0: skill unlock conditions, skill evolutions (rules) and mastery (looks only)
+    wins: p.wins | 0, maxed: !!p.maxed, sevo: p.sevo || null, mast: p.mast || null, gm29: clamp(p.gm29 | 0, 0, 10) };      // 2.6.0 (+2.9.0 God Mastery level: looks only): skill unlock conditions, skill evolutions (rules) and mastery (looks only)
 }
 const pickWith = (list, rnd) => list[Math.floor(rnd() * list.length) % list.length];
 /** createTicket(setup, playerProgress, rnd, extra) → ticket (plain JSON) */
@@ -3703,7 +3704,7 @@ function createTicket(setup, prog0, rnd, extra = {}) {
   switch (S.mode) {
     case '2v2': { const ally = S.ally && S.ally !== 'random' && getBall(S.ally) ? S.ally : choose([me.id]); teams = [[pl, enemySpec(getBall(ally), plv, diff === 'easy' ? 'normal' : diff)], [E(chosen || choose([me.id]), elv), E(choose([me.id]), elv)]]; break; }
     case 'ffa': { teams = [[pl]]; const used = [me.id]; for (let i = 1; i < clamp(S.ffaCount || 4, 3, 6); i++) { const id = i === 1 && chosen ? chosen : choose(used); used.push(id); teams.push([E(id, elv)]); } break; }
-    case 'boss': teams = [[pl], [E(getBall(S.boss) ? S.boss : 'ancientgod', elv + 3, { boss: true, ai: 'boss' })]]; break;
+    case 'boss': teams = [[pl], [E(getBall(S.boss) ? S.boss : 'ancientgod', elv + 3, { boss: true, ai: 'boss' })]]; break;   // (2.9.0: the secret Archon is checked by the server)
     case 'survival': teams = [[pl], [E(choose([me.id]), plv - 1)]]; break;
     case 'endless': teams = [[pl], [E(choose([me.id]), plv - 2)]]; break;
     case 'practice': teams = [[pl], [E(chosen || choose([me.id]), plv)]]; break;
@@ -3711,7 +3712,8 @@ function createTicket(setup, prog0, rnd, extra = {}) {
     default: teams = [[pl], [E(chosen || choose([me.id]), elv)]];
   }
   return { v: 2, mode: MODES[S.mode] ? S.mode : '1v1', difficulty: diff, seed: (Math.floor(rnd() * 4294967296) >>> 0), manual: !!S.manual, teams, pool,
-    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0, ...(S.adminTest && me.supreme && me.adminOnly ? { adminTest: true } : {}), ...(S.godTest && me.godBall && S.mode === 'practice' ? { godTest: true } : {}) } };
+    opts: { infinite: !!S.infinite, dummy: !!S.dummy, roundName: extra.roundName || '', round: extra.round || 0, ...(S.adminTest && me.supreme && me.adminOnly ? { adminTest: true } : {}), ...(S.godTest && me.godBall && S.mode === 'practice' ? { godTest: true } : {}),
+      ...(S.mode === 'boss' && S.boss === 'fracturedarchon' ? { archon: true, arena: 'collision' } : S.arena === 'collision' && S.mode !== 'tournament' ? { arena: 'collision' } : {}) } };   // 2.9.0 arenas
 }
 /* ---------- online PvP (shared by the game server and the browser) ---------- */
 const PVP = { BLOCK: 12, MIN_DELAY: 2, MAX_DELAY: 10 };   // inputs are exchanged in blocks of 12 steps (50 ms)
@@ -3739,19 +3741,19 @@ function rankTier(points) {
 /** createPvpTicket(seats, seed, pmode) → ticket. A seat is a human player { ball, level, evo, up, tree, cos, name, team }
  *  or an AI seat { ai: true, ball, level, evo, tree, name, team }. Human seats get slots 0, 1, 2… in order and fight on AUTO
  *  with the strong AI until their player switches to MANUAL. Without teams, every seat is its own team (1 VS 1). */
-function createPvpTicket(players, seed, pmode = 'duel') {
+function createPvpTicket(players, seed, pmode = 'duel', extra = {}) {
   const teamed = players.some(p => p.team != null), nTeams = teamed ? Math.max(...players.map(p => p.team | 0)) + 1 : players.length;
   const teams = Array.from({ length: nTeams }, () => []); let slot = 0;
   players.forEach((p, i) => {
     const def = getBall(p.ball); if (!def) throw new Error('Ball not available: ' + p.ball);
     const s = playerSpecFrom(def, p), ai = def.ai === 'boss' ? 'intelligent' : (def.ai || 'intelligent');
     let spec;
-    if (p.ai) spec = { ...s, isPlayer: false, pvp: false, tag: String(p.name || 'AI').slice(0, 20), ai, diff: 'hard', cos: null };
+    if (p.ai) spec = { ...s, isPlayer: false, pvp: false, tag: String(p.name || 'AI').slice(0, 20), ai: p.boss ? 'boss' : ai, diff: 'hard', cos: null, ...(p.boss ? { boss: true } : {}) };   // 2.9.0: a co-op boss seat
     else { const sl = slot++; spec = { ...s, isPlayer: false, pvp: true, slot: sl, tag: p.name || 'Player ' + (sl + 1), ai, diff: 'hard' }; }
     teams[teamed ? p.team | 0 : i].push(spec);
   });
   if (teams.some(t => !t.length)) throw new Error('Every team needs at least one ball');
-  return { v: 3, mode: 'pvp', pmode, difficulty: 'hard', seed: seed >>> 0, manual: false, teams, pool: [], opts: { pvp: true, pmode } };
+  return { v: 3, mode: 'pvp', pmode, difficulty: 'hard', seed: seed >>> 0, manual: false, teams, pool: [], opts: { pvp: true, pmode, ...(extra.arena === 'collision' ? { arena: 'collision' } : {}), ...(extra.archon ? { archon: true } : {}) } };
 }
 /** merges both players' input frames for one block into replay entries [step, slot, type, ...args] (same order everywhere) */
 function mergePvpBlock(b, frames) {
@@ -3771,6 +3773,8 @@ function cleanPvpActions(list) {
       case 'm': out.push([a[0], 'm', a[2] ? 1 : 0]); break;
       case 'x': if (a.length !== 6 || !a.slice(2).every(v => Number.isInteger(v) && v >= -1000 && v <= 1000)) return null; out.push([a[0], 'x', a[2], a[3], a[4], a[5]]); break;   // owner console
       case 's': if (![a[2], a[3]].every(v => Number.isInteger(v) && v >= -100 && v <= 100) || (a[4] !== 0 && a[4] !== 900)) return null; out.push([a[0], 's', a[2], a[3], a[4]]); break;
+      case 't': if (!Number.isInteger(a[2]) || a[2] < 0 || a[2] > 9999) return null; out.push([a[0], 't', a[2]]); break;   // 2.9.0 Fate Notebook target (a ball's match id)
+      case 'c': out.push([a[0], 'c', 0]); break;                                                                        // 2.9.0 Reality Clash press
       default: return null;
     }
   }
@@ -3783,7 +3787,8 @@ function buildBattleConfig(T, hooks = {}) {
   for (const t of T.teams) for (const s of t) if (!getBall(s.ball)) throw new Error('Ball not available: ' + s.ball);
   const cfg = { mode: T.mode, difficulty: T.difficulty, seed: T.seed, manual: T.manual, teams: T.teams.map(t => t.map(mk)), infiniteHp: T.mode === 'practice' && !!T.opts.infinite,
     dummy: T.mode === 'practice' && !!T.opts.dummy, roundName: T.opts.roundName, onEnd: hooks.onEnd, replay: hooks.replay, headless: hooks.headless,
-    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked, adminTest: !!(T.opts && T.opts.adminTest), godTest: !!(T.opts && T.opts.godTest) };
+    pvp: T.mode === 'pvp', pmode: T.pmode || 'duel', me: hooks.me, net: hooks.net, ranked: !!hooks.ranked, adminTest: !!(T.opts && T.opts.adminTest), godTest: !!(T.opts && T.opts.godTest),
+    arena: T.opts && T.opts.arena === 'collision' ? 'collision' : null, archon: !!(T.opts && T.opts.archon) };
   const pl = T.teams[0][0], diff = T.difficulty;
   const nextFrom = excl => { const c = T.pool.filter(id => !excl.includes(id)); return pick(c.length ? c : T.pool); };
   if (T.mode === 'survival') cfg.checkEnd = B => {
@@ -3817,7 +3822,7 @@ function simulateTicket(T, inputs = [], maxSteps = 240 * 60 * 30) {
   while (!B.result && B.stepN < maxSteps) B.step(STEP);
   const r = B.result;
   BATTLE = null;
-  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places, skUse: skUseOf(B) } : { ok: false, reason: 'timeout', step: B.stepN };
+  return r ? { ok: true, win: r.win, step: r.step, time: r.time, kills: r.kills, wave: r.wave, hpPct: r.hpPct, stats: r.stats, rage: r.rage, god: r.god, winner: r.winner, slots: r.slots, places: r.places, skUse: skUseOf(B), gm: typeof gmOf === 'function' ? gmOf(B) : null } : { ok: false, reason: 'timeout', step: B.stepN };
 }
 /** 2.6.0: how often each human player's ball used each of its abilities (skill mastery comes from verified battles only) */
 function skUseOf(B) { const out = {}; const list = B.pvp ? (B.slots || []) : (B.player ? [B.player] : []); list.forEach((f, i) => { if (f && f.skUse) out[B.pvp ? f.slot : 0] = { ...f.skUse }; }); return out; }

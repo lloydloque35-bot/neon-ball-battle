@@ -28,6 +28,8 @@ function register(app, S, H) {
   action('/api/shop/unlock', (u, b) => {
     const def = ballOrThrow(b.ball);
     if (def.free) throw bad('This ball is free — it is already unlocked for every player');
+    if (def.coinGod && S.reality) return S.reality.buyWithCoins(u, def.id);        // 2.9.0 Reality Gods: 50,000 coins, atomic (server/reality.js)
+    if (def.realityGod) throw bad(`${def.name} is sold only in the Shop for PHP ${def.pricePhp} (verified payment), never for coins`);
     if (def.edition) throw bad('This is a limited edition: it is sold only in the Shop (PHP), never for coins');
     if (def.paid) throw bad('This Premium God Ball is sold in the Premium God Shop (PHP), not for coins');
     if (def.pass) throw bad('This God Ball comes with the Battle Pass (PHP 299), not for coins');

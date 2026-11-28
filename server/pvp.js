@@ -182,12 +182,15 @@ function register(app, S) {
     try { p.spec = prepare(p, m.ball, false); } catch (e) { return err(p, e.message); }
     if (!S.limiter.hit('pvproom:' + p.user.id, 30, 3600e3)) return err(p, 'Too many rooms created. Try again later.');
     let code; do { code = Array.from({ length: 5 }, () => CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]).join(''); } while (rooms.has(code));
-    const room = { code, mode, host: p, members: [p], at: now() }; rooms.set(code, room);
+    // 2.9.0: a co-op room can fight THE FRACTURED ARCHON (if the host has found it); any room can use the REALITY COLLISION ZONE
+    const archon = mode === 'coop' && m.boss === 'archon';
+    if (archon && !(S.reality && S.reality.archonUnlockedFor(p.user))) return err(p, 'THE FRACTURED ARCHON is still sealed for you. Win 3 Boss Battles (or own a Reality God) first.');
+    const room = { code, mode, host: p, members: [p], at: now(), archon, arena: archon || m.arena === 'collision' ? 'collision' : null }; rooms.set(code, room);
     p.room = room; p.state = 'room'; p.team = 0;
     roomUpdate(room);
   }
   function roomUpdate(room) {
-    for (const p of room.members) send(p, { t: 'room', code: room.code, room: { code: room.code, mode: room.mode, cap: capOf(room.mode), isHost: p === room.host,
+    for (const p of room.members) send(p, { t: 'room', code: room.code, room: { code: room.code, mode: room.mode, cap: capOf(room.mode), isHost: p === room.host, archon: !!room.archon, arena: room.arena || 'classic',
       members: room.members.map(x => ({ name: x.user.username, ball: x.spec.ball, team: x.team, you: x === p, host: x === room.host, ...rankOf(x.user.id) })) } });
   }
   function joinRoom(p, m) {
@@ -217,9 +220,10 @@ function register(app, S) {
     if (room.members.length < 2) return err(p, 'Wait for at least one friend to join.');
     closeRoom(room);
     const M = room.members;
-    if (room.mode === 'coop') return launch('coop', M.map(x => ({ p: x, team: 0 })), false, room.code, 'Co-op vs AI: a friendly match, so no rank points or rewards.');
-    if (room.mode === 'team') return launch('team', M.map(x => ({ p: x, team: x.team })), false, room.code);
-    return launch(room.mode, shuffle(M).map((x, i) => ({ p: x, team: i })), false, room.code);
+    const opts = { arena: room.arena || null, archon: !!room.archon };
+    if (room.mode === 'coop') return launch('coop', M.map(x => ({ p: x, team: 0 })), false, room.code, room.archon ? 'Co-op vs THE FRACTURED ARCHON: a verified win gives every player the Archon rewards (no rank points).' : 'Co-op vs AI: a friendly match, so no rank points or rewards.', opts);
+    if (room.mode === 'team') return launch('team', M.map(x => ({ p: x, team: x.team })), false, room.code, undefined, opts);
+    return launch(room.mode, shuffle(M).map((x, i) => ({ p: x, team: i })), false, room.code, undefined, opts);
   }
   /** a 2 VS 2 room with exactly two friends: search ranked opponents together (same team) */
   function seekFromRoom(p) {
@@ -254,16 +258,17 @@ function register(app, S) {
     return base;
   }
   /** humans: [{ p, team }] → seats (players first in each team, AI balls in the empty seats) */
-  function launch(mode, humans, ranked, code, note) {
+  function launch(mode, humans, ranked, code, note, opts = {}) {
     const layout = MODES[mode].seats, nTeams = Math.max(...layout) + 1, seats = [];
     for (let t = 0; t < nTeams; t++) {
       const mine = humans.filter(h => h.team === t), cap = layout.filter(x => x === t).length;
       for (const h of mine) seats.push({ p: h.p, team: t });
       for (let k = mine.length; k < cap; k++) seats.push({ team: t });
     }
-    startMatch(mode, seats, ranked, code, note);
+    startMatch(mode, seats, ranked, code, note, opts);
   }
-  function startMatch(mode, seats, ranked, code, note) {
+  function startMatch(mode, seats, ranked, code, note, opts = {}) {
+    if (opts.archon) seats = [...seats.filter(s => s.p), { team: 1, boss: true }];      // 2.9.0: the two AI seats become THE FRACTURED ARCHON
     const humans = seats.filter(s => s.p).map(s => s.p), slotTeam = seats.filter(s => s.p).map(s => s.team);
     const catalog = matchCatalog(humans);
     let ticket, list;
@@ -274,8 +279,9 @@ function register(app, S) {
       const pool = core.opponentPool(false).filter(b => !b.godMode && !b.fusion && !b.draft && !b.summonOnly).map(b => b.id);
       let ai = 0;
       list = seats.map(s => s.p ? { ...s.p.spec, team: s.team }
+        : s.boss ? { ai: true, boss: true, ball: core.ARCHON.id, level: Math.min(core.MAX_LVL, lv + 3), evo, up: {}, tree: FULL_TREE, name: 'THE FRACTURED ARCHON', team: s.team }
         : { ai: true, ball: pool[crypto.randomInt(pool.length)], level: lv, evo, up: {}, tree: lv >= 15 ? FULL_TREE : lv >= 5 ? { slot3: 1 } : {}, name: AI_NAMES[ai++ % AI_NAMES.length], team: s.team });
-      ticket = core.createPvpTicket(list, crypto.randomInt(0, 2 ** 32), mode);
+      ticket = core.createPvpTicket(list, crypto.randomInt(0, 2 ** 32), mode, { arena: opts.arena, archon: opts.archon });
     } catch (e) {
       S.log.error('[pvp start]', e.message);
       return humans.forEach(p => { p.state = 'idle'; err(p, 'The match could not be started. Please try again.'); });
@@ -355,7 +361,7 @@ function register(app, S) {
       matches.delete(M.id); return;
     }
     if (closing) return;
-    const r = v.result, nTeams = M.ticket.teams.length;
+    const r = v.result, nTeams = M.ticket.teams.length; M.gm = r.gm || null;      // 2.9.0 God Mastery counters from the verified re-simulation
     const winner = r.ok && Number.isInteger(r.winner) && r.winner >= 0 && r.winner < nTeams ? r.winner : -1;
     const places = r.ok && Array.isArray(r.places) && r.places.length === nTeams ? r.places : new Array(nTeams).fill(1);
     let changes;
@@ -416,7 +422,8 @@ function register(app, S) {
         if (exp) { ({ ups, level } = S.giveBallExp(uid, ball, exp)); S.giveAccountExp(uid, exp); }
       }
       if (M.ranked && counted && rewarded[s] && S.skills26 && r.skUse) S.withCatalog({ id: uid, role: p.user.role }, () => S.skills26.grant(uid, ball, r.skUse[s], result === 'win'));      // 2.6.0: skill mastery (ranked, verified, within the daily limits)
-      return { result, place, ball, coins, exp, ups, level, rpBefore: pts[s], rpAfter: season ? season.after : pts[s], rpDelta: season ? season.after - season.before : 0, tier: season ? season.tier : null, note: notes[s] };
+      const reality = S.reality ? S.withCatalog({ id: uid, role: p.user.role }, () => S.reality.afterMatch(uid, M.id, M, s, ball, result === 'win', !!(M.ranked && counted && rewarded[s]))) : null;   // 2.9.0
+      return { reality, result, place, ball, coins: coins + ((reality && reality.archon && reality.archon.coins) || 0), exp, ups, level, rpBefore: pts[s], rpAfter: season ? season.after : pts[s], rpDelta: season ? season.after - season.before : 0, tier: season ? season.tier : null, note: notes[s] };
     });
   }
 

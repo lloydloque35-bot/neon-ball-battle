@@ -26,7 +26,7 @@ npm run owner -- create --username You    # the ONLY way to create the admin/own
 ```
 
 Full setup, Stripe sandbox and going-live checklist, backups and recovery: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
-Version **2.8.0**. Anti Ball limited edition: **[docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)**. Battle Pass & coin packs: **[docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
+Version **2.9.0**. Reality vs Absolute: **[docs/REALITY-2.9.0.md](docs/REALITY-2.9.0.md)** (QA: [docs/QA-2.9.0.md](docs/QA-2.9.0.md)). Anti Ball limited edition: **[docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)**. Battle Pass & coin packs: **[docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)**. Security and anti-cheat design: **[docs/SECURITY.md](docs/SECURITY.md)**. Online PvP: **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)**. What's done: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**.
 
 ## Gameplay
 - Balls bounce on their own. Collisions deal damage based on attack, impact speed and defence, and **HP is shown inside each ball**.
@@ -50,7 +50,18 @@ Version **2.8.0**. Anti Ball limited edition: **[docs/ANTI-BALL-LE-2.8.0.md](doc
     - **Tech Ball 2 — Cyber Overlord** (Premium): Laser Grid, Hologram Clone, EMP Pulse, Cyber Trap, Auto Turret, Overclock Mode with a heat system; ultimate **Skynet Protocol**
   - **NEW 2.5.0 — God of Absolute's AUTONOMOUS FREE WILL**: it is never controlled by a player — it picks its own strategies and targets, teleports out of danger, times its own ultimate, and leaves the arena by itself to hunt hiding enemies, recover or ambush (always returning). Owner-only AI settings.
   - **NEW 2.5.1 — it REALLY leaves the arena**: it smashes through the wall, flies in the open space outside the walls (the camera pulls back so everyone sees it), fires golden Beyond Lances through the wall, drags hiding enemies out to fight them outside, and crashes back in with a judgment shockwave.
-  - **NEW 2.8.0 — ANTI BALL: LIMITED EDITION** ([docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)): 100 copies worldwide, serials ANTI-001 … ANTI-100, PHP 999, never restocked; a new defensive-counter kit (Null Core, Skill Rejection, Adaptive Matrix, Counter Pulse, Null Zone, Mirror Protocol, System Override, Absolute Resistance, ultimate ANTI EXISTENCE), passive Adaptive Null, the NULL ASCENSION transformation and Anti Ball Mastery (looks only).
+  - **NEW 2.9.0 — REALITY VS ABSOLUTE** ([docs/REALITY-2.9.0.md](docs/REALITY-2.9.0.md)):
+    - Three new God Balls with original designs:
+      - **The Void Below**: 50,000 coins.
+      - **The Absolute Above**: 50,000 coins.
+      - **Fate Note Ball**: PHP 99.
+    - Each has 5 abilities × 3 form versions, a passive with an energy meter, a regular and a final-form ultimate, and 3 forms.
+    - **REALITY COLLISION**: a rivalry with a timing **Reality Clash**.
+    - **GOD SYNERGY** between allies.
+    - The **REALITY COLLISION ZONE** arena.
+    - The secret cosmic boss **THE FRACTURED ARCHON** (3 phases, co-op).
+    - **God Mastery** (looks only), the **Supreme God Collection** (search, sort, filters), a lobby showcase and the in-battle **Fate Notebook**.
+  - **2.8.0 — ANTI BALL: LIMITED EDITION** ([docs/ANTI-BALL-LE-2.8.0.md](docs/ANTI-BALL-LE-2.8.0.md)): 100 copies worldwide, serials ANTI-001 … ANTI-100, PHP 999, never restocked; a new defensive-counter kit (Null Core, Skill Rejection, Adaptive Matrix, Counter Pulse, Null Zone, Mirror Protocol, System Override, Absolute Resistance, ultimate ANTI EXISTENCE), passive Adaptive Null, the NULL ASCENSION transformation and Anti Ball Mastery (looks only).
   - **2.7.0 — BATTLE PASS & COIN PACKS** ([docs/BATTLEPASS-2.7.0.md](docs/BATTLEPASS-2.7.0.md)):
     - 🎫 Battle Pass PHP 299 (one-time): God of Chaos, God of War, AI Tech and Solar Eclipse, owned forever. Players who already played them keep them.
     - 🆓 Free Pass: Anti Ball was free here until 2.8.0 (now a limited edition).
@@ -112,6 +123,8 @@ supreme.js                           2.1.0 Supreme Admin Balls + the forms / God
 gods.js                              2.2.0 Supreme God Balls, 2.7.0 Battle Pass flags (also loaded by the server)
 gods2.js                             2.3.0 Premium God Balls, the Infinite Void, the God Shop screen (also loaded by the server)
 anti.js                              2.8.0 Anti Ball limited edition kit, Adaptive Null, NULL ASCENSION, mastery (also loaded by the server)
+reality.js                           2.9.0 Reality Gods, Reality Clash, God Synergy, Reality Collision Zone, Fractured Archon, God Mastery (also loaded by the server)
+reality_ui.js                        2.9.0 lobby showcase, Supreme God Collection, Reality Gods shop, Fate Notebook, clash button (browser only)
 store.js                             2.7.0 shop screen: Battle Pass and coin packs (browser only)
 anti_ui.js                           2.8.0 Anti Ball shop showcase, serial number, mastery, owner panel (browser only)
 online.js                            accounts, cloud save, premium, rankings, fusion, owner dashboard UI
@@ -121,6 +134,7 @@ server/                              Node game server (no dependencies)
   game.js economy.js verifier.js     cloud save, verified battles (worker threads), economy
   billing.js                         Stripe subscription + signed webhooks
   shop.js                            Premium God Shop: QR payments (owner-approved) + PayMongo checkout (verified server-side)
+  reality.js                         2.9.0: 50,000-coin purchases (atomic), God Mastery, the Fractured Archon's unlock and rewards
   admin.js                           owner-only API
   pvp.js ws.js                       online PvP: matchmaking, rooms, lockstep relay (WebSocket)
   core.js                            loads script.js + supreme.js + gods.js + gods2.js headlessly for server-side replays

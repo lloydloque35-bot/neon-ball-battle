@@ -42,9 +42,12 @@ const PRODUCTS = {
   // payment, or the owner's approval of a QR payment). The number of coins is stored on the purchase when it is created.
   coins_10k: { id: 'coins_10k', name: '10,000 Coins', amount: 9900, balls: [], coins: 10000 },
   coins_1m: { id: 'coins_1m', name: '1,000,000 Coins', amount: 99900, balls: [], coins: 1000000 },
+  // 2.9.0 FATE NOTE BALL: a Reality God, PHP 99, one-time, owned forever (the two other Reality Gods are bought with
+  // 50,000 coins in server/reality.js — never with pesos)
+  fatenote: { id: 'fatenote', name: 'FATE NOTE BALL', amount: 9900, balls: ['fatenote'] },
 };
 /** what the PayMongo checkout page says the player is buying */
-const lineDesc = P => P.coins ? 'Game coins — added once to your account' : P.pass ? 'Battle Pass — 4 Supreme God Balls, yours forever' : P.id === 'anti' ? 'Limited edition (100 copies) — your own serial number, yours forever' : 'Premium God Ball — permanent ownership';
+const lineDesc = P => P.coins ? 'Game coins — added once to your account' : P.pass ? 'Battle Pass — 4 Supreme God Balls, yours forever' : P.id === 'anti' ? 'Limited edition (100 copies) — your own serial number, yours forever' : P.id === 'fatenote' ? 'Reality God Ball — permanent ownership' : 'Premium God Ball — permanent ownership';
 /** two products conflict when they would grant the same ball */
 const overlap = (x, y) => { const A = PRODUCTS[x], B = PRODUCTS[y]; return !!(A && B && A.balls.some(b => B.balls.includes(b))); };
 const METHODS = { gcash: 'GCash', paymaya: 'Maya', qrph: 'QR Ph (bank & e-wallet apps)', dob: 'Online banking (BPI / UnionBank)', card: 'Credit / debit card', grab_pay: 'GrabPay', billease: 'BillEase' };

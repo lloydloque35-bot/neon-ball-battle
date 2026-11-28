@@ -32,6 +32,7 @@ test('skill slots by rarity (ultimate included); Common / Uncommon keep the abil
   assert.deepEqual({ ...core.SLOT_CAP }, { Common: 2, Uncommon: 3, Rare: 4, Epic: 5, Legendary: 6, Mythical: 7, Ancient: 8, Secret: 8, Limited: 9, 'God Tier': 10 });
   for (const b of collectible()) {
     if (b.adminOnly) continue;
+    if (b.realityGod) { assert.equal(b.skills.length + 1, 6, b.id + ': the 2.9.0 Reality Gods have exactly 5 abilities + the ultimate (their own design)'); assert.equal(b.slotCap, 6); continue; }
     const own = b.skills.filter(s => !s.v26).length + 1, total = b.skills.length + 1;
     if (own >= core.SLOT_CAP[b.rarity]) assert.equal(total, own, b.id + ' keeps exactly its own abilities');
     else assert.equal(total, core.SLOT_CAP[b.rarity], b.id + ' (' + b.rarity + ') fills its slots');

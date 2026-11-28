@@ -79,7 +79,7 @@ const Online = {
   async post(path, body) { const r = await API.post(path, body); if (r.save) this.applySave(r.save); return r; },
   /* battles: the server issues the ticket and verifies the result */
   async startBattle(S) {
-    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial, ...(S.adminTest ? { adminTest: true, startForm: S.startForm | 0 } : {}), ...(S.godTest ? { godTest: true, startForm: S.startForm | 0 } : {}) });
+    const r = await API.post('/api/battle/start', { mode: S.mode, ball: S.ball, enemy: S.enemy, ally: S.ally, difficulty: S.difficulty, ffaCount: S.ffaCount, boss: S.boss, infinite: S.infinite, dummy: S.dummy, manual: S.manual, trial: !!S.trial, arena: S.arena === 'collision' ? 'collision' : undefined, ...(S.adminTest ? { adminTest: true, startForm: S.startForm | 0 } : {}), ...(S.godTest ? { godTest: true, startForm: S.startForm | 0 } : {}) });
     return r.ticket;
   },
   async tourStart(S) { return (await API.post('/api/tournament/start', { ball: S.ball, difficulty: S.difficulty })).tour; },
@@ -89,6 +89,7 @@ const Online = {
     const r = await API.post('/api/battle/finish', { id: T.id, inputs, claimed: { win: res.win, step: res.step } });
     if (r.save) this.applySave(r.save);
     if (r.tour) Game.tour = r.tour;
+    if (window.RG_UI) try { RG_UI.showRewards(r); } catch (e) { /* optional */ }      // 2.9.0 God Mastery / Archon rewards
     const sr = r.result || {};
     return { ...sr, mode: sr.mode || T.mode, stats: sr.stats || res.stats, time: sr.time ?? res.time, coins: r.coins || 0, exp: r.exp || 0, ups: r.ups || 0, level: r.level,
       ballId: T.teams[0][0].ball, extraMsg: r.extraMsg, tourMsg: r.tourMsg, verified: !!r.verified, mismatch: !!r.mismatch, newAchievements: r.newAchievements, win: !!sr.win };
@@ -747,6 +748,7 @@ const PvP = {
     const p = $('#resultsBody p.muted'); if (p) p.textContent = why + ' The AI is finishing your match. Waiting for the result…';
   },
   result(m) {
+    if (window.RG_UI && m && m.reality) try { RG_UI.showRewards(m); } catch (e) { /* optional */ }      // 2.9.0
     const M = this.match; this.match = null; this.net = null; this.waiting = false; this.state = 'idle'; this.history = null;
     if (m.save) Online.applySave(m.save); else if (Online.save) setCatalog(Online.save.catalog);
     if (m.error) { toast('⚠ ' + esc(m.error), 'bad'); return UI.show('pvp'); }
@@ -818,7 +820,9 @@ Object.assign(UI, {
       h('button', { class: 'btn big primary', disabled: !sel || sel.adminOnly, onclick: go(() => PvP.send({ t: 'queue', mode, ball: this.pvpBall })) }, sel && sel.adminOnly ? 'Admin balls: friend rooms only' : `Find a match with ${sel ? sel.name : '…'}`)));
     actions.append(h('div', { class: 'card' }, h('h3', {}, mode === 'coop' ? '🤝 Team up with a friend' : '🏠 Play with friends'),
       h('p', { class: 'muted' }, mode === 'coop' ? 'Create a room and share the code. The match starts when your friend joins.' : `Friendly match, up to ${md.humans || md.seats.length} players. No season points.`),
-      h('button', { class: 'btn', onclick: go(() => PvP.send({ t: 'host', mode, ball: this.pvpBall })) }, '＋ Create a room'),
+      mode === 'coop' ? h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!PvP.archon, onchange: e => { PvP.archon = e.target.checked; } }), '✦ Fight THE FRACTURED ARCHON (secret boss — the host must have found it)') : null,
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!PvP.arena29, onchange: e => { PvP.arena29 = e.target.checked; } }), '✦ Arena: REALITY COLLISION ZONE'),
+      h('button', { class: 'btn', onclick: go(() => PvP.send({ t: 'host', mode, ball: this.pvpBall, ...(mode === 'coop' && PvP.archon ? { boss: 'archon' } : {}), ...(PvP.arena29 ? { arena: 'collision' } : {}) })) }, '＋ Create a room'),
       h('div', { class: 'row', style: { gap: '6px', marginTop: '8px' } }, code, h('button', { class: 'btn', onclick: go(() => { if (!PvP.joinCode.trim()) return toast('Type the room code first'); PvP.send({ t: 'join', code: PvP.joinCode.trim(), ball: this.pvpBall }); }) }, 'Join room'))));
     body.append(actions);
     body.append(h('p', { class: 'muted small' }, 'Your ball fights on AUTO; tap AUTO to switch to MANUAL. If you leave or lose your connection, the AI finishes the fight for you and the result still counts. Admin balls can only be used in friend rooms.'));
